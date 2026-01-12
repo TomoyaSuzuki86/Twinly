@@ -30,11 +30,214 @@
 - ローカル保存（localStorage / IndexedDB どちらでも可。後でFirebaseへ移しやすく）
 - おむつ在庫管理（サイズ別、残り10枚で購入導線：リンクは設定で登録）
 
-### Phase 1.5（早めに）
+###### Phase 1.5（夫婦共有の土台：Firebase Auth + Firestore）
 
-- Firebase Authentication（Googleログイン）
-- Firestoreへ保存（夫婦共有の前提）
-- 家庭（family）単位で共有できるデータ構造（招待コードは後でもよいが設計に余白）
+#### 目的
+
+- Googleログインできる
+- Firestoreにデータを保存し、別端末でも同じデータを見られる
+- family（家族）単位の共有の土台を作る（招待は次でもよい）
+
+---
+
+#### 開発者自身がやる（Codex CLIでは不可：Firebase Console）
+
+1. Firebaseプロジェクト作成（例：twinly-prod）
+   
+   1. firebaseConfigは以下です
+      
+      ```
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "firebase/app";
+      import { getAnalytics } from "firebase/analytics";
+      // TODO: Add SDKs for Firebase products that you want to use
+      // https://firebase.google.com/docs/web/setup#available-libraries
+      
+      // Your web app's Firebase configuration
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+        apiKey: "AIzaSyAEn2SKA28aLo-KtM2432C4jf6YX40FFhY",
+        authDomain: "twinly-prod.firebaseapp.com",
+        projectId: "twinly-prod",
+        storageBucket: "twinly-prod.firebasestorage.app",
+        messagingSenderId: "557885702942",
+        appId: "1:557885702942:web:b87f1280a9222a4c56ff0f",
+        measurementId: "G-BEE0JC4C8P"
+      };
+      
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const analytics = getAnalytics(app);
+      ```
+      
+      
+
+2. Authentication：Googleログインを有効化
+
+3. Firestore Database：作成（開発中はテストモードでも可）
+
+4. Firestoreルールを設定（docに保存した rules をコンソールへ貼り付ける）←以下のルールを設定済み
+   
+   ```
+   rules_version = '2';
+   
+   service cloud.firestore {
+     match /databases/{database}/documents {
+   
+       function isSignedIn() {
+         return request.auth != null;
+       }
+   
+       // families/{familyId}/members/{uid} が存在すれば「家族メンバー」
+       function isFamilyMember(familyId) {
+         return isSignedIn()
+           && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+       }
+   
+       match /families/{familyId} {
+   
+         // family本体
+         allow read: if isFamilyMember(familyId);
+         allow create: if isSignedIn();
+         allow update, delete: if isFamilyMember(familyId);
+   
+         // ★ members は初期参加のための例外を作る
+         match /members/{uid} {
+           // 読み取り：家族メンバーならOK（自分だけ見えるでもOKだが、まずは簡単に）
+           allow read: if isFamilyMember(familyId);
+   
+           // 作成：本人が自分のuidのmemberを作れる（初回参加で必要）
+           allow create: if isSignedIn() && request.auth.uid == uid;
+   
+           // 更新・削除：基本は本人のみ（運用で「管理者」導入したくなったら後で拡張）
+           allow update, delete: if isSignedIn() && request.auth.uid == uid;
+         }
+   
+         // それ以外のサブコレクション（events / babies など）
+         match /{sub=**} {
+           allow read, write: if isFamilyMember(familyId);
+         }
+       }
+   
+       // デフォルト拒否
+       match /{document=**} {
+         allow read, write: if false;
+       }
+     }
+   }
+   
+   ```
+- families/{familyId}/members/{uid} を基準にアクセス制御
+  5. Webアプリ登録（firebaseConfigを取得）
+
+---
+
+#### Codexがやる（コード側）
+
+##### A. Firebase導入と初期化
+
+- firebase SDKを追加
+- `src/lib/firebase.ts` を作成し、以下をexportする
+  - `app`, `auth`, `db`
+  - firebase.tsは以下になる想定
+  - ```
+    import { initializeApp, getApps } from "firebase/app";
+    import { getAuth } from "firebase/auth";
+    import { getFirestore } from "firebase/firestore";
+    
+    // Analytics は「必要になってから」でOK（後述）
+    import { getAnalytics, isSupported } from "firebase/analytics";
+    
+    const firebaseConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    };
+    
+    // ViteのHMRで二重初期化しないようにする
+    export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+    
+    export const auth = getAuth(app);
+    export const db = getFirestore(app);
+    
+    // Analytics は動かない環境もあるのでガードする（任意）
+    export async function initAnalytics() {
+      if (import.meta.env.DEV) return null; // 開発中は切るのが無難
+      const ok = await isSupported();
+      return ok ? getAnalytics(app) : null;
+    }
+    
+    ```
+  - 
+- Analyticsは必須ではない。入れるなら「本番のみ」＋ isSupportedガード
+
+##### B. 環境変数の整備（.env.local含む）
+
+- `.env.example` を追加し、必要キーを列挙する（Vite想定で VITE_ プレフィックス）
+- `.gitignore` を確認し `.env.local` がコミットされないようにする
+- READMEまたはdocに「`.env.local` を作って値を入れる」手順を書く
+  - `.env.local` の中身（例）
+    - VITE_FIREBASE_API_KEY=...
+    - VITE_FIREBASE_AUTH_DOMAIN=...
+    - VITE_FIREBASE_PROJECT_ID=...
+    - VITE_FIREBASE_STORAGE_BUCKET=...
+    - VITE_FIREBASE_MESSAGING_SENDER_ID=...
+    - VITE_FIREBASE_APP_ID=...
+    - VITE_FIREBASE_MEASUREMENT_ID=...（任意）
+
+##### C. GoogleログインUI
+
+- ヘッダーまたは設定画面に「ログイン/ログアウト」ボタンを追加
+- ログイン状態（メール等）を表示
+- auth状態を購読し、ログイン後にFirestore同期を有効化する
+
+##### D. Firestoreデータ構造（Phase 1.5の最小）
+
+- `families/{familyId}`
+- `families/{familyId}/members/{uid}`
+- `families/{familyId}/babies/{babyId}`
+- `families/{familyId}/events/{eventId}`
+
+##### E. 初回ログイン時の family 作成フロー（重要）
+
+- ログイン直後、以下を順に実行する
+  1) `familyId` を決める（まずは `familyId = auth.uid` でOK）
+  2) `families/{familyId}` が無ければ作成
+  3) `families/{familyId}/members/{auth.uid}` を作成（自分を家族メンバーに登録）
+- これにより、Firestoreルールに引っかからず events/babies を扱える
+
+##### F. events / babies の保存と購読
+
+- repository層を作り、Firestoreの保存・購読（onSnapshot）を実装する
+- 画面状態のソースをFirestoreに寄せる（localは予備/移行用）
+
+##### G. localStorage → Firestore 移行（Phase1資産の救済）
+
+- 初回ログイン時：
+  - Firestoreのeventsが空
+  - localStorageにeventsがある
+  - 未移行フラグ
+    の条件なら一括アップロード
+- 移行済みフラグで二重移行を防ぐ
+
+##### H. 追加（任意だが便利）
+
+- Firestoreに未同期がある、などの簡易表示（数だけでOK）
+- エクスポート/インポート（JSON）は引き続き残す
+
+---
+
+#### 受け入れ条件（Phase 1.5）
+
+- Googleログインできる
+- 記録がFirestoreに保存される
+- 別ブラウザ/別端末で同じGoogleアカウントでログインすると同じログが見える
+- 初回ログイン時に members 登録まで自動で完了する
+- localStorageからの移行が一度だけ実行され、データが欠けない
 
 ### Phase 2（Googleカレンダー連携を本命として固める）
 
@@ -176,3 +379,5 @@
 
 - clone: `git clone git@github.com:TomoyaSuzuki86/Twinly.git`
 - install/build/test は package.json / README に従う（見つからない場合は作る）
+
+

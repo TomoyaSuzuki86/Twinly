@@ -1,4 +1,4 @@
-
+ï»¿
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -15,8 +15,12 @@ import {
   Undo2,
   X,
 } from "lucide-react";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import { collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 const LS_KEY = "twinly-app-v1";
+const LS_FAMILY_KEY = "twinly-family-id";
 
 type BabyId = "A" | "B";
 type EventType = "milk" | "diaper" | "daily";
@@ -110,21 +114,21 @@ const demoBirthDate = (daysAgo: number) => {
 const baseProfiles: Record<BabyId, BabyProfile> = {
   A: {
     babyId: "A",
-    displayName: "Ô‚¿‚á‚ñA",
+    displayName: "èµ¤ã¡ã‚ƒã‚“A",
     birthDate: demoBirthDate(103),
-    diaperSize: "V¶™",
-    diaperStockBySize: { "V¶™": 80, S: 0, M: 0, L: 0 },
+    diaperSize: "æ–°ç”Ÿå…",
+    diaperStockBySize: { "æ–°ç”Ÿå…": 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
-    calendarName: "ˆç™‹L˜^-A",
+    calendarName: "è‚²å…è¨˜éŒ²-A",
   },
   B: {
     babyId: "B",
-    displayName: "Ô‚¿‚á‚ñB",
+    displayName: "èµ¤ã¡ã‚ƒã‚“B",
     birthDate: demoBirthDate(103),
-    diaperSize: "V¶™",
-    diaperStockBySize: { "V¶™": 80, S: 0, M: 0, L: 0 },
+    diaperSize: "æ–°ç”Ÿå…",
+    diaperStockBySize: { "æ–°ç”Ÿå…": 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
-    calendarName: "ˆç™‹L˜^-B",
+    calendarName: "è‚²å…è¨˜éŒ²-B",
   },
 };
 
@@ -201,7 +205,7 @@ function SolidButton({
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
-      title={onLongPress ? "’·‰Ÿ‚µ‚ÅÚ×" : undefined}
+      title={onLongPress ? "é•·æŠ¼ã—ã§è©³ç´°" : undefined}
     >
       <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/15">{icon}</div>
       <div className="text-2xl font-semibold tracking-tight">{title}</div>
@@ -300,7 +304,7 @@ function SnackbarUndo({
                 onClick={onUndo}
               >
                 <Undo2 className="h-5 w-5" />
-                <span className="text-sm font-semibold">æ‚èÁ‚·</span>
+                <span className="text-sm font-semibold">å–ã‚Šæ¶ˆã™</span>
               </button>
             </div>
             <button className="sr-only" onClick={onClose} aria-label="close-snackbar" />
@@ -353,10 +357,10 @@ function EventCard({
 
   const title =
     event.type === "milk"
-      ? `${event.milkMl ?? 0}mlE${event.milkMethod === "breast" ? "•ê“û" : "šM“û•r"}`
+      ? `${event.milkMl ?? 0}mlãƒ»${event.milkMethod === "breast" ? "æ¯ä¹³" : "å“ºä¹³ç“¶"}`
       : event.type === "diaper"
-      ? `‚¨‚Ş‚ÂE${event.diaperKind === "pee" ? "‚¨‚µ‚Á‚±" : event.diaperKind === "poop" ? "‚¤‚ñ‚¿" : "—¼•û"}`
-      : "“úŸƒŒƒ|[ƒg";
+      ? `ãŠã‚€ã¤ãƒ»${event.diaperKind === "pee" ? "ãŠã—ã£ã“" : event.diaperKind === "poop" ? "ã†ã‚“ã¡" : "ä¸¡æ–¹"}`
+      : "æ—¥æ¬¡ãƒ¬ãƒãƒ¼ãƒˆ";
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-[26px] border border-white/10 bg-white/5 p-4">
@@ -390,6 +394,11 @@ function EventCard({
 export default function App() {
   const [app, setApp] = useLocalStorageState<AppState>(LS_KEY, initialState);
   const [activeDate, setActiveDate] = useState(() => app.ui.lastViewedDate);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [familyId, setFamilyId] = useState(() => localStorage.getItem(LS_FAMILY_KEY) ?? "");
+  const [familyInput, setFamilyInput] = useState("");
+  const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -406,6 +415,14 @@ export default function App() {
 
   const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
   const undoTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      setAuthReady(true);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     setApp((prev) => ({ ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } }));
@@ -444,6 +461,38 @@ export default function App() {
     });
     return out;
   }, [app.profiles]);
+
+  const saveFamilyId = (next: string) => {
+    setFamilyId(next);
+    if (next) {
+      localStorage.setItem(LS_FAMILY_KEY, next);
+    } else {
+      localStorage.removeItem(LS_FAMILY_KEY);
+    }
+  };
+
+  useEffect(() => {
+    if (!authUser || !familyId) return;
+    const familyRef = doc(db, "families", familyId);
+    const memberRef = doc(db, "families", familyId, "members", authUser.uid);
+    setDoc(
+      familyRef,
+      {
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    setDoc(
+      memberRef,
+      {
+        uid: authUser.uid,
+        displayName: authUser.displayName ?? "",
+        email: authUser.email ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }, [authUser, familyId]);
 
   const scheduleUndo = (event: LogEvent) => {
     if (undoTimerRef.current) {
@@ -568,7 +617,7 @@ export default function App() {
   };
 
   const resetAll = () => {
-    if (!confirm("‘S‚Ä‚Ìƒf[ƒ^‚ğíœ‚µ‚Ü‚·‚©H")) return;
+    if (!confirm("å…¨ã¦ã®ãƒ‡ãƒ¼ã‚¿ã‚’å‰Šé™¤ã—ã¾ã™ã‹ï¼Ÿ")) return;
     setApp(initialState);
     setActiveDate(fmtDate(new Date()));
     setModal(null);
@@ -585,7 +634,7 @@ export default function App() {
     const diaperEvents = events.filter((e) => e.type === "diaper");
     const milkTotal = milkEvents.reduce((sum, e) => sum + (e.milkMl ?? 0), 0);
     const diaperCount = diaperEvents.length;
-    return `${todayLabel} ‚Ì‚Ü‚Æ‚ßFƒ~ƒ‹ƒN ${milkEvents.length}‰ñi‡Œv ${milkTotal}mljA‚¨‚Ş‚Â ${diaperCount}‰ñ`;
+    return `${todayLabel} ã®ã¾ã¨ã‚ï¼šãƒŸãƒ«ã‚¯ ${milkEvents.length}å›ï¼ˆåˆè¨ˆ ${milkTotal}mlï¼‰ã€ãŠã‚€ã¤ ${diaperCount}å›`;
   };
 
   const changeDiaperSize = (babyId: BabyId, next: string) => {
@@ -657,7 +706,116 @@ export default function App() {
       setApp(next);
       setActiveDate(next.ui?.lastViewedDate ?? fmtDate(new Date()));
     } catch {
-      alert("ƒCƒ“ƒ|[ƒg‚É¸”s‚µ‚Ü‚µ‚½BJSON‚ÌŒ`®‚ğŠm”F‚µ‚Ä‚­‚¾‚³‚¢B");
+      alert("ã‚¤ãƒ³ãƒãƒ¼ãƒˆã«å¤±æ•—ã—ã¾ã—ãŸã€‚JSONã®å½¢å¼ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚");
+    }
+  };
+
+  const signInGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch {
+      alert("Googleãƒ­ã‚°ã‚¤ãƒ³ã«å¤±æ•—ã—ã¾ã—ãŸã€‚");
+    }
+  };
+
+  const signOutGoogle = async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      alert("ãƒ­ã‚°ã‚¢ã‚¦ãƒˆã«å¤±æ•—ã—ã¾ã—ãŸã€‚");
+    }
+  };
+
+  const createFamily = async () => {
+    if (!authUser) {
+      alert("å…ˆã«Googleãƒ­ã‚°ã‚¤ãƒ³ã—ã¦ãã ã•ã„ã€‚");
+      return;
+    }
+    const ref = doc(collection(db, "families"));
+    await setDoc(
+      ref,
+      {
+        ownerUid: authUser.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    saveFamilyId(ref.id);
+  };
+
+  const joinFamily = async () => {
+    const trimmed = familyInput.trim();
+    if (!trimmed) return;
+    const ref = doc(db, "families", trimmed);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      alert("å®¶æ—ã‚³ãƒ¼ãƒ‰ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚");
+      return;
+    }
+    saveFamilyId(trimmed);
+    setFamilyInput("");
+  };
+
+  const saveToCloud = async () => {
+    if (!authUser) {
+      alert("Googleãƒ­ã‚°ã‚¤ãƒ³ã—ã¦ãã ã•ã„ã€‚");
+      return;
+    }
+    if (!familyId) {
+      alert("å®¶æ—ã‚³ãƒ¼ãƒ‰ã‚’è¨­å®šã—ã¦ãã ã•ã„ã€‚");
+      return;
+    }
+    setCloudStatus("saving");
+    try {
+      const ref = doc(db, "families", familyId, "app", "state");
+      await setDoc(
+        ref,
+        {
+          app,
+          updatedAt: serverTimestamp(),
+          updatedBy: authUser.uid,
+        },
+        { merge: true }
+      );
+      setCloudStatus("done");
+    } catch {
+      setCloudStatus("error");
+      alert("ã‚¯ãƒ©ã‚¦ãƒ‰ä¿å­˜ã«å¤±æ•—ã—ã¾ã—ãŸã€‚");
+    }
+  };
+
+  const loadFromCloud = async () => {
+    if (!authUser) {
+      alert("Googleãƒ­ã‚°ã‚¤ãƒ³ã—ã¦ãã ã•ã„ã€‚");
+      return;
+    }
+    if (!familyId) {
+      alert("å®¶æ—ã‚³ãƒ¼ãƒ‰ã‚’è¨­å®šã—ã¦ãã ã•ã„ã€‚");
+      return;
+    }
+    setCloudStatus("loading");
+    try {
+      const ref = doc(db, "families", familyId, "app", "state");
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        alert("ã‚¯ãƒ©ã‚¦ãƒ‰ã«ä¿å­˜ã•ã‚ŒãŸãƒ‡ãƒ¼ã‚¿ãŒã‚ã‚Šã¾ã›ã‚“ã€‚");
+        setCloudStatus("idle");
+        return;
+      }
+      const data = snap.data() as { app?: AppState };
+      if (!data?.app) {
+        alert("ã‚¯ãƒ©ã‚¦ãƒ‰ãƒ‡ãƒ¼ã‚¿ã®å½¢å¼ãŒä¸æ­£ã§ã™ã€‚");
+        setCloudStatus("error");
+        return;
+      }
+      setApp(data.app);
+      setActiveDate(data.app.ui?.lastViewedDate ?? fmtDate(new Date()));
+      setCloudStatus("done");
+    } catch {
+      setCloudStatus("error");
+      alert("ã‚¯ãƒ©ã‚¦ãƒ‰èª­ã¿è¾¼ã¿ã«å¤±æ•—ã—ã¾ã—ãŸã€‚");
     }
   };
 
@@ -684,14 +842,14 @@ export default function App() {
             </div>
             <div>
               <div className="text-2xl font-semibold tracking-tight text-white">{p.displayName}</div>
-              <div className="mt-1 text-sm text-white/55">¶Œã{ageDays}“ú</div>
+              <div className="mt-1 text-sm text-white/55">ç”Ÿå¾Œ{ageDays}æ—¥</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <TagPill>
-                  <span className="text-[11px]">‚¨‚Ş‚Â {p.diaperSize}Ec‚è {rem}</span>
+                  <span className="text-[11px]">ãŠã‚€ã¤ {p.diaperSize}ãƒ»æ®‹ã‚Š {rem}</span>
                 </TagPill>
                 {low ? (
                   <TagPill>
-                    <span className="text-[11px] text-amber-200">c‚è­‚È‚¢</span>
+                    <span className="text-[11px] text-amber-200">æ®‹ã‚Šå°‘ãªã„</span>
                   </TagPill>
                 ) : null}
                 {low && purchaseUrl ? (
@@ -701,7 +859,7 @@ export default function App() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    w“ü‚Ö
+                    è³¼å…¥ã¸
                   </a>
                 ) : null}
               </div>
@@ -714,25 +872,25 @@ export default function App() {
               const body = buildDailyReport(babyId, byBaby[babyId]);
               addEvent(babyId, "daily", { note: body });
             }}
-            title="“úŸƒŒƒ|[ƒg"
+            title="æ—¥æ¬¡ãƒ¬ãƒãƒ¼ãƒˆ"
           >
             <FileText className="h-4 w-4" />
-            ‚Ü‚Æ‚ß
+            ã¾ã¨ã‚
           </button>
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <MiniCard label="ƒ~ƒ‹ƒN‡Œv">
+          <MiniCard label="ãƒŸãƒ«ã‚¯åˆè¨ˆ">
             <div className="flex items-end gap-2">
               <span className="text-sky-300">{milkTotal}</span>
               <span className="mb-1 text-lg font-semibold text-white/70">ml</span>
-              <span className="mb-1 ml-auto text-sm text-white/50">{milkEvents.length}‰ñ</span>
+              <span className="mb-1 ml-auto text-sm text-white/50">{milkEvents.length}å›</span>
             </div>
           </MiniCard>
-          <MiniCard label="‚¨‚Ş‚Â">
+          <MiniCard label="ãŠã‚€ã¤">
             <div className="flex items-end gap-2">
               <span className="text-amber-300">{diaperCount}</span>
-              <span className="mb-1 text-lg font-semibold text-white/70">‰ñ</span>
+              <span className="mb-1 text-lg font-semibold text-white/70">å›</span>
             </div>
           </MiniCard>
         </div>
@@ -741,7 +899,7 @@ export default function App() {
           <SolidButton
             tone="milk"
             icon={<Milk className="h-6 w-6" />}
-            title="ƒ~ƒ‹ƒN"
+            title="ãƒŸãƒ«ã‚¯"
             onClick={() => addEvent(babyId, "milk", { milkMl: 140, milkMethod: "breast" })}
             onLongPress={() => {
               setMilkMl(140);
@@ -753,7 +911,7 @@ export default function App() {
           <SolidButton
             tone="diaper"
             icon={<Droplets className="h-6 w-6" />}
-            title="‚¨‚Ş‚Â"
+            title="ãŠã‚€ã¤"
             onClick={() => addEvent(babyId, "diaper", { diaperKind: "pee" })}
             onLongPress={() => {
               setDiaperKind("pee");
@@ -764,11 +922,11 @@ export default function App() {
         </div>
 
         <div className="mt-5">
-          <div className="text-sm font-semibold text-white/40">¡“ú‚ÌƒƒO</div>
+          <div className="text-sm font-semibold text-white/40">ä»Šæ—¥ã®ãƒ­ã‚°</div>
           <div className="mt-3 flex flex-col gap-3">
             {byBaby[babyId].length === 0 ? (
               <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 text-sm text-white/55">
-                ‚Ü‚¾‹L˜^‚ª‚ ‚è‚Ü‚¹‚ñ
+                ã¾ã è¨˜éŒ²ãŒã‚ã‚Šã¾ã›ã‚“
               </div>
             ) : (
               byBaby[babyId]
@@ -790,9 +948,9 @@ export default function App() {
 
   const openSettings = () => setModal({ kind: "settings" });
 
-  const milkTitle = modal && modal.kind === "milk" ? `${app.profiles[modal.babyId].displayName}: ƒ~ƒ‹ƒN‹L˜^` : "ƒ~ƒ‹ƒN‹L˜^";
+  const milkTitle = modal && modal.kind === "milk" ? `${app.profiles[modal.babyId].displayName}: ãƒŸãƒ«ã‚¯è¨˜éŒ²` : "ãƒŸãƒ«ã‚¯è¨˜éŒ²";
   const diaperTitle =
-    modal && modal.kind === "diaper" ? `${app.profiles[modal.babyId].displayName}: ‚¨‚Ş‚Â‹L˜^` : "‚¨‚Ş‚Â‹L˜^";
+    modal && modal.kind === "diaper" ? `${app.profiles[modal.babyId].displayName}: ãŠã‚€ã¤è¨˜éŒ²` : "ãŠã‚€ã¤è¨˜éŒ²";
 
   const [newSize, setNewSize] = useState<Record<BabyId, string>>({ A: "", B: "" });
   const [importText, setImportText] = useState("");
@@ -834,7 +992,7 @@ export default function App() {
             </TagPill>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-white/50">•\¦“ú</label>
+            <label className="text-xs text-white/50">è¡¨ç¤ºæ—¥</label>
             <input
               type="date"
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
@@ -844,10 +1002,10 @@ export default function App() {
             <button
               className="inline-flex items-center gap-2 rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
               onClick={resetAll}
-              title="‘SÁ‚µ"
+              title="å…¨æ¶ˆã—"
             >
               <Trash2 className="h-4 w-4" />
-              ‘SÁ‚µ
+              å…¨æ¶ˆã—
             </button>
           </div>
         </div>
@@ -858,7 +1016,7 @@ export default function App() {
         </div>
       </div>
 
-      <SnackbarUndo open={undo.open} message="‹L˜^‚ğ•Û‘¶‚µ‚Ü‚µ‚½" onUndo={undoLast} onClose={() => setUndo({ open: false })} />
+      <SnackbarUndo open={undo.open} message="è¨˜éŒ²ã‚’ä¿å­˜ã—ã¾ã—ãŸ" onUndo={undoLast} onClose={() => setUndo({ open: false })} />
 
       <ModalShell
         open={!!modal && modal.kind === "milk"}
@@ -870,7 +1028,7 @@ export default function App() {
               className="rounded-2xl bg-white/5 px-6 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
               onClick={() => setModal(null)}
             >
-              ƒLƒƒƒ“ƒZƒ‹
+              ã‚­ãƒ£ãƒ³ã‚»ãƒ«
             </button>
             <button
               className="rounded-2xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white hover:bg-sky-500"
@@ -880,13 +1038,13 @@ export default function App() {
                 setModal(null);
               }}
             >
-              •Û‘¶‚·‚é
+              ä¿å­˜ã™ã‚‹
             </button>
           </>
         }
       >
         <div className="rounded-[32px] border border-white/10 bg-white/5 p-6">
-          <div className="text-center text-sm font-semibold text-white/55">—Ê (ml)</div>
+          <div className="text-center text-sm font-semibold text-white/55">é‡ (ml)</div>
 
           <div className="mt-6 flex items-center justify-center gap-6">
             <button
@@ -917,7 +1075,7 @@ export default function App() {
               }`}
               onClick={() => setMilkMethod("bottle")}
             >
-              šM“û•r
+              å“ºä¹³ç“¶
             </button>
             <button
               className={`rounded-[22px] border px-4 py-4 text-base font-semibold ${
@@ -927,17 +1085,17 @@ export default function App() {
               }`}
               onClick={() => setMilkMethod("breast")}
             >
-              •ê“û
+              æ¯ä¹³
             </button>
           </div>
 
           <div className="mt-5">
-            <div className="text-xs text-white/50">ƒƒ‚i”CˆÓj</div>
+            <div className="text-xs text-white/50">ãƒ¡ãƒ¢ï¼ˆä»»æ„ï¼‰</div>
             <input
               className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="—áF“r’†‚ÅƒQƒbƒv"
+              placeholder="ä¾‹ï¼šé€”ä¸­ã§ã‚²ãƒƒãƒ—"
             />
           </div>
         </div>
@@ -954,7 +1112,7 @@ export default function App() {
               className="rounded-2xl bg-white/5 px-6 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
               onClick={() => setModal(null)}
             >
-              ƒLƒƒƒ“ƒZƒ‹
+              ã‚­ãƒ£ãƒ³ã‚»ãƒ«
             </button>
             <button
               className="rounded-2xl bg-amber-600 px-6 py-3 text-sm font-semibold text-white hover:bg-amber-500"
@@ -964,18 +1122,18 @@ export default function App() {
                 setModal(null);
               }}
             >
-              •Û‘¶‚·‚é
+              ä¿å­˜ã™ã‚‹
             </button>
           </>
         }
       >
         <div className="rounded-[32px] border border-white/10 bg-white/5 p-6">
-          <div className="text-sm font-semibold text-white/55">í—Ş</div>
+          <div className="text-sm font-semibold text-white/55">ç¨®é¡</div>
           <div className="mt-4 grid grid-cols-3 gap-3">
             {([
-              { k: "pee", label: "‚¨‚µ‚Á‚±" },
-              { k: "poop", label: "‚¤‚ñ‚¿" },
-              { k: "mix", label: "—¼•û" },
+              { k: "pee", label: "ãŠã—ã£ã“" },
+              { k: "poop", label: "ã†ã‚“ã¡" },
+              { k: "mix", label: "ä¸¡æ–¹" },
             ] as const).map((x) => (
               <button
                 key={x.k}
@@ -992,12 +1150,12 @@ export default function App() {
           </div>
 
           <div className="mt-5">
-            <div className="text-xs text-white/50">ƒƒ‚i”CˆÓj</div>
+            <div className="text-xs text-white/50">ãƒ¡ãƒ¢ï¼ˆä»»æ„ï¼‰</div>
             <input
               className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="—áF”§r‚ê‹C–¡"
+              placeholder="ä¾‹ï¼šè‚Œè’ã‚Œæ°—å‘³"
             />
           </div>
         </div>
@@ -1005,7 +1163,7 @@ export default function App() {
 
       <ModalShell
         open={!!modal && modal.kind === "settings"}
-        title="İ’è"
+        title="è¨­å®š"
         onClose={() => setModal(null)}
         icon={<Settings className="h-5 w-5 text-white" />}
         footer={
@@ -1014,22 +1172,43 @@ export default function App() {
               className="rounded-2xl bg-white/5 px-6 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
               onClick={() => setModal(null)}
             >
-              •Â‚¶‚é
+              é–‰ã˜ã‚‹
             </button>
           </>
         }
       >
         <div className="grid gap-4">
           <div className="rounded-[32px] border border-white/10 bg-white/5 p-5">
-            <div className="text-base font-semibold text-white">GoogleƒJƒŒƒ“ƒ_[</div>
+            <div className="text-base font-semibold text-white">Googleã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼</div>
             <div className="mt-2 text-xs text-white/55">
-              ‚±‚±‚Íƒ‚ƒbƒN‚Å‚·B–{À‘•‚ÍOAuth 2.0‚ÅŒ ŒÀ‚ğæ‚èAŠeƒCƒxƒ“ƒg‚ğuˆç™‹L˜^-A/Bv‚Éì¬‚µ‚Ü‚·B
+              ã“ã“ã¯ãƒ¢ãƒƒã‚¯ã§ã™ã€‚æœ¬å®Ÿè£…ã¯OAuth 2.0ã§æ¨©é™ã‚’å–ã‚Šã€å„ã‚¤ãƒ™ãƒ³ãƒˆã‚’ã€Œè‚²å…è¨˜éŒ²-A/Bã€ã«ä½œæˆã—ã¾ã™ã€‚
+            </div>
+            <div className="mt-3 text-xs text-white/55">ã‚¢ã‚«ã‚¦ãƒ³ãƒˆ</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/80">
+              <span>
+                {authReady ? (authUser ? `${authUser.displayName ?? "æœªè¨­å®š"} (${authUser.email ?? "-"})` : "æœªãƒ­ã‚°ã‚¤ãƒ³") : "ç¢ºèªä¸­..."}
+              </span>
+              {authUser ? (
+                <button
+                  className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
+                  onClick={signOutGoogle}
+                >
+                  ãƒ­ã‚°ã‚¢ã‚¦ãƒˆ
+                </button>
+              ) : (
+                <button
+                  className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
+                  onClick={signInGoogle}
+                >
+                  Googleã§ãƒ­ã‚°ã‚¤ãƒ³
+                </button>
+              )}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {(Object.keys(app.profiles) as BabyId[]).map((babyId) => (
                 <div key={babyId} className="rounded-[26px] border border-white/10 bg-white/5 p-4">
                   <div className="text-sm font-semibold text-white">{babyId}</div>
-                  <div className="mt-3 text-xs text-white/55">ƒJƒŒƒ“ƒ_[–¼</div>
+                  <div className="mt-3 text-xs text-white/55">ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼å</div>
                   <input
                     className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                     value={app.profiles[babyId].calendarName}
@@ -1046,15 +1225,9 @@ export default function App() {
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
-                      onClick={() => alert("iƒ‚ƒbƒNjGoogle‚ÅƒƒOƒCƒ“")}
+                      onClick={() => alert("ï¼ˆãƒ¢ãƒƒã‚¯ï¼‰ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ä½œæˆ")}
                     >
-                      ƒƒOƒCƒ“
-                    </button>
-                    <button
-                      className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
-                      onClick={() => alert("iƒ‚ƒbƒNjƒJƒŒƒ“ƒ_[ì¬")}
-                    >
-                      ƒJƒŒƒ“ƒ_[ì¬
+                      ã‚«ãƒ¬ãƒ³ãƒ€ãƒ¼ä½œæˆ
                     </button>
                   </div>
                 </div>
@@ -1063,7 +1236,74 @@ export default function App() {
           </div>
 
           <div className="rounded-[32px] border border-white/10 bg-white/5 p-5">
-            <div className="text-base font-semibold text-white">Ô‚¿‚á‚ñƒvƒƒtƒB[ƒ‹</div>
+            <div className="text-base font-semibold text-white">ã‚¯ãƒ©ã‚¦ãƒ‰å…±æœ‰ï¼ˆPhase 1.5ï¼‰</div>
+            <div className="mt-2 text-xs text-white/55">
+              Googleãƒ­ã‚°ã‚¤ãƒ³å¾Œã€å®¶æ—ã‚³ãƒ¼ãƒ‰ã‚’å…±æœ‰ã—ã¦åŒã˜ãƒ‡ãƒ¼ã‚¿ã‚’ä½¿ã„ã¾ã™ã€‚
+            </div>
+            <div className="mt-3 text-xs text-white/55">å®¶æ—ã‚³ãƒ¼ãƒ‰</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80">
+                {familyId || "æœªè¨­å®š"}
+              </div>
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                onClick={createFamily}
+              >
+                æ–°ã—ã„å®¶æ—ã‚’ä½œæˆ
+              </button>
+            </div>
+            <div className="mt-3 text-xs text-white/55">å‚åŠ ã™ã‚‹</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                className="w-56 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
+                placeholder="å®¶æ—ã‚³ãƒ¼ãƒ‰ã‚’å…¥åŠ›"
+                value={familyInput}
+                onChange={(e) => setFamilyInput(e.target.value)}
+              />
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                onClick={joinFamily}
+              >
+                å‚åŠ 
+              </button>
+              {familyId ? (
+                <button
+                  className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                  onClick={() => saveFamilyId("")}
+                >
+                  è§£é™¤
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                onClick={loadFromCloud}
+              >
+                ã‚¯ãƒ©ã‚¦ãƒ‰ã‹ã‚‰èª­ã¿è¾¼ã¿
+              </button>
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                onClick={saveToCloud}
+              >
+                ã‚¯ãƒ©ã‚¦ãƒ‰ã«ä¿å­˜
+              </button>
+              <span className="text-xs text-white/55">
+                {cloudStatus === "saving"
+                  ? "ä¿å­˜ä¸­..."
+                  : cloudStatus === "loading"
+                  ? "èª­ã¿è¾¼ã¿ä¸­..."
+                  : cloudStatus === "done"
+                  ? "å®Œäº†"
+                  : cloudStatus === "error"
+                  ? "ã‚¨ãƒ©ãƒ¼"
+                  : ""}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-[32px] border border-white/10 bg-white/5 p-5">
+            <div className="text-base font-semibold text-white">èµ¤ã¡ã‚ƒã‚“ãƒ—ãƒ­ãƒ•ã‚£ãƒ¼ãƒ«</div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {(Object.keys(app.profiles) as BabyId[]).map((babyId) => {
                 const p = app.profiles[babyId];
@@ -1072,7 +1312,7 @@ export default function App() {
                   <div key={babyId} className="rounded-[26px] border border-white/10 bg-white/5 p-4">
                     <div className="text-sm font-semibold text-white">{babyId}</div>
 
-                    <div className="mt-3 text-xs text-white/55">•\¦–¼</div>
+                    <div className="mt-3 text-xs text-white/55">è¡¨ç¤ºå</div>
                     <input
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                       value={p.displayName}
@@ -1087,7 +1327,7 @@ export default function App() {
                       }
                     />
 
-                    <div className="mt-3 text-xs text-white/55">¶”NŒ“ú</div>
+                    <div className="mt-3 text-xs text-white/55">ç”Ÿå¹´æœˆæ—¥</div>
                     <input
                       type="date"
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
@@ -1103,7 +1343,7 @@ export default function App() {
                       }
                     />
 
-                    <div className="mt-3 text-xs text-white/55">Œ»İƒTƒCƒY</div>
+                    <div className="mt-3 text-xs text-white/55">ç¾åœ¨ã‚µã‚¤ã‚º</div>
                     <select
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                       value={p.diaperSize}
@@ -1116,7 +1356,7 @@ export default function App() {
                       ))}
                     </select>
 
-                    <div className="mt-3 text-xs text-white/55">w“üƒŠƒ“ƒNi”CˆÓj</div>
+                    <div className="mt-3 text-xs text-white/55">è³¼å…¥ãƒªãƒ³ã‚¯ï¼ˆä»»æ„ï¼‰</div>
                     <input
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                       value={p.diaperPurchaseUrl ?? ""}
@@ -1131,7 +1371,7 @@ export default function App() {
                       }
                     />
 
-                    <div className="mt-3 text-xs text-white/55">İŒÉ”</div>
+                    <div className="mt-3 text-xs text-white/55">åœ¨åº«æ•°</div>
                     <div className="mt-2 grid gap-2">
                       {sizes.map((size) => (
                         <div
@@ -1167,7 +1407,7 @@ export default function App() {
                     <div className="mt-3 flex items-center gap-2">
                       <input
                         className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
-                        placeholder="ƒTƒCƒY’Ç‰Ái—áFXLj"
+                        placeholder="ã‚µã‚¤ã‚ºè¿½åŠ ï¼ˆä¾‹ï¼šXLï¼‰"
                         value={newSize[babyId]}
                         onChange={(e) => setNewSize((prev) => ({ ...prev, [babyId]: e.target.value }))}
                       />
@@ -1178,7 +1418,7 @@ export default function App() {
                           setNewSize((prev) => ({ ...prev, [babyId]: "" }));
                         }}
                       >
-                        ’Ç‰Á
+                        è¿½åŠ 
                       </button>
                     </div>
                   </div>
@@ -1188,45 +1428,45 @@ export default function App() {
           </div>
 
           <div className="rounded-[32px] border border-white/10 bg-white/5 p-5">
-            <div className="text-base font-semibold text-white">ƒf[ƒ^</div>
-            <div className="mt-2 text-xs text-white/55">JSON‚ÌƒGƒNƒXƒ|[ƒgEƒCƒ“ƒ|[ƒg‚ª‰Â”\‚Å‚·B</div>
+            <div className="text-base font-semibold text-white">ãƒ‡ãƒ¼ã‚¿</div>
+            <div className="mt-2 text-xs text-white/55">JSONã®ã‚¨ã‚¯ã‚¹ãƒãƒ¼ãƒˆãƒ»ã‚¤ãƒ³ãƒãƒ¼ãƒˆãŒå¯èƒ½ã§ã™ã€‚</div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
                 onClick={exportJson}
               >
-                JSON‚ğƒ_ƒEƒ“ƒ[ƒh
+                JSONã‚’ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰
               </button>
             </div>
 
             <div className="mt-4">
-              <div className="text-xs text-white/55">JSON“\‚è•t‚¯</div>
+              <div className="text-xs text-white/55">JSONè²¼ã‚Šä»˜ã‘</div>
               <textarea
                 className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                 rows={4}
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
-                placeholder="‚±‚±‚ÉJSON‚ğ“\‚è•t‚¯‚ÄƒCƒ“ƒ|[ƒg"
+                placeholder="ã“ã“ã«JSONã‚’è²¼ã‚Šä»˜ã‘ã¦ã‚¤ãƒ³ãƒãƒ¼ãƒˆ"
               />
               <div className="mt-2 flex items-center gap-2">
                 <button
                   className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
                   onClick={() => importJson(importText)}
                 >
-                  ƒCƒ“ƒ|[ƒg
+                  ã‚¤ãƒ³ãƒãƒ¼ãƒˆ
                 </button>
                 <button
                   className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
                   onClick={() => setImportText("")}
                 >
-                  ƒNƒŠƒA
+                  ã‚¯ãƒªã‚¢
                 </button>
               </div>
             </div>
 
             <div className="mt-4">
-              <div className="text-xs text-white/55">ƒtƒ@ƒCƒ‹‚©‚ç“Ç‚İ‚İ</div>
+              <div className="text-xs text-white/55">ãƒ•ã‚¡ã‚¤ãƒ«ã‹ã‚‰èª­ã¿è¾¼ã¿</div>
               <input
                 type="file"
                 accept="application/json"
@@ -1244,7 +1484,7 @@ export default function App() {
 
       <ModalShell
         open={!!modal && modal.kind === "edit"}
-        title={editTarget ? `${app.profiles[editTarget.babyId].displayName}: •ÒW` : "•ÒW"}
+        title={editTarget ? `${app.profiles[editTarget.babyId].displayName}: ç·¨é›†` : "ç·¨é›†"}
         onClose={() => setModal(null)}
         icon={<Pencil className="h-5 w-5 text-white" />}
         footer={
@@ -1253,28 +1493,28 @@ export default function App() {
               className="rounded-2xl bg-white/5 px-6 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
               onClick={() => setModal(null)}
             >
-              ƒLƒƒƒ“ƒZƒ‹
+              ã‚­ãƒ£ãƒ³ã‚»ãƒ«
             </button>
             <button
               className="rounded-2xl bg-white/10 px-6 py-3 text-sm font-semibold text-white hover:bg-white/15"
               onClick={saveEdit}
               disabled={!editTarget}
             >
-              •Û‘¶
+              ä¿å­˜
             </button>
           </>
         }
       >
         {!editTarget ? (
-          <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 text-sm text-white/55">‘ÎÛ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ</div>
+          <div className="rounded-[26px] border border-white/10 bg-white/5 p-4 text-sm text-white/55">å¯¾è±¡ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“</div>
         ) : (
           <div className="grid gap-4">
             {editTarget.type === "milk" ? (
               <div className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-                <div className="text-sm font-semibold text-white/70">ƒ~ƒ‹ƒN</div>
+                <div className="text-sm font-semibold text-white/70">ãƒŸãƒ«ã‚¯</div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
-                    <div className="text-xs text-white/50">—Ê (ml)</div>
+                    <div className="text-xs text-white/50">é‡ (ml)</div>
                     <input
                       type="number"
                       className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
@@ -1283,7 +1523,7 @@ export default function App() {
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-white/50">í—Ş</div>
+                    <div className="text-xs text-white/50">ç¨®é¡</div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button
                         className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
@@ -1291,7 +1531,7 @@ export default function App() {
                         }`}
                         onClick={() => setMilkMethod("bottle")}
                       >
-                        šM“û•r
+                        å“ºä¹³ç“¶
                       </button>
                       <button
                         className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
@@ -1299,7 +1539,7 @@ export default function App() {
                         }`}
                         onClick={() => setMilkMethod("breast")}
                       >
-                        •ê“û
+                        æ¯ä¹³
                       </button>
                     </div>
                   </div>
@@ -1309,12 +1549,12 @@ export default function App() {
 
             {editTarget.type === "diaper" ? (
               <div className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-                <div className="text-sm font-semibold text-white/70">‚¨‚Ş‚Â</div>
+                <div className="text-sm font-semibold text-white/70">ãŠã‚€ã¤</div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {([
-                    { k: "pee", label: "‚¨‚µ‚Á‚±" },
-                    { k: "poop", label: "‚¤‚ñ‚¿" },
-                    { k: "mix", label: "—¼•û" },
+                    { k: "pee", label: "ãŠã—ã£ã“" },
+                    { k: "poop", label: "ã†ã‚“ã¡" },
+                    { k: "mix", label: "ä¸¡æ–¹" },
                   ] as const).map((x) => (
                     <button
                       key={x.k}
@@ -1331,7 +1571,7 @@ export default function App() {
             ) : null}
 
             <div className="rounded-[26px] border border-white/10 bg-white/5 p-4">
-              <div className="text-xs text-white/50">ƒƒ‚</div>
+              <div className="text-xs text-white/50">ãƒ¡ãƒ¢</div>
               <textarea
                 className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
                 rows={4}
@@ -1345,3 +1585,4 @@ export default function App() {
     </div>
   );
 }
+
