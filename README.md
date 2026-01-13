@@ -11,7 +11,7 @@ npm run dev
 
 ## Firebase (Phase 1.5)
 
-Create `.env.local` (or `.env`) based on `.env.example` and fill in your Firebase Web config.
+Create `.env.local` (or `.env`) based on `.env.example` and fill in your Firebase Web config (measurement ID is optional).
 
 ## Build
 
