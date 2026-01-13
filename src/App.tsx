@@ -15,12 +15,21 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  User,
+} from "firebase/auth";
 import { collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 const LS_KEY = "twinly-app-v1";
 const LS_FAMILY_KEY = "twinly-family-id";
+const LS_GOOGLE_TOKEN = "twinly-google-access-token";
 
 type BabyId = "A" | "B";
 type EventType = "milk" | "diaper" | "daily";
@@ -37,6 +46,7 @@ type LogEvent = {
   diaperKind?: DiaperKind;
   note?: string;
   calendarStatus?: "pending" | "synced" | "error";
+  calendarEventId?: string;
 };
 
 type BabyProfile = {
@@ -47,6 +57,7 @@ type BabyProfile = {
   diaperStockBySize: Record<string, number>;
   diaperPurchaseUrl?: string;
   calendarName: string;
+  calendarId?: string;
 };
 
 type AppState = {
@@ -120,6 +131,7 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     diaperStockBySize: { "新生児": 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
     calendarName: "育児記録-A",
+    calendarId: "",
   },
   B: {
     babyId: "B",
@@ -129,6 +141,7 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     diaperStockBySize: { "新生児": 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
     calendarName: "育児記録-B",
+    calendarId: "",
   },
 };
 
@@ -260,7 +273,7 @@ function ModalShell({
                 <X className="h-5 w-5 text-white/70" />
               </button>
             </div>
-            <div className="px-6 pb-4">{children}</div>
+            <div className="max-h-[70vh] overflow-y-auto px-6 pb-4">{children}</div>
             <div className="flex items-center justify-between gap-3 border-t border-white/10 px-6 py-5">
               {footer}
             </div>
@@ -361,6 +374,14 @@ function EventCard({
       : event.type === "diaper"
       ? `おむつ・${event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方"}`
       : "日次レポート";
+  const statusDot =
+    event.calendarStatus === "synced"
+      ? "bg-emerald-400"
+      : event.calendarStatus === "pending"
+      ? "bg-amber-400"
+      : event.calendarStatus === "error"
+      ? "bg-rose-400"
+      : "bg-white/30";
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-[26px] border border-white/10 bg-white/5 p-4">
@@ -372,6 +393,7 @@ function EventCard({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${statusDot}`} title={`カレンダー: ${event.calendarStatus ?? "-"}`} />
         <div className="w-14 text-right text-sm text-white/55">{t}</div>
         <button
           className="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 hover:bg-white/10"
@@ -399,6 +421,7 @@ export default function App() {
   const [familyId, setFamilyId] = useState(() => localStorage.getItem(LS_FAMILY_KEY) ?? "");
   const [familyInput, setFamilyInput] = useState("");
   const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
+  const [googleToken, setGoogleToken] = useState(() => localStorage.getItem(LS_GOOGLE_TOKEN) ?? "");
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -471,6 +494,15 @@ export default function App() {
     }
   };
 
+  const saveGoogleToken = (token: string) => {
+    setGoogleToken(token);
+    if (token) {
+      localStorage.setItem(LS_GOOGLE_TOKEN, token);
+    } else {
+      localStorage.removeItem(LS_GOOGLE_TOKEN);
+    }
+  };
+
   useEffect(() => {
     if (!authUser || !familyId) return;
     const familyRef = doc(db, "families", familyId);
@@ -493,6 +525,19 @@ export default function App() {
       { merge: true }
     );
   }, [authUser, familyId]);
+
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (!result) return;
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const accessToken = credential?.accessToken;
+        if (accessToken) saveGoogleToken(accessToken);
+      })
+      .catch(() => {
+        // ignore redirect errors
+      });
+  }, []);
 
   const scheduleUndo = (event: LogEvent) => {
     if (undoTimerRef.current) {
@@ -710,10 +755,161 @@ export default function App() {
     }
   };
 
+  const updateEvent = (eventId: string, patch: Partial<LogEvent>) => {
+    setApp((prev) => ({
+      ...prev,
+      events: prev.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e)),
+    }));
+  };
+
+  const fetchCalendarApi = async (path: string, options: RequestInit = {}) => {
+    if (!googleToken) {
+      alert("Googleカレンダー権限が必要です。設定画面でログインしてください。");
+      throw new Error("missing-token");
+    }
+    const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${googleToken}`,
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        alert("認証が切れています。再ログインしてください。");
+      }
+      throw new Error(`calendar-api-${res.status}`);
+    }
+    return res.json() as Promise<any>;
+  };
+
+  const buildCalendarEvent = (babyId: BabyId, event: LogEvent) => {
+    const profile = app.profiles[babyId];
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const baseTitle = profile.displayName;
+    if (event.type === "daily") {
+      const day = fmtDate(new Date(event.timestamp));
+      const nextDay = fmtDate(new Date(event.timestamp + 24 * 60 * 60 * 1000));
+      return {
+        summary: `${baseTitle} 日次レポート`,
+        description: event.note ?? "",
+        start: { date: day },
+        end: { date: nextDay },
+      };
+    }
+    const start = new Date(event.timestamp);
+    const end = new Date(event.timestamp + 10 * 60 * 1000);
+    const detail =
+      event.type === "milk"
+        ? `${event.milkMl ?? 0}ml・${event.milkMethod === "breast" ? "母乳" : "哺乳瓶"}`
+        : `おむつ・${event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方"}`;
+    return {
+      summary: `${baseTitle} ${detail}`,
+      description: event.note ?? "",
+      start: { dateTime: start.toISOString(), timeZone: tz },
+      end: { dateTime: end.toISOString(), timeZone: tz },
+    };
+  };
+
+  const ensureCalendarId = async (babyId: BabyId) => {
+    const p = app.profiles[babyId];
+    if (p.calendarId) return p.calendarId;
+    const list = await fetchCalendarApi("/users/me/calendarList");
+    const found = (list.items ?? []).find((item: any) => item.summary === p.calendarName);
+    if (!found) return "";
+    setApp((prev) => ({
+      ...prev,
+      profiles: {
+        ...prev.profiles,
+        [babyId]: { ...prev.profiles[babyId], calendarId: found.id },
+      },
+    }));
+    return found.id as string;
+  };
+
+  const createCalendar = async (babyId: BabyId) => {
+    const p = app.profiles[babyId];
+    try {
+      const created = await fetchCalendarApi("/calendars", {
+        method: "POST",
+        body: JSON.stringify({ summary: p.calendarName }),
+      });
+      setApp((prev) => ({
+        ...prev,
+        profiles: {
+          ...prev.profiles,
+          [babyId]: { ...prev.profiles[babyId], calendarId: created.id },
+        },
+      }));
+    } catch {
+      alert("カレンダー作成に失敗しました。");
+    }
+  };
+
+  const findCalendar = async (babyId: BabyId) => {
+    try {
+      const id = await ensureCalendarId(babyId);
+      if (!id) alert("一致するカレンダーが見つかりません。");
+    } catch {
+      alert("カレンダー検索に失敗しました。");
+    }
+  };
+
+  const syncEventToCalendar = async (event: LogEvent) => {
+    const calendarId = await ensureCalendarId(event.babyId);
+    if (!calendarId) {
+      updateEvent(event.id, { calendarStatus: "error" });
+      return;
+    }
+    const body = buildCalendarEvent(event.babyId, event);
+    try {
+      const res = event.calendarEventId
+        ? await fetchCalendarApi(`/calendars/${encodeURIComponent(calendarId)}/events/${event.calendarEventId}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          })
+        : await fetchCalendarApi(`/calendars/${encodeURIComponent(calendarId)}/events`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+      updateEvent(event.id, { calendarStatus: "synced", calendarEventId: res.id });
+    } catch {
+      updateEvent(event.id, { calendarStatus: "error" });
+    }
+  };
+
+  const syncTodayEvents = async () => {
+    if (!authUser) {
+      alert("Googleログインしてください。");
+      return;
+    }
+    const targets = eventsToday;
+    if (targets.length === 0) {
+      alert("同期するイベントがありません。");
+      return;
+    }
+    targets.forEach((e) => updateEvent(e.id, { calendarStatus: "pending" }));
+    for (const ev of targets) {
+      // Sequential to keep order and rate limits modest.
+      // eslint-disable-next-line no-await-in-loop
+      await syncEventToCalendar(ev);
+    }
+  };
+
   const signInGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.addScope("https://www.googleapis.com/auth/calendar");
+      provider.addScope("https://www.googleapis.com/auth/calendar.events");
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const accessToken = credential?.accessToken;
+        if (accessToken) saveGoogleToken(accessToken);
+      } catch {
+        await signInWithRedirect(auth, provider);
+      }
     } catch {
       alert("Googleログインに失敗しました。");
     }
@@ -722,6 +918,7 @@ export default function App() {
   const signOutGoogle = async () => {
     try {
       await signOut(auth);
+      saveGoogleToken("");
     } catch {
       alert("ログアウトに失敗しました。");
     }
@@ -1204,6 +1401,26 @@ export default function App() {
                 </button>
               )}
             </div>
+            <div className="mt-3 text-xs text-white/55">カレンダー権限</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/80">
+              <span>{googleToken ? "取得済み" : "未取得"}</span>
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
+                onClick={signInGoogle}
+                disabled={!authUser}
+                title={!authUser ? "ログインが必要です" : undefined}
+              >
+                権限を更新
+              </button>
+              <button
+                className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
+                onClick={syncTodayEvents}
+                disabled={!authUser}
+                title={!authUser ? "ログインが必要です" : undefined}
+              >
+                今日を同期
+              </button>
+            </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {(Object.keys(app.profiles) as BabyId[]).map((babyId) => (
                 <div key={babyId} className="rounded-[26px] border border-white/10 bg-white/5 p-4">
@@ -1225,10 +1442,20 @@ export default function App() {
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
-                      onClick={() => alert("（モック）カレンダー作成")}
+                      onClick={() => createCalendar(babyId)}
                     >
                       カレンダー作成
                     </button>
+                    <button
+                      className="rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
+                      onClick={() => findCalendar(babyId)}
+                    >
+                      カレンダー検索
+                    </button>
+                  </div>
+                  <div className="mt-3 text-xs text-white/55">カレンダーID</div>
+                  <div className="mt-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">
+                    {app.profiles[babyId].calendarId || "-"}
                   </div>
                 </div>
               ))}

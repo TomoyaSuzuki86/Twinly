@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // families/{familyId}/members/{uid} が存在すれば「家族メンバー」
+    function isFamilyMember(familyId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    match /families/{familyId} {
+
+      // family本体
+      allow read: if isFamilyMember(familyId);
+      allow create: if isSignedIn();
+      allow update, delete: if isFamilyMember(familyId);
+
+      // ★ members は初期参加のための例外を作る
+      match /members/{uid} {
+        // 読み取り：家族メンバーならOK（自分だけ見えるでもOKだが、まずは簡単に）
+        allow read: if isFamilyMember(familyId);
+
+        // 作成：本人が自分のuidのmemberを作れる（初回参加で必要）
+        allow create: if isSignedIn() && request.auth.uid == uid;
+
+        // 更新・削除：基本は本人のみ（運用で「管理者」導入したくなったら後で拡張）
+        allow update, delete: if isSignedIn() && request.auth.uid == uid;
+      }
+
+      // それ以外のサブコレクション（events / babies など）
+      match /{sub=**} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+    }
+
+    // デフォルト拒否
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
