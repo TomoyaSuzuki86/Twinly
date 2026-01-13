@@ -245,20 +245,20 @@ function ModalShell({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-2 sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onMouseDown={onClose}
         >
           <motion.div
-            className="w-full max-w-2xl overflow-hidden rounded-[40px] border border-white/10 bg-[#0B152D] shadow-2xl shadow-black/50"
+            className="w-full max-w-2xl overflow-hidden rounded-[32px] sm:rounded-[40px] border border-white/10 bg-[#0B152D] shadow-2xl shadow-black/50"
             initial={{ y: 18, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-5">
+            <div className="flex items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
               <div className="flex items-center gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/10">
                   {icon ?? <Milk className="h-5 w-5 text-white" />}
@@ -273,8 +273,8 @@ function ModalShell({
                 <X className="h-5 w-5 text-white/70" />
               </button>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto px-6 pb-4">{children}</div>
-            <div className="flex items-center justify-between gap-3 border-t border-white/10 px-6 py-5">
+            <div className="max-h-[70vh] overflow-y-auto px-4 pb-4 sm:px-6">{children}</div>
+            <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-4 sm:px-6 sm:py-5">
               {footer}
             </div>
           </motion.div>
@@ -1037,7 +1037,7 @@ export default function App() {
     const purchaseUrl = p.diaperPurchaseUrl?.trim();
 
     return (
-      <div className="rounded-[36px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/30">
+      <div className="min-w-[320px] rounded-[36px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/30 lg:min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <div className="grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-black/30">
@@ -1211,7 +1211,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
           <BabyPanel babyId="A" />
           <BabyPanel babyId="B" />
         </div>
@@ -1427,7 +1427,7 @@ export default function App() {
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {(Object.keys(app.profiles) as BabyId[]).map((babyId) => (
-                <div key={babyId} className="rounded-[26px] border border-white/10 bg-white/5 p-4">
+                <div key={babyId} className="min-w-0 rounded-[26px] border border-white/10 bg-white/5 p-4">
                   <div className="text-sm font-semibold text-white">{babyId}</div>
                   <div className="mt-3 text-xs text-white/55">カレンダー名</div>
                   <input
@@ -1458,7 +1458,7 @@ export default function App() {
                     </button>
                   </div>
                   <div className="mt-3 text-xs text-white/55">カレンダーID</div>
-                  <div className="mt-1 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">
+                  <div className="mt-1 break-all rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">
                     {app.profiles[babyId].calendarId || "-"}
                   </div>
                 </div>
@@ -1486,7 +1486,7 @@ export default function App() {
             <div className="mt-3 text-xs text-white/55">参加する</div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
-                className="w-56 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80 sm:w-56"
                 placeholder="家族コードを入力"
                 value={familyInput}
                 onChange={(e) => setFamilyInput(e.target.value)}
@@ -1540,7 +1540,7 @@ export default function App() {
                 const p = app.profiles[babyId];
                 const sizes = Object.keys(p.diaperStockBySize);
                 return (
-                  <div key={babyId} className="rounded-[26px] border border-white/10 bg-white/5 p-4">
+                  <div key={babyId} className="min-w-0 rounded-[26px] border border-white/10 bg-white/5 p-4">
                     <div className="text-sm font-semibold text-white">{babyId}</div>
 
                     <div className="mt-3 text-xs text-white/55">表示名</div>
