@@ -58,6 +58,8 @@ type BabyProfile = {
   diaperPurchaseUrl?: string;
   calendarName: string;
   calendarId?: string;
+  iconEmoji?: string;
+  iconGradient?: string;
 };
 
 type AppState = {
@@ -132,6 +134,8 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     diaperPurchaseUrl: "",
     calendarName: "育児記録-A",
     calendarId: "",
+    iconEmoji: "👶",
+    iconGradient: "from-violet-500 to-fuchsia-500",
   },
   B: {
     babyId: "B",
@@ -142,6 +146,8 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     diaperPurchaseUrl: "",
     calendarName: "育児記録-B",
     calendarId: "",
+    iconEmoji: "🍼",
+    iconGradient: "from-sky-500 to-cyan-400",
   },
 };
 
@@ -169,6 +175,14 @@ function MiniCard({ label, children }: { label: string; children: React.ReactNod
     </div>
   );
 }
+
+const iconGradients = [
+  { label: "Violet", value: "from-violet-500 to-fuchsia-500" },
+  { label: "Sky", value: "from-sky-500 to-cyan-400" },
+  { label: "Amber", value: "from-amber-500 to-orange-400" },
+  { label: "Emerald", value: "from-emerald-500 to-teal-400" },
+  { label: "Rose", value: "from-rose-500 to-pink-400" },
+];
 
 function SolidButton({
   tone,
@@ -1040,8 +1054,10 @@ export default function App() {
       <div className="flex-none w-[88vw] rounded-[32px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/30 sm:w-[460px] sm:p-5 lg:w-auto lg:flex-1 lg:min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-black/30">
-              <Baby className="h-7 w-7 text-white" />
+            <div
+              className={`grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br ${p.iconGradient ?? "from-violet-500 to-fuchsia-500"} shadow-lg shadow-black/30`}
+            >
+              {p.iconEmoji ? <span className="text-2xl">{p.iconEmoji}</span> : <Baby className="h-7 w-7 text-white" />}
             </div>
             <div>
               <div className="text-2xl font-semibold tracking-tight text-white">{p.displayName}</div>
@@ -1159,19 +1175,31 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#040814] via-[#050B1A] to-[#040814]">
       <div className="mx-auto max-w-[1500px] p-4">
-        <div className="flex items-center justify-between gap-3 rounded-[28px] border border-white/10 bg-white/5 px-5 py-4 shadow-xl shadow-black/30">
+        <div className="flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 px-4 py-4 shadow-xl shadow-black/30 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div className="flex items-center gap-4">
             <div className="grid h-12 w-12 place-items-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-black/30">
               <Baby className="h-6 w-6 text-white" />
             </div>
             <div className="text-2xl font-extrabold tracking-tight text-white">Twinly</div>
-            <TagPill>
-              <span className="font-semibold">PWA</span>
-            </TagPill>
             <CalendarStatusPill status={syncStatus} />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-xs text-white/50">表示日</label>
+            <input
+              type="date"
+              className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+              value={activeDate}
+              onChange={(e) => setActiveDate(e.target.value)}
+            />
+            <button
+              className="inline-flex items-center gap-2 rounded-2xl bg-white/5 px-3 py-2 text-sm font-semibold text-white/75 hover:bg-white/10"
+              onClick={resetAll}
+              title="全消し"
+            >
+              <Trash2 className="h-4 w-4" />
+              全消し
+            </button>
             <button
               className="grid h-12 w-12 place-items-center rounded-2xl bg-white/5 hover:bg-white/10"
               onClick={openSettings}
@@ -1185,33 +1213,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <TagPill>
-              <CalendarDays className="h-4 w-4" />
-              <span className="font-semibold">{todayLabel}</span>
-            </TagPill>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-white/50">表示日</label>
-            <input
-              type="date"
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
-              value={activeDate}
-              onChange={(e) => setActiveDate(e.target.value)}
-            />
-            <button
-              className="inline-flex items-center gap-2 rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 hover:bg-white/10"
-              onClick={resetAll}
-              title="全消し"
-            >
-              <Trash2 className="h-4 w-4" />
-              全消し
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
+        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
           <BabyPanel babyId="A" />
           <BabyPanel babyId="B" />
         </div>
@@ -1557,6 +1559,43 @@ export default function App() {
                         }))
                       }
                     />
+
+                    <div className="mt-3 text-xs text-white/55">アイコン（絵文字）</div>
+                    <input
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
+                      maxLength={2}
+                      value={p.iconEmoji ?? ""}
+                      onChange={(e) =>
+                        setApp((prev) => ({
+                          ...prev,
+                          profiles: {
+                            ...prev.profiles,
+                            [babyId]: { ...prev.profiles[babyId], iconEmoji: e.target.value },
+                          },
+                        }))
+                      }
+                    />
+
+                    <div className="mt-3 text-xs text-white/55">アイコンカラー</div>
+                    <select
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
+                      value={p.iconGradient ?? iconGradients[0].value}
+                      onChange={(e) =>
+                        setApp((prev) => ({
+                          ...prev,
+                          profiles: {
+                            ...prev.profiles,
+                            [babyId]: { ...prev.profiles[babyId], iconGradient: e.target.value },
+                          },
+                        }))
+                      }
+                    >
+                      {iconGradients.map((opt) => (
+                        <option key={opt.value} value={opt.value} className="bg-[#0B152D]">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
 
                     <div className="mt-3 text-xs text-white/55">生年月日</div>
                     <input
