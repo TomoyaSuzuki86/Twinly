@@ -169,9 +169,9 @@ function TagPill({ children }: { children: React.ReactNode }) {
 
 function MiniCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-sm">
+    <div className="rounded-3xl border border-white/10 bg-white/5 p-3 shadow-sm sm:p-4">
       <div className="text-xs text-white/60">{label}</div>
-      <div className="mt-2 text-4xl font-semibold tracking-tight text-white">{children}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">{children}</div>
     </div>
   );
 }
@@ -228,14 +228,14 @@ function SolidButton({
 
   return (
     <button
-      className={`flex h-24 w-full select-none items-center justify-center gap-3 rounded-[26px] ${bg} text-white shadow-lg shadow-black/20 active:scale-[0.99]`}
+      className={`flex h-20 w-full select-none items-center justify-center gap-3 rounded-[24px] ${bg} text-white shadow-lg shadow-black/20 active:scale-[0.99] sm:h-24 sm:rounded-[26px]`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
       title={onLongPress ? "長押しで詳細" : undefined}
     >
-      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/15">{icon}</div>
-      <div className="text-2xl font-semibold tracking-tight">{title}</div>
+      <div className="grid h-9 w-9 place-items-center rounded-2xl bg-white/15 sm:h-10 sm:w-10">{icon}</div>
+      <div className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</div>
     </button>
   );
 }
@@ -1051,17 +1051,17 @@ export default function App() {
     const purchaseUrl = p.diaperPurchaseUrl?.trim();
 
     return (
-      <div className="flex-none w-[84vw] snap-start rounded-[32px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/30 sm:w-[460px] sm:p-5 lg:w-auto lg:flex-1 lg:min-w-0">
+      <div className="min-w-0 w-full rounded-[28px] border border-white/10 bg-white/5 p-3 shadow-xl shadow-black/30 sm:rounded-[36px] sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <div
-              className={`grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br ${p.iconGradient ?? "from-violet-500 to-fuchsia-500"} shadow-lg shadow-black/30`}
+              className={`grid h-12 w-12 place-items-center rounded-3xl bg-gradient-to-br ${p.iconGradient ?? "from-violet-500 to-fuchsia-500"} shadow-lg shadow-black/30 sm:h-14 sm:w-14`}
             >
               {p.iconEmoji ? <span className="text-2xl">{p.iconEmoji}</span> : <Baby className="h-7 w-7 text-white" />}
             </div>
             <div>
-              <div className="text-2xl font-semibold tracking-tight text-white">{p.displayName}</div>
-              <div className="mt-1 text-sm text-white/55">生後{ageDays}日</div>
+              <div className="text-xl font-semibold tracking-tight text-white sm:text-2xl">{p.displayName}</div>
+              <div className="mt-1 text-xs text-white/55 sm:text-sm">生後{ageDays}日</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <TagPill>
                   <span className="text-[11px]">おむつ {p.diaperSize}・残り {rem}</span>
@@ -1213,7 +1213,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 pr-8 scroll-px-4 snap-x snap-mandatory lg:mx-0 lg:px-0 lg:pr-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
           <BabyPanel babyId="A" />
           <BabyPanel babyId="B" />
         </div>
