@@ -1037,7 +1037,7 @@ export default function App() {
     const purchaseUrl = p.diaperPurchaseUrl?.trim();
 
     return (
-      <div className="min-w-[320px] rounded-[36px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/30 lg:min-w-0">
+      <div className="flex-none w-[88vw] rounded-[32px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/30 sm:w-[460px] sm:p-5 lg:w-auto lg:flex-1 lg:min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <div className="grid h-14 w-14 place-items-center rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-black/30">
@@ -1082,23 +1082,7 @@ export default function App() {
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <MiniCard label="ミルク合計">
-            <div className="flex items-end gap-2">
-              <span className="text-sky-300">{milkTotal}</span>
-              <span className="mb-1 text-lg font-semibold text-white/70">ml</span>
-              <span className="mb-1 ml-auto text-sm text-white/50">{milkEvents.length}回</span>
-            </div>
-          </MiniCard>
-          <MiniCard label="おむつ">
-            <div className="flex items-end gap-2">
-              <span className="text-amber-300">{diaperCount}</span>
-              <span className="mb-1 text-lg font-semibold text-white/70">回</span>
-            </div>
-          </MiniCard>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
           <SolidButton
             tone="milk"
             icon={<Milk className="h-6 w-6" />}
@@ -1120,6 +1104,22 @@ export default function App() {
               setModal({ kind: "diaper", babyId });
             }}
           />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
+          <MiniCard label="ミルク合計">
+            <div className="flex items-end gap-2">
+              <span className="text-sky-300">{milkTotal}</span>
+              <span className="mb-1 text-lg font-semibold text-white/70">ml</span>
+              <span className="mb-1 ml-auto text-sm text-white/50">{milkEvents.length}回</span>
+            </div>
+          </MiniCard>
+          <MiniCard label="おむつ">
+            <div className="flex items-end gap-2">
+              <span className="text-amber-300">{diaperCount}</span>
+              <span className="mb-1 text-lg font-semibold text-white/70">回</span>
+            </div>
+          </MiniCard>
         </div>
 
         <div className="mt-5">
