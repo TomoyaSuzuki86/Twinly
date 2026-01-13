@@ -25,7 +25,7 @@ import {
   User,
 } from "firebase/auth";
 import { collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { auth, db, isFirebaseConfigured } from "./firebase";
 
 const LS_KEY = "twinly-app-v1";
 const LS_FAMILY_KEY = "twinly-family-id";
@@ -436,6 +436,7 @@ export default function App() {
   const [familyInput, setFamilyInput] = useState("");
   const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
   const [googleToken, setGoogleToken] = useState(() => localStorage.getItem(LS_GOOGLE_TOKEN) ?? "");
+  const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -454,6 +455,10 @@ export default function App() {
   const undoTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!auth) {
+      setAuthReady(true);
+      return undefined;
+    }
     const unsub = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
       setAuthReady(true);
@@ -518,7 +523,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!authUser || !familyId) return;
+    if (!authUser || !familyId || !db) return;
     const familyRef = doc(db, "families", familyId);
     const memberRef = doc(db, "families", familyId, "members", authUser.uid);
     setDoc(
@@ -538,9 +543,10 @@ export default function App() {
       },
       { merge: true }
     );
-  }, [authUser, familyId]);
+  }, [authUser, familyId, db]);
 
   useEffect(() => {
+    if (!auth) return;
     getRedirectResult(auth)
       .then((result) => {
         if (!result) return;
@@ -918,6 +924,7 @@ export default function App() {
   };
 
   const signInGoogle = async () => {
+    if (!auth) return;
     try {
       const provider = new GoogleAuthProvider();
       provider.addScope("https://www.googleapis.com/auth/calendar");
@@ -936,6 +943,7 @@ export default function App() {
   };
 
   const signOutGoogle = async () => {
+    if (!auth) return;
     try {
       await signOut(auth);
       saveGoogleToken("");
@@ -1386,6 +1394,11 @@ export default function App() {
             <div className="mt-2 text-xs text-white/55">
               ここはモックです。本実装はOAuth 2.0で権限を取り、各イベントを「育児記録-A/B」に作成します。
             </div>
+            {!firebaseEnabled && (
+              <div className="mt-3 rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">
+                Firebase設定が見つかりません。.env.local に VITE_FIREBASE_* を設定するとログインできます。
+              </div>
+            )}
             <div className="mt-3 text-xs text-white/55">アカウント</div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/80">
               <span>
@@ -1395,6 +1408,7 @@ export default function App() {
                 <button
                   className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
                   onClick={signOutGoogle}
+                  disabled={!firebaseEnabled}
                 >
                   ログアウト
                 </button>
@@ -1402,6 +1416,7 @@ export default function App() {
                 <button
                   className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
                   onClick={signInGoogle}
+                  disabled={!firebaseEnabled}
                 >
                   Googleでログイン
                 </button>
@@ -1413,16 +1428,16 @@ export default function App() {
               <button
                 className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
                 onClick={signInGoogle}
-                disabled={!authUser}
-                title={!authUser ? "ログインが必要です" : undefined}
+                disabled={!authUser || !firebaseEnabled}
+                title={!authUser ? "ログインが必要です" : !firebaseEnabled ? "Firebase設定が必要です" : undefined}
               >
                 権限を更新
               </button>
               <button
                 className="rounded-2xl bg-white/5 px-4 py-2 text-xs font-semibold text-white/75 hover:bg-white/10"
                 onClick={syncTodayEvents}
-                disabled={!authUser}
-                title={!authUser ? "ログインが必要です" : undefined}
+                disabled={!authUser || !firebaseEnabled}
+                title={!authUser ? "ログインが必要です" : !firebaseEnabled ? "Firebase設定が必要です" : undefined}
               >
                 今日を同期
               </button>
@@ -1855,4 +1870,3 @@ export default function App() {
     </div>
   );
 }
-
