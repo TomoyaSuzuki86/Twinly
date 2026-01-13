@@ -1,32 +1,81 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
-import {setGlobalOptions} from "firebase-functions";
-import {onRequest} from "firebase-functions/https";
+import { setGlobalOptions } from "firebase-functions/v2";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
+import * as admin from "firebase-admin";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
 setGlobalOptions({ maxInstances: 10 });
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+const TZ = "Asia/Tokyo";
+
+const formatDate = (d: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+
+const startOfDayMs = (dateStr: string) => new Date(`${dateStr}T00:00:00+09:00`).getTime();
+const endOfDayMs = (dateStr: string) => new Date(`${dateStr}T23:59:59+09:00`).getTime();
+
+const buildSummary = (dateStr: string, events: any[]) => {
+  const milkEvents = events.filter((e) => e.type === "milk");
+  const diaperEvents = events.filter((e) => e.type === "diaper");
+  const milkTotal = milkEvents.reduce((sum, e) => sum + (e.milkMl ?? 0), 0);
+  return `${dateStr} のまとめ：ミルク ${milkEvents.length}回（合計 ${milkTotal}ml）、おむつ ${diaperEvents.length}回`;
+};
+
+export const nightlyDailySummary = onSchedule(
+  { schedule: "0 23 * * *", timeZone: TZ },
+  async () => {
+    const db = admin.firestore();
+    const today = formatDate(new Date());
+    const rangeStart = startOfDayMs(today);
+    const rangeEnd = endOfDayMs(today);
+
+    const families = await db.collection("families").get();
+    for (const family of families.docs) {
+      const appRef = db.doc(`families/${family.id}/app/state`);
+      const appSnap = await appRef.get();
+      const appData = appSnap.data();
+      const app = appData?.app;
+      if (!app || !Array.isArray(app.events)) continue;
+
+      const nextEvents = [...app.events];
+      let changed = false;
+
+      for (const babyId of ["A", "B"]) {
+        const dayEvents = app.events.filter(
+          (e: any) => e.babyId === babyId && e.timestamp >= rangeStart && e.timestamp <= rangeEnd
+        );
+        const hasDaily = dayEvents.some((e: any) => e.type === "daily");
+        if (hasDaily) continue;
+
+        const note = buildSummary(today, dayEvents);
+        nextEvents.unshift({
+          id: `daily-${today}-${babyId}`,
+          babyId,
+          type: "daily",
+          timestamp: rangeEnd,
+          note,
+          calendarStatus: "pending",
+        });
+        changed = true;
+      }
+
+      if (changed) {
+        await appRef.set(
+          {
+            app: { ...app, events: nextEvents },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedBy: "system",
+          },
+          { merge: true }
+        );
+        logger.info("Daily summary created", { familyId: family.id });
+      }
+    }
+  }
+);

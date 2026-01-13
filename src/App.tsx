@@ -548,20 +548,14 @@ export default function App() {
     undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
   };
 
-  const setCalendarMockStatus = (eventId: string, status: LogEvent["calendarStatus"]) => {
-    setApp((prev) => ({
-      ...prev,
-      events: prev.events.map((e) => (e.id === eventId ? { ...e, calendarStatus: status } : e)),
-    }));
-  };
-
   const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
+    const shouldSync = Boolean(authUser && googleToken);
     const event: LogEvent = {
       id: uid(),
       babyId,
       type,
       timestamp: Date.now(),
-      calendarStatus: "pending",
+      calendarStatus: shouldSync ? "pending" : undefined,
       ...payload,
     };
 
@@ -587,8 +581,11 @@ export default function App() {
       setApp((prev) => ({ ...prev, events: [event, ...prev.events] }));
     }
 
-    window.setTimeout(() => setCalendarMockStatus(event.id, "synced"), 450);
     scheduleUndo(event);
+
+    if (shouldSync) {
+      void syncEventToCalendar(event);
+    }
   };
 
   const removeEvent = (eventId: string) => {
@@ -643,6 +640,7 @@ export default function App() {
   const saveEdit = () => {
     if (!editTarget) return;
 
+    const shouldSync = Boolean(authUser && googleToken);
     const updated: Partial<LogEvent> =
       editTarget.type === "milk"
         ? { milkMl, milkMethod, note }
@@ -653,11 +651,15 @@ export default function App() {
     setApp((prev) => ({
       ...prev,
       events: prev.events.map((e) =>
-        e.id === editTarget.id ? { ...e, ...updated, calendarStatus: "pending" } : e
+        e.id === editTarget.id
+          ? { ...e, ...updated, calendarStatus: shouldSync ? "pending" : e.calendarStatus }
+          : e
       ),
     }));
 
-    window.setTimeout(() => setCalendarMockStatus(editTarget.id, "synced"), 500);
+    if (shouldSync) {
+      void syncEventToCalendar({ ...editTarget, ...updated, calendarStatus: "pending" });
+    }
     setModal(null);
   };
 
@@ -884,6 +886,10 @@ export default function App() {
       alert("Googleログインしてください。");
       return;
     }
+    if (!googleToken) {
+      alert("カレンダー権限が必要です。設定で権限を取得してください。");
+      return;
+    }
     const targets = eventsToday;
     if (targets.length === 0) {
       alert("同期するイベントがありません。");
@@ -1097,8 +1103,7 @@ export default function App() {
             tone="milk"
             icon={<Milk className="h-6 w-6" />}
             title="ミルク"
-            onClick={() => addEvent(babyId, "milk", { milkMl: 140, milkMethod: "breast" })}
-            onLongPress={() => {
+            onClick={() => {
               setMilkMl(140);
               setMilkMethod("breast");
               setNote("");
@@ -1109,8 +1114,7 @@ export default function App() {
             tone="diaper"
             icon={<Droplets className="h-6 w-6" />}
             title="おむつ"
-            onClick={() => addEvent(babyId, "diaper", { diaperKind: "pee" })}
-            onLongPress={() => {
+            onClick={() => {
               setDiaperKind("pee");
               setNote("");
               setModal({ kind: "diaper", babyId });
