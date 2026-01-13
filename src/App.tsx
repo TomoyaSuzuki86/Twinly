@@ -1051,7 +1051,7 @@ export default function App() {
     const purchaseUrl = p.diaperPurchaseUrl?.trim();
 
     return (
-      <div className="flex-none w-[88vw] rounded-[32px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/30 sm:w-[460px] sm:p-5 lg:w-auto lg:flex-1 lg:min-w-0">
+      <div className="flex-none w-[84vw] snap-start rounded-[32px] border border-white/10 bg-white/5 p-4 shadow-xl shadow-black/30 sm:w-[460px] sm:p-5 lg:w-auto lg:flex-1 lg:min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <div
@@ -1213,7 +1213,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
+        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 -mx-4 px-4 pr-8 scroll-px-4 snap-x snap-mandatory lg:mx-0 lg:px-0 lg:pr-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0">
           <BabyPanel babyId="A" />
           <BabyPanel babyId="B" />
         </div>
