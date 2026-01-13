@@ -31,6 +31,8 @@ jobs:
           projectId: twinly-prod
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
+      - name: Install Functions deps
+        run: npm --prefix functions ci
       - name: Deploy Functions and Firestore
         run: |
           printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
