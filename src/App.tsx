@@ -182,16 +182,13 @@ export default function App() {
     if (!familyId || !db) return;
     const appRef = doc(db, "families", familyId, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.app) {
-          setApp(data.app as AppState);
-        }
-      } else {
-        // New family, save initial state
-        void saveAppToFirestore(initialState);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.app) {
+        setApp(data.app as AppState);
       }
-    });
+    }
+  });
     return () => unsub();
   }, [familyId, db]);
 
