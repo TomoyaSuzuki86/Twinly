@@ -1,40 +1,26 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  Baby,
-  Check,
-  CircleUser,
-  Settings,
-  Trash2,
-  Undo2,
-} from "lucide-react";
-import {
-  GoogleAuthProvider,
-  getRedirectResult,
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-  User,
-} from "firebase/auth";
-import { collection, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { Baby, Check, CircleUser, Settings, Trash2, Undo2 } from "lucide-react";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, isFirebaseConfigured } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
-import { AppState, BabyId, BabyProfile, DiaperKind, LogEvent, MilkMethod, EventType } from "./types";
-import { clamp, daysSince, endOfDayMs, fmtDate, startOfDayMs, uid } from "./lib/utils";
+import { AppState, BabyId, BabyProfile, DiaperKind, EventType, LogEvent, MilkMethod } from "./types";
+import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { EditModal } from "./components/EditModal";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
+import { BabyTabTrigger } from "./components/BabyTabTrigger";
 
-const LS_KEY = "twinly-app-v1";
 const LS_FAMILY_KEY = "twinly-family-id";
 const LS_GOOGLE_TOKEN = "twinly-google-access-token";
 
-function useLocalStorageState<T>(key: string, initialValue: T) {
+function useLocalStorage<T>(key: string, initialValue: T) {
   const [state, setState] = useState<T>(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -67,7 +53,7 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     displayName: "赤ちゃんA",
     birthDate: demoBirthDate(103),
     diaperSize: "新生児",
-    diaperStockBySize: { "新生児": 80, S: 0, M: 0, L: 0 },
+    diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
     calendarName: "育児記録-A",
     calendarId: "",
@@ -79,7 +65,7 @@ const baseProfiles: Record<BabyId, BabyProfile> = {
     displayName: "赤ちゃんB",
     birthDate: demoBirthDate(103),
     diaperSize: "新生児",
-    diaperStockBySize: { "新生児": 80, S: 0, M: 0, L: 0 },
+    diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
     diaperPurchaseUrl: "",
     calendarName: "育児記録-B",
     calendarId: "",
@@ -95,6 +81,10 @@ const initialState: AppState = {
     lastViewedDate: fmtDate(new Date()),
   },
 };
+
+function AppContainer({ children }: { children: React.ReactNode }) {
+  return <div className="min-h-screen bg-background text-foreground">{children}</div>;
+}
 
 function SnackbarUndo({
   open,
@@ -122,11 +112,7 @@ function SnackbarUndo({
                 <Check className="h-5 w-5" />
                 <div className="text-sm font-semibold">{message}</div>
               </div>
-              <Button
-                variant="ghost"
-                className="h-full rounded-none border-l"
-                onClick={onUndo}
-              >
+              <Button variant="ghost" className="h-full rounded-none border-l" onClick={onUndo}>
                 <Undo2 className="mr-2 h-5 w-5" />
                 取り消す
               </Button>
@@ -139,9 +125,7 @@ function SnackbarUndo({
   );
 }
 
-function CalendarStatusPill({ status }: { status?: LogEvent["calendarStatus"] }) {
-  const text =
-    status === "synced" ? "SYNCED" : status === "pending" ? "SYNCING" : status === "error" ? "ERROR" : "-";
+function CalendarStatusDot({ status }: { status?: LogEvent["calendarStatus"] }) {
   const dot =
     status === "synced"
       ? "bg-emerald-400"
@@ -150,23 +134,18 @@ function CalendarStatusPill({ status }: { status?: LogEvent["calendarStatus"] })
       : status === "error"
       ? "bg-rose-400"
       : "bg-muted-foreground";
-  return (
-    <div className="flex items-center gap-2 rounded-full border bg-secondary px-4 py-2 text-xs text-secondary-foreground">
-      <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-      <span className="font-semibold">GOOGLE CALENDAR {text}</span>
-    </div>
-  );
+  return <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />;
 }
 
 export default function App() {
-  const [app, setApp] = useLocalStorageState<AppState>(LS_KEY, initialState);
+  const [app, setApp] = useState<AppState>(initialState);
+  const [familyId, setFamilyId] = useLocalStorage(LS_FAMILY_KEY, "");
+  const [familyInput, setFamilyInput] = useState("");
   const [activeDate, setActiveDate] = useState(() => app.ui.lastViewedDate);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [familyId, setFamilyId] = useState(() => localStorage.getItem(LS_FAMILY_KEY) ?? "");
-  const [familyInput, setFamilyInput] = useState("");
   const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
-  const [googleToken, setGoogleToken] = useState(() => localStorage.getItem(LS_GOOGLE_TOKEN) ?? "");
+  const [googleToken, setGoogleToken] = useLocalStorage(LS_GOOGLE_TOKEN, "");
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
 
   const [modal, setModal] = useState<
@@ -176,6 +155,45 @@ export default function App() {
     | { kind: "edit"; eventId: string }
     | null
   >(null);
+
+  const saveAppToFirestore = async (nextApp: AppState) => {
+    setApp(nextApp);
+    if (!familyId || !db || !authUser) return;
+    setCloudStatus("saving");
+    try {
+      const appRef = doc(db, "families", familyId, "app", "state");
+      await setDoc(
+        appRef,
+        {
+          app: removeUndefined(nextApp),
+          updatedAt: serverTimestamp(),
+          updatedBy: authUser.uid,
+        },
+        { merge: true }
+      );
+      setCloudStatus("done");
+    } catch (e) {
+      console.error(e);
+      setCloudStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    if (!familyId || !db) return;
+    const appRef = doc(db, "families", familyId, "app", "state");
+    const unsub = onSnapshot(appRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.app) {
+          setApp(data.app as AppState);
+        }
+      } else {
+        // New family, save initial state
+        void saveAppToFirestore(initialState);
+      }
+    });
+    return () => unsub();
+  }, [familyId, db]);
 
   const handleOpenModal = (
     kind: "milk" | "diaper" | "edit" | "settings",
@@ -190,11 +208,6 @@ export default function App() {
     }
   };
 
-  const handleAddDailyReport = (babyId: BabyId, events: LogEvent[]) => {
-    const body = buildDailyReport(babyId, events);
-    addEvent(babyId, "daily", { note: body });
-  };
-
   const onSaveMilk = (payload: { milkMl: number; milkMethod: MilkMethod; note: string }) => {
     if (!modal || modal.kind !== "milk") return;
     addEvent(modal.babyId, "milk", payload);
@@ -206,23 +219,13 @@ export default function App() {
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
-    const shouldSync = Boolean(authUser && googleToken);
     const originalEvent = app.events.find((e) => e.id === eventId);
     if (!originalEvent) return;
-
     const updatedEvent = { ...originalEvent, ...payload };
-
-    setApp((prev) => ({
-      ...prev,
-      events: prev.events.map((e) =>
-        e.id === eventId
-          ? { ...updatedEvent, calendarStatus: shouldSync ? "pending" : e.calendarStatus }
-          : e
-      ),
-    }));
-
-    if (shouldSync) {
-      void syncEventToCalendar({ ...updatedEvent, calendarStatus: "pending" });
+    const nextEvents = app.events.map((e) => (e.id === eventId ? updatedEvent : e));
+    void saveAppToFirestore({ ...app, events: nextEvents });
+    if (googleToken) {
+      void syncEventToCalendar(updatedEvent);
     }
   };
 
@@ -242,8 +245,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    setApp((prev) => ({ ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } }));
-  }, [activeDate, setApp]);
+    const nextApp = { ...app, ui: { ...app.ui, lastViewedDate: activeDate } };
+    void saveAppToFirestore(nextApp);
+  }, [activeDate]);
 
   const dayRange = useMemo(() => {
     const d = new Date(`${activeDate}T00:00:00`);
@@ -279,60 +283,21 @@ export default function App() {
     return out;
   }, [app.profiles]);
 
-  const saveFamilyId = (next: string) => {
-    setFamilyId(next);
-    if (next) {
-      localStorage.setItem(LS_FAMILY_KEY, next);
-    } else {
-      localStorage.removeItem(LS_FAMILY_KEY);
-    }
-  };
-
-  const saveGoogleToken = (token: string) => {
-    setGoogleToken(token);
-    if (token) {
-      localStorage.setItem(LS_GOOGLE_TOKEN, token);
-    } else {
-      localStorage.removeItem(LS_GOOGLE_TOKEN);
-    }
-  };
-
   useEffect(() => {
     if (!authUser || !familyId || !db) return;
-    const familyRef = doc(db, "families", familyId);
     const memberRef = doc(db, "families", familyId, "members", authUser.uid);
-    setDoc(
-      familyRef,
-      {
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-    setDoc(
+    void setDoc(
       memberRef,
       {
         uid: authUser.uid,
         displayName: authUser.displayName ?? "",
         email: authUser.email ?? "",
+        photoURL: authUser.photoURL ?? "",
         updatedAt: serverTimestamp(),
       },
       { merge: true }
     );
   }, [authUser, familyId, db]);
-
-  useEffect(() => {
-    if (!auth) return;
-    getRedirectResult(auth)
-      .then((result) => {
-        if (!result) return;
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        const accessToken = credential?.accessToken;
-        if (accessToken) saveGoogleToken(accessToken);
-      })
-      .catch(() => {
-        // ignore redirect errors
-      });
-  }, []);
 
   const scheduleUndo = (event: LogEvent) => {
     if (undoTimerRef.current) {
@@ -354,28 +319,24 @@ export default function App() {
       ...payload,
     };
 
+    console.log("addEvent: Initial event status", { eventId: event.id, calendarStatus: event.calendarStatus, shouldSync });
+
+    let nextApp = { ...app, events: [event, ...app.events] };
     if (type === "diaper") {
       const p = app.profiles[babyId];
       const size = p.diaperSize;
       const remaining = (p.diaperStockBySize[size] ?? 0) - 1;
-      setApp((prev) => ({
-        ...prev,
-        profiles: {
-          ...prev.profiles,
-          [babyId]: {
-            ...prev.profiles[babyId],
-            diaperStockBySize: {
-              ...prev.profiles[babyId].diaperStockBySize,
-              [size]: Math.max(0, remaining),
-            },
-          },
+      const nextProfiles = {
+        ...app.profiles,
+        [babyId]: {
+          ...p,
+          diaperStockBySize: { ...p.diaperStockBySize, [size]: Math.max(0, remaining) },
         },
-        events: [event, ...prev.events],
-      }));
-    } else {
-      setApp((prev) => ({ ...prev, events: [event, ...prev.events] }));
+      };
+      nextApp = { ...nextApp, profiles: nextProfiles };
     }
 
+    void saveAppToFirestore(nextApp);
     scheduleUndo(event);
 
     if (shouldSync) {
@@ -384,34 +345,29 @@ export default function App() {
   };
 
   const removeEvent = (eventId: string) => {
-    setApp((prev) => ({ ...prev, events: prev.events.filter((e) => e.id !== eventId) }));
+    const nextApp = { ...app, events: app.events.filter((e) => e.id !== eventId) };
+    void saveAppToFirestore(nextApp);
   };
 
   const undoLast = () => {
     const event = undo.event;
     if (!event) return;
 
+    let nextApp = { ...app, events: app.events.filter((e) => e.id !== event.id) };
     if (event.type === "diaper") {
       const p = app.profiles[event.babyId];
       const size = p.diaperSize;
-      setApp((prev) => ({
-        ...prev,
-        profiles: {
-          ...prev.profiles,
-          [event.babyId]: {
-            ...prev.profiles[event.babyId],
-            diaperStockBySize: {
-              ...prev.profiles[event.babyId].diaperStockBySize,
-              [size]: (prev.profiles[event.babyId].diaperStockBySize[size] ?? 0) + 1,
-            },
-          },
+      const nextProfiles = {
+        ...app.profiles,
+        [event.babyId]: {
+          ...p,
+          diaperStockBySize: { ...p.diaperStockBySize, [size]: (p.diaperStockBySize[size] ?? 0) + 1 },
         },
-        events: prev.events.filter((e) => e.id !== event.id),
-      }));
-    } else {
-      removeEvent(event.id);
+      };
+      nextApp = { ...nextApp, profiles: nextProfiles };
     }
 
+    void saveAppToFirestore(nextApp);
     setUndo({ open: false });
     if (undoTimerRef.current) {
       window.clearTimeout(undoTimerRef.current);
@@ -426,30 +382,16 @@ export default function App() {
 
   const resetAll = () => {
     if (!confirm("全てのデータを削除しますか？")) return;
-    setApp(initialState);
+    void saveAppToFirestore(initialState);
     setActiveDate(fmtDate(new Date()));
     setModal(null);
     setUndo({ open: false });
   };
 
-  const todayLabel = useMemo(() => {
-    const d = new Date(`${activeDate}T00:00:00`);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  }, [activeDate]);
-
-  const buildDailyReport = (_babyId: BabyId, events: LogEvent[]) => {
-    const milkEvents = events.filter((e) => e.type === "milk");
-    const diaperEvents = events.filter((e) => e.type === "diaper");
-    const milkTotal = milkEvents.reduce((sum, e) => sum + (e.milkMl ?? 0), 0);
-    const diaperCount = diaperEvents.length;
-    return `${todayLabel} のまとめ：ミルク ${milkEvents.length}回（合計 ${milkTotal}ml）、おむつ ${diaperCount}回`;
-  };
-
-  const updateEvent = (eventId: string, patch: Partial<LogEvent>) => {
-    setApp((prev) => ({
-      ...prev,
-      events: prev.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e)),
-    }));
+  const updateEventInState = (eventId: string, patch: Partial<LogEvent>) => {
+    console.log("updateEventInState: Applying patch", { eventId, patch });
+    const nextEvents = app.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e));
+    void saveAppToFirestore({ ...app, events: nextEvents });
   };
 
   const fetchCalendarApi = async (path: string, options: RequestInit = {}) => {
@@ -468,7 +410,10 @@ export default function App() {
     if (!res.ok) {
       if (res.status === 401) {
         alert("認証が切れています。再ログインしてください。");
+        setGoogleToken("");
       }
+      const errorBody = await res.json();
+      console.error("fetchCalendarApi: API Error", { status: res.status, body: errorBody });
       throw new Error(`calendar-api-${res.status}`);
     }
     return res.json() as Promise<any>;
@@ -505,23 +450,24 @@ export default function App() {
   const ensureCalendarId = async (babyId: BabyId) => {
     const p = app.profiles[babyId];
     if (p.calendarId) return p.calendarId;
+    console.log("ensureCalendarId: Fetching calendar list for", p.calendarName);
     const list = await fetchCalendarApi("/users/me/calendarList");
     const found = (list.items ?? []).find((item: any) => item.summary === p.calendarName);
-    if (!found) return "";
-    setApp((prev) => ({
-      ...prev,
-      profiles: {
-        ...prev.profiles,
-        [babyId]: { ...prev.profiles[babyId], calendarId: found.id },
-      },
-    }));
+    if (!found) {
+      console.warn("ensureCalendarId: Calendar not found", p.calendarName);
+      return "";
+    }
+    const nextProfiles = { ...app.profiles, [babyId]: { ...p, calendarId: found.id } };
+    void saveAppToFirestore({ ...app, profiles: nextProfiles });
     return found.id as string;
   };
 
   const syncEventToCalendar = async (event: LogEvent) => {
+    console.log("syncEventToCalendar: Attempting to sync event", { eventId: event.id, currentStatus: event.calendarStatus });
     const calendarId = await ensureCalendarId(event.babyId);
     if (!calendarId) {
-      updateEvent(event.id, { calendarStatus: "error" });
+      console.error("syncEventToCalendar: No calendarId found for baby", event.babyId);
+      updateEventInState(event.id, { calendarStatus: "error" });
       return;
     }
     const body = buildCalendarEvent(event.babyId, event);
@@ -535,75 +481,188 @@ export default function App() {
             method: "POST",
             body: JSON.stringify(body),
           });
-      updateEvent(event.id, { calendarStatus: "synced", calendarEventId: res.id });
-    } catch {
-      updateEvent(event.id, { calendarStatus: "error" });
+      console.log("syncEventToCalendar: API success", { eventId: event.id, resId: res.id });
+      updateEventInState(event.id, { calendarStatus: "synced", calendarEventId: res.id });
+    } catch (error) {
+      console.error("syncEventToCalendar: API failure", { eventId: event.id, error });
+      updateEventInState(event.id, { calendarStatus: "error" });
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-7xl p-2 sm:p-4">
-        <header className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
-              <Baby className="h-6 w-6 text-white" />
+  const handleSignIn = async () => {
+    if (!auth) return;
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/calendar");
+      const res = await signInWithPopup(auth, provider);
+      const cred = GoogleAuthProvider.credentialFromResult(res);
+      if (cred?.accessToken) {
+        setGoogleToken(cred.accessToken);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("サインインに失敗しました");
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!auth) return;
+    await signOut(auth);
+    setGoogleToken("");
+  };
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(app, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `twinly-backup-${fmtDate(new Date())}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = ev.target?.result as string;
+        const importedState = JSON.parse(json) as AppState;
+        // TODO: Add validation logic
+        void saveAppToFirestore(importedState);
+        alert("データをインポートしました");
+      } catch {
+        alert("ファイルの読み込みに失敗しました");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  if (!authReady) {
+    return (
+      <AppContainer>
+        <div className="grid h-screen place-items-center">
+          <p>読み込み中...</p>
+        </div>
+      </AppContainer>
+    );
+  }
+
+  if (!familyId) {
+    return (
+      <AppContainer>
+        <div className="mx-auto grid h-screen max-w-md place-items-center p-4">
+          <div className="space-y-6 rounded-xl border bg-card p-8 text-card-foreground">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">Twinlyへようこそ</h1>
+              <p className="text-muted-foreground">
+                データを同期するために、ファミリーIDを設定してください。
+              </p>
             </div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Twinly</h1>
-            <CalendarStatusPill status={syncStatus} />
+            <div className="space-y-4">
+              <Button className="w-full" onClick={() => setFamilyId(uid())}>
+                新しいファミリーを作成
+              </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">または</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={familyInput}
+                  onChange={(e) => setFamilyInput(e.target.value)}
+                  placeholder="既存のファミリーID"
+                />
+                <Button variant="secondary" onClick={() => setFamilyId(familyInput)}>
+                  参加
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AppContainer>
+    );
+  }
+
+  return (
+    <AppContainer>
+      <div className="mx-auto max-w-7xl p-2 sm:p-4">
+        <header className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
+                <Baby className="h-6 w-6 text-white" />
+              </div>
+              <h1 className="text-2xl font-extrabold tracking-tight">Twinly</h1>
+              <CalendarStatusDot status={syncStatus} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
+                <Settings className="h-5 w-5" />
+              </Button>
+              {authUser ? (
+                <img src={authUser.photoURL!} alt="avatar" className="h-10 w-10 rounded-full" />
+              ) : (
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-muted">
+                  <CircleUser className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm text-muted-foreground">表示日</label>
-            <Input
-              type="date"
-              className="w-auto"
-              value={activeDate}
-              onChange={(e) => setActiveDate(e.target.value)}
-            />
-            <Button
-              variant="outline"
-              onClick={resetAll}
-              title="全消し"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              全消し
+            <Input type="date" className="w-auto" value={activeDate} onChange={(e) => setActiveDate(e.target.value)} />
+            <Button variant="outline" onClick={() => setActiveDate(fmtDate(new Date()))}>
+              今日
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleOpenModal("settings")}
-              aria-label="settings"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
-            <div className="grid h-10 w-10 place-items-center rounded-full bg-muted">
-              <CircleUser className="h-6 w-6 text-muted-foreground" />
-            </div>
           </div>
         </header>
 
-        <main className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <BabyPanel
-            profile={app.profiles.A}
-            events={byBaby.A}
-            lowStock={lowStock.A}
-            onOpenModal={handleOpenModal}
-            onAddDailyReport={handleAddDailyReport}
-            onDeleteEvent={removeEvent}
-          />
-          <BabyPanel
-            profile={app.profiles.B}
-            events={byBaby.B}
-            lowStock={lowStock.B}
-            onOpenModal={handleOpenModal}
-            onAddDailyReport={handleAddDailyReport}
-            onDeleteEvent={removeEvent}
-          />
+        <main>
+          <Tabs defaultValue="A" className="w-full">
+            <TabsList className="grid h-auto w-full grid-cols-2">
+              <TabsTrigger value="A" className="h-auto">
+                <BabyTabTrigger profile={app.profiles.A} />
+              </TabsTrigger>
+              <TabsTrigger value="B" className="h-auto">
+                <BabyTabTrigger profile={app.profiles.B} />
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="A" className="mt-4">
+              <BabyPanel
+                profile={app.profiles.A}
+                events={byBaby.A}
+                lowStock={lowStock.A}
+                onOpenModal={handleOpenModal}
+                onDeleteEvent={removeEvent}
+              />
+            </TabsContent>
+            <TabsContent value="B" className="mt-4">
+              <BabyPanel
+                profile={app.profiles.B}
+                events={byBaby.B}
+                lowStock={lowStock.B}
+                onOpenModal={handleOpenModal}
+                onDeleteEvent={removeEvent}
+              />
+            </TabsContent>
+          </Tabs>
         </main>
       </div>
 
-      <SnackbarUndo open={undo.open} message="記録を保存しました" onUndo={undoLast} onClose={() => setUndo({ open: false })} />
+      <SnackbarUndo
+        open={undo.open}
+        message="記録を保存しました"
+        onUndo={undoLast}
+        onClose={() => setUndo({ open: false })}
+      />
 
       <MilkModal
         open={modal?.kind === "milk"}
@@ -621,7 +680,17 @@ export default function App() {
         open={modal?.kind === "settings"}
         onOpenChange={(open) => !open && setModal(null)}
         app={app}
-        setApp={setApp}
+        setApp={(updater) => {
+          const nextApp = typeof updater === "function" ? updater(app) : updater;
+          void saveAppToFirestore(nextApp);
+        }}
+        user={authUser}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
+        onExport={handleExport}
+        onImport={handleImport}
+        onResetAll={resetAll}
+        googleToken={googleToken}
       />
       <EditModal
         open={modal?.kind === "edit"}
@@ -629,6 +698,6 @@ export default function App() {
         event={editTarget}
         onSave={onSaveEdit}
       />
-    </div>
+    </AppContainer>
   );
 }
