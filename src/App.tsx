@@ -1396,7 +1396,7 @@ export default function App() {
             </div>
             {!firebaseEnabled && (
               <div className="mt-3 rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">
-                Firebase設定が見つかりません。.env.local に VITE_FIREBASE_* を設定するとログインできます。
+                Firebase設定が見つかりません。環境変数 VITE_FIREBASE_* を設定するとログインできます。
               </div>
             )}
             <div className="mt-3 text-xs text-white/55">アカウント</div>
