@@ -12,13 +12,20 @@ import { AppState, BabyId } from "@/types";
 import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { User } from "firebase/auth";
+import React from "react";
 
 type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   app: AppState;
   setApp: React.Dispatch<React.SetStateAction<AppState>>;
-  // TODO: Add more props for auth, cloud, etc.
+  user: User | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onExport: () => void;
+  onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onResetAll: () => void;
+  googleToken: string;
 };
 
 const iconGradients = [
@@ -29,9 +36,20 @@ const iconGradients = [
   { label: "Rose", value: "from-rose-500 to-pink-400" },
 ];
 
-export function SettingsModal({ open, onOpenChange, app, setApp }: SettingsModalProps) {
-  // This is a simplified version.
-  // A full implementation would require passing down many more state and handler props.
+export function SettingsModal({
+  open,
+  onOpenChange,
+  app,
+  setApp,
+  user,
+  onSignIn,
+  onSignOut,
+  onExport,
+  onImport,
+  onResetAll,
+  googleToken,
+}: SettingsModalProps) {
+  const importRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,6 +126,25 @@ export function SettingsModal({ open, onOpenChange, app, setApp }: SettingsModal
                       </select>
                     </div>
                     <div className="space-y-2">
+                      <Label>カレンダー名</Label>
+                      <Input
+                        value={p.calendarName}
+                        onChange={(e) =>
+                          setApp((prev) => ({
+                            ...prev,
+                            profiles: {
+                              ...prev.profiles,
+                              [babyId]: {
+                                ...p,
+                                calendarName: e.target.value,
+                                calendarId: "", // Reset calendar ID when name changes
+                              },
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
                       <Label>生年月日</Label>
                       <Input
                         type="date"
@@ -129,13 +166,79 @@ export function SettingsModal({ open, onOpenChange, app, setApp }: SettingsModal
             </div>
           </TabsContent>
           <TabsContent value="calendar">
-            <p className="text-muted-foreground">カレンダー連携の設定はここに表示されます。</p>
+            <div className="space-y-4 rounded-lg border p-4">
+              <h3 className="font-semibold">Google Calendar連携</h3>
+              <p className="text-sm text-muted-foreground">
+                記録をGoogleカレンダーに自動で同期します。同期を有効にするには、クラウド同期をONにしてください。
+              </p>
+              {user ? (
+                <div className="space-y-4">
+                  <p className="text-sm font-medium text-emerald-600">✓ カレンダー連携は有効です</p>
+                  <div className="space-y-2">
+                    {(Object.keys(app.profiles) as BabyId[]).map((babyId) => {
+                      const p = app.profiles[babyId];
+                      return (
+                        <div key={babyId} className="flex items-center justify-between rounded-md bg-muted px-3 py-2 text-sm">
+                          <span className="font-semibold">{p.displayName}</span>
+                          <span className="text-muted-foreground">{p.calendarName}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <Button onClick={onSignIn}>Googleカレンダーに接続</Button>
+              )}
+            </div>
           </TabsContent>
           <TabsContent value="cloud">
-            <p className="text-muted-foreground">クラウド同期の設定はここに表示されます。</p>
+            <div className="space-y-4 rounded-lg border p-4">
+              <h3 className="font-semibold">クラウド同期</h3>
+              <p className="text-sm text-muted-foreground">
+                Googleアカウントでログインすると、複数のデバイスでデータを同期できます。
+              </p>
+              {user ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <img src={user.photoURL!} alt="avatar" className="h-10 w-10 rounded-full" />
+                    <div>
+                      <p className="font-semibold">{user.displayName}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Googleトークン: {googleToken ? <span className="text-emerald-600">取得済み</span> : <span className="text-rose-600">未取得</span>}
+                  </p>
+                  <Button variant="outline" onClick={onSignOut}>
+                    サインアウト
+                  </Button>
+                </div>
+              ) : (
+                <Button onClick={onSignIn}>Googleでサインイン</Button>
+              )}
+            </div>
           </TabsContent>
           <TabsContent value="data">
-            <p className="text-muted-foreground">データ管理（インポート/エクスポート）はここに表示されます。</p>
+            <div className="space-y-4 rounded-lg border p-4">
+              <h3 className="font-semibold">データ管理</h3>
+              <p className="text-sm text-muted-foreground">
+                アプリのデータをファイルに書き出したり、ファイルから読み込んだりします。
+              </p>
+              <div className="flex gap-4">
+                <Button variant="outline" onClick={onExport}>
+                  エクスポート
+                </Button>
+                <Button variant="outline" onClick={() => importRef.current?.click()}>
+                  インポート
+                </Button>
+                <input type="file" accept=".json" ref={importRef} className="hidden" onChange={onImport} />
+              </div>
+              <div className="pt-4">
+                <Button variant="destructive" onClick={onResetAll}>
+                  全てのデータを削除
+                </Button>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
         <DialogFooter>
