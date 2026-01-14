@@ -28,7 +28,7 @@ export const isFirebaseConfigured = Object.values(requiredConfig).every(isNonEmp
 
 if (!isFirebaseConfigured) {
   console.warn(
-    "[Twinly] Firebase config is missing. Set VITE_FIREBASE_* in .env.local to enable Google login."
+    "[Twinly] Firebase config is missing. Set VITE_FIREBASE_* environment variables to enable Google login."
   );
 }
 
