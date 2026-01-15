@@ -620,11 +620,15 @@ export default function App() {
 
   const ensureCalendarId = async (babyId: BabyId) => {
     const p = app.profiles[babyId];
-    if (p.calendarId) return p.calendarId;
-    console.log("ensureCalendarId: Fetching calendar list for", p.calendarName);
-    const list = await fetchCalendarApi("/users/me/calendarList");
-    const found = (list.items ?? []).find((item: any) => item.summary === p.calendarName);
-    if (!found) {
+    const updateCalendarId = (calendarId: string) => {
+      setApp((prevApp) => {
+        const nextProfiles = { ...prevApp.profiles, [babyId]: { ...p, calendarId } };
+        const nextApp = { ...prevApp, profiles: nextProfiles };
+        void saveAppToFirestore(nextApp);
+        return nextApp;
+      });
+    };
+    const createCalendar = async () => {
       console.warn("ensureCalendarId: Calendar not found, creating new one", p.calendarName);
       const newCalendar = await fetchCalendarApi("/calendars", {
         method: "POST",
@@ -634,20 +638,34 @@ export default function App() {
         console.error("ensureCalendarId: Failed to create calendar", p.calendarName);
         return "";
       }
-      setApp((prevApp) => {
-        const nextProfiles = { ...prevApp.profiles, [babyId]: { ...p, calendarId: newCalendar.id } };
-        const nextApp = { ...prevApp, profiles: nextProfiles };
-        void saveAppToFirestore(nextApp);
-        return nextApp;
-      });
+      updateCalendarId(newCalendar.id as string);
       return newCalendar.id as string;
+    };
+    if (p.calendarId) {
+      try {
+        const existing = await fetchCalendarApi(`/calendars/${encodeURIComponent(p.calendarId)}`);
+        if (existing?.summary === p.calendarName) {
+          return p.calendarId;
+        }
+        console.warn("ensureCalendarId: Calendar name mismatch, searching by name", {
+          calendarId: p.calendarId,
+          summary: existing?.summary,
+          expected: p.calendarName,
+        });
+      } catch (error) {
+        console.warn("ensureCalendarId: Stored calendarId not found, recreating", {
+          calendarId: p.calendarId,
+          error,
+        });
+      }
     }
-    setApp((prevApp) => {
-      const nextProfiles = { ...prevApp.profiles, [babyId]: { ...p, calendarId: found.id } };
-      const nextApp = { ...prevApp, profiles: nextProfiles };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
-    });
+    console.log("ensureCalendarId: Fetching calendar list for", p.calendarName);
+    const list = await fetchCalendarApi("/users/me/calendarList");
+    const found = (list.items ?? []).find((item: any) => item.summary === p.calendarName);
+    if (!found) {
+      return createCalendar();
+    }
+    updateCalendarId(found.id as string);
     return found.id as string;
   };
 
