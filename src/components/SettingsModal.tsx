@@ -51,6 +51,26 @@ export function SettingsModal({
     }));
   };
 
+  // Function to handle changes to diaper stock
+  const handleDiaperStockChange = (size: string, amount: number) => {
+    setLocalProfiles((prev) => {
+      const nextProfiles = { ...prev };
+      // Assuming all profiles have the same diaper sizes and stock is shared
+      const currentStock = nextProfiles.A.diaperStockBySize[size] ?? 0; // Get current stock from any baby (e.g., A)
+
+      (Object.keys(nextProfiles) as BabyId[]).forEach((babyId) => {
+        nextProfiles[babyId] = {
+          ...nextProfiles[babyId],
+          diaperStockBySize: {
+            ...nextProfiles[babyId].diaperStockBySize,
+            [size]: currentStock + amount,
+          },
+        };
+      });
+      return nextProfiles;
+    });
+  };
+
   // Function to save localProfiles to global app state when modal closes
   const handleClose = (isOpen: boolean) => {
     if (!isOpen) {
@@ -65,7 +85,7 @@ export function SettingsModal({
 
   return (
     <DialogComponents.Dialog open={open} onOpenChange={handleClose}> {/* Use handleClose here */}
-      <DialogComponents.DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogComponents.DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto p-4">
         <DialogComponents.DialogHeader>
           <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
         </DialogComponents.DialogHeader>
@@ -75,6 +95,7 @@ export function SettingsModal({
             <TabsTrigger value="calendar">カレンダー連携</TabsTrigger>
             <TabsTrigger value="cloud">クラウド同期</TabsTrigger>
             <TabsTrigger value="data">データ管理</TabsTrigger>
+            <TabsTrigger value="diaper-stock">おむつ在庫</TabsTrigger>
           </TabsList>
           <TabsContent value="profile" className="mt-4">
             <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
@@ -217,6 +238,39 @@ export function SettingsModal({
                 <Button variant="destructive" onClick={onResetAll}>
                   全てのデータを削除
                 </Button>
+              </div>
+            </div>
+          </TabsContent>
+          <TabsContent value="diaper-stock">
+            <div className="space-y-4 rounded-lg border p-4">
+              <h3 className="font-semibold">おむつ在庫管理</h3>
+              <p className="text-sm text-muted-foreground">
+                おむつのサイズごとの在庫数を管理します。この設定は全ての赤ちゃんに適用されます。
+              </p>
+              <div className="space-y-4">
+                {Object.keys(localProfiles.A.diaperStockBySize).map((size) => ( // Assuming all profiles have the same diaper sizes
+                  <div key={size} className="flex items-center gap-4">
+                    <Label className="w-20">{size}</Label>
+                    <Button variant="outline" size="icon" onClick={() => handleDiaperStockChange(size, -10)} className="h-9 w-9">
+                      -10
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => handleDiaperStockChange(size, -1)} className="h-9 w-9">
+                      -1
+                    </Button>
+                    <Input
+                      type="number"
+                      value={localProfiles.A.diaperStockBySize[size] ?? 0}
+                      onChange={(e) => handleDiaperStockChange(size, Number(e.target.value) - (localProfiles.A.diaperStockBySize[size] ?? 0))}
+                      className="w-20 text-center text-base"
+                    />
+                    <Button variant="outline" size="icon" onClick={() => handleDiaperStockChange(size, 1)} className="h-9 w-9">
+                      +1
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={() => handleDiaperStockChange(size, 10)} className="h-9 w-9">
+                      +10
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
           </TabsContent>

@@ -213,9 +213,35 @@ export default function App() {
     addEvent(modal.babyId, "milk", payload);
   };
 
-  const onSaveDiaper = (payload: { diaperKind: DiaperKind; note: string }) => {
+  const onSaveDiaper = (payload: { diaperKind: DiaperKind; note: string; selectedDiaperSize: string }) => {
     if (!modal || modal.kind !== "diaper") return;
-    addEvent(modal.babyId, "diaper", payload);
+    const babyId = modal.babyId;
+    const { diaperKind, note, selectedDiaperSize } = payload;
+
+    // 1. Add the diaper event
+    addEvent(babyId, "diaper", { diaperKind, note });
+
+    // 2. Update diaper stock and last used size
+    setApp((prevApp) => {
+      const nextProfiles = { ...prevApp.profiles };
+      const currentStock = nextProfiles[babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
+
+      // Decrement stock for the selected size for all babies (shared stock)
+      (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
+        nextProfiles[id] = {
+          ...nextProfiles[id],
+          diaperStockBySize: {
+            ...nextProfiles[id].diaperStockBySize,
+            [selectedDiaperSize]: currentStock - 1, // Decrement by 1
+          },
+          diaperSize: id === babyId ? selectedDiaperSize : nextProfiles[id].diaperSize, // Update last used diaper size only for the current baby
+        };
+      });
+
+      const nextApp = { ...prevApp, profiles: nextProfiles };
+      void saveAppToFirestore(nextApp); // Persist this state
+      return nextApp;
+    });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -723,6 +749,7 @@ export default function App() {
         onUpdateDiaperStock={(size, stock) =>
           modal?.kind === "diaper" && onUpdateDiaperStock(modal.babyId, size, stock)
         }
+        babyProfile={modal?.kind === "diaper" ? app.profiles[modal.babyId] : app.profiles.A}
       />
       <SettingsModal
         open={modal?.kind === "settings"}
