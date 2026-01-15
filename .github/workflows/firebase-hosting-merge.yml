@@ -37,7 +37,7 @@ jobs:
       - name: Deploy Functions
         run: |
           printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-key.json"
-          firebase deploy --only functions --project twinly-prod --non-interactive
+          firebase deploy --only functions --project twinly-prod --non-interactive --force
         env:
           SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-key.json
