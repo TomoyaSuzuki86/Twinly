@@ -18,7 +18,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
 import { iconGradients } from "./lib/utils"; // Import iconGradients
 
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+
 const LS_GOOGLE_TOKEN = "twinly-google-access-token";
+const LS_GOOGLE_TOKEN_EXP = "twinly-google-access-token-exp";
+const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 
 function useLocalStorage<T>(key: string, initialValue: T) {
   const [state, setState] = useState<T>(() => {
@@ -145,6 +155,7 @@ export default function App() {
   const [appLoading, setAppLoading] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
   const [googleToken, setGoogleToken] = useLocalStorage(LS_GOOGLE_TOKEN, "");
+  const [googleTokenExpiresAt, setGoogleTokenExpiresAt] = useLocalStorage(LS_GOOGLE_TOKEN_EXP, 0);
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
 
   const [modal, setModal] = useState<
@@ -177,6 +188,75 @@ export default function App() {
       setCloudStatus("error");
     }
   };
+
+  const isGoogleTokenValid = (token: string, expiresAt: number) => {
+    if (!token) return false;
+    if (!expiresAt) return true;
+    return Date.now() < expiresAt - 60_000;
+  };
+
+  const loadGsiScript = () => {
+    return new Promise<void>((resolve, reject) => {
+      if (typeof window === "undefined") {
+        reject(new Error("no-window"));
+        return;
+      }
+      if (window.google?.accounts?.oauth2) {
+        resolve();
+        return;
+      }
+      const existing = document.querySelector("script[data-gsi]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("gsi-load-failed")));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.dataset.gsi = "true";
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("gsi-load-failed"));
+      document.head.appendChild(script);
+    });
+  };
+
+  const requestGoogleTokenSilently = async () => {
+    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
+    if (!clientId) return null;
+    try {
+      await loadGsiScript();
+      return await new Promise<string | null>((resolve) => {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: GOOGLE_CALENDAR_SCOPE,
+          prompt: "",
+          callback: (resp: any) => {
+            if (resp?.access_token) {
+              setGoogleToken(resp.access_token);
+              const expires = resp.expires_in ? Date.now() + resp.expires_in * 1000 : 0;
+              setGoogleTokenExpiresAt(expires);
+              resolve(resp.access_token);
+            } else {
+              resolve(null);
+            }
+          },
+        });
+        tokenClient.requestAccessToken({ prompt: "" });
+      });
+    } catch (error) {
+      console.warn("requestGoogleTokenSilently: failed", error);
+      return null;
+    }
+  };
+
+  const ensureGoogleToken = async () => {
+    if (isGoogleTokenValid(googleToken, googleTokenExpiresAt)) return googleToken;
+    const refreshed = await requestGoogleTokenSilently();
+    return refreshed;
+  };
+
 
   const ensureUserDocument = async (user: User) => {
     if (!db) return;
@@ -294,12 +374,19 @@ export default function App() {
       } else {
         setApp(initialState);
         setGoogleToken("");
+    setGoogleTokenExpiresAt(0);
         setAppLoading(false);
       }
       setAuthReady(true);
     });
     return () => unsub();
   }, []);
+  useEffect(() => {
+    if (!authUser) return;
+    if (isGoogleTokenValid(googleToken, googleTokenExpiresAt)) return;
+    void requestGoogleTokenSilently();
+  }, [authUser, googleToken, googleTokenExpiresAt]);
+
 
   useEffect(() => {
     const nextApp = { ...app, ui: { ...app.ui, lastViewedDate: activeDate } };
@@ -461,27 +548,45 @@ export default function App() {
   };
 
   const fetchCalendarApi = async (path: string, options: RequestInit = {}) => {
-    if (!googleToken) {
-      alert("Googleカレンダー権限が必要です。設定画面でログインしてください。");
+    const token = await ensureGoogleToken();
+    if (!token) {
+      alert("Google Calendar token is missing. Please reconnect.");
       throw new Error("missing-token");
     }
-    const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${googleToken}`,
-        "Content-Type": "application/json",
-        ...(options.headers ?? {}),
-      },
-    });
+
+    const doFetch = async (accessToken: string) => {
+      const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          ...(options.headers ?? {}),
+        },
+      });
+      return res;
+    };
+
+    let res = await doFetch(token);
+    if (res.status === 401) {
+      setGoogleToken("");
+      setGoogleTokenExpiresAt(0);
+      const refreshed = await ensureGoogleToken();
+      if (refreshed) {
+        res = await doFetch(refreshed);
+      }
+    }
+
     if (!res.ok) {
       if (res.status === 401) {
-        alert("認証が切れています。再ログインしてください。");
+        alert("Calendar auth expired. Please reconnect.");
         setGoogleToken("");
+        setGoogleTokenExpiresAt(0);
       }
       const errorBody = await res.json();
       console.error("fetchCalendarApi: API Error", { status: res.status, body: errorBody });
       throw new Error(`calendar-api-${res.status}`);
     }
+
     return res.json() as Promise<any>;
   };
 
@@ -577,11 +682,12 @@ export default function App() {
     if (!auth) return;
     try {
       const provider = new GoogleAuthProvider();
-      provider.addScope("https://www.googleapis.com/auth/calendar");
+      provider.addScope(GOOGLE_CALENDAR_SCOPE);
       const res = await signInWithPopup(auth, provider);
       const cred = GoogleAuthProvider.credentialFromResult(res);
       if (cred?.accessToken) {
         setGoogleToken(cred.accessToken);
+        setGoogleTokenExpiresAt(0);
       }
     } catch (e) {
       console.error(e);
@@ -593,6 +699,7 @@ export default function App() {
     if (!auth) return;
     await signOut(auth);
     setGoogleToken("");
+    setGoogleTokenExpiresAt(0);
   };
 
   const handleExport = () => {
@@ -631,7 +738,7 @@ export default function App() {
           <div className="max-w-md space-y-3 text-center">
             <h1 className="text-2xl font-bold">Twinly</h1>
             <p className="text-muted-foreground">
-              Firebase env vars are missing. Set VITE_FIREBASE_* in .env.local.
+              Firebase env vars are missing. Set VITE_FIREBASE_* in the build environment.
             </p>
           </div>
         </div>
