@@ -18,7 +18,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
 import { iconGradients } from "./lib/utils"; // Import iconGradients
 
-const LS_FAMILY_KEY = "twinly-family-id";
 const LS_GOOGLE_TOKEN = "twinly-google-access-token";
 
 function useLocalStorage<T>(key: string, initialValue: T) {
@@ -140,11 +139,10 @@ function CalendarStatusDot({ status }: { status?: LogEvent["calendarStatus"] }) 
 
 export default function App() {
   const [app, setApp] = useState<AppState>(initialState);
-  const [familyId, setFamilyId] = useLocalStorage(LS_FAMILY_KEY, "");
-  const [familyInput, setFamilyInput] = useState("");
   const [activeDate, setActiveDate] = useState(() => app.ui.lastViewedDate);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [appLoading, setAppLoading] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<"idle" | "saving" | "loading" | "error" | "done">("idle");
   const [googleToken, setGoogleToken] = useLocalStorage(LS_GOOGLE_TOKEN, "");
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
@@ -159,10 +157,10 @@ export default function App() {
 
   const saveAppToFirestore = async (nextApp: AppState) => {
     console.log("saveAppToFirestore: Saving app", nextApp);
-    if (!familyId || !db || !authUser) return;
+    if (!db || !authUser) return;
     setCloudStatus("saving");
     try {
-      const appRef = doc(db, "families", familyId, "app", "state");
+      const appRef = doc(db, "users", authUser.uid, "app", "state");
       await setDoc(
         appRef,
         {
@@ -180,9 +178,26 @@ export default function App() {
     }
   };
 
+  const ensureUserDocument = async (user: User) => {
+    if (!db) return;
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(
+      userRef,
+      {
+        uid: user.uid,
+        displayName: user.displayName ?? "",
+        email: user.email ?? "",
+        photoURL: user.photoURL ?? "",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  };
+
   useEffect(() => {
-    if (!familyId || !db) return;
-    const appRef = doc(db, "families", familyId, "app", "state");
+    if (!authUser || !db) return;
+    setAppLoading(true);
+    const appRef = doc(db, "users", authUser.uid, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
       if (snap.exists()) {
         console.log("onSnapshot: Data received from Firestore", snap.data());
@@ -190,11 +205,15 @@ export default function App() {
         if (data.app) {
           setApp(data.app as AppState);
           console.log("onSnapshot: App state updated from Firestore", data.app);
+          setAppLoading(false);
+          return;
         }
       }
+      setApp(initialState);
+      setAppLoading(false);
     });
     return () => unsub();
-  }, [familyId, db]);
+  }, [authUser, db]);
 
   const handleOpenModal = (
     kind: "milk" | "diaper" | "edit" | "settings",
@@ -270,6 +289,13 @@ export default function App() {
     }
     const unsub = onAuthStateChanged(auth, (user) => {
       setAuthUser(user);
+      if (user) {
+        void ensureUserDocument(user);
+      } else {
+        setApp(initialState);
+        setGoogleToken("");
+        setAppLoading(false);
+      }
       setAuthReady(true);
     });
     return () => unsub();
@@ -314,22 +340,6 @@ export default function App() {
     return out;
   }, [app.profiles]);
 
-  useEffect(() => {
-    if (!authUser || !familyId || !db) return;
-    const memberRef = doc(db, "families", familyId, "members", authUser.uid);
-    void setDoc(
-      memberRef,
-      {
-        uid: authUser.uid,
-        displayName: authUser.displayName ?? "",
-        email: authUser.email ?? "",
-        photoURL: authUser.photoURL ?? "",
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  }, [authUser, familyId, db]);
-
   const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
     setApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
@@ -369,6 +379,7 @@ export default function App() {
   };
 
   const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
+    if (!authUser || !db) return;
     const shouldSync = Boolean(authUser && googleToken);
     const event: LogEvent = {
       id: uid(),
@@ -397,6 +408,7 @@ export default function App() {
   };
 
   const removeEvent = (eventId: string) => {
+    if (!authUser || !db) return;
     setApp((prevApp) => {
       const nextApp = { ...prevApp, events: prevApp.events.filter((e) => e.id !== eventId) };
       void saveAppToFirestore(nextApp);
@@ -405,6 +417,7 @@ export default function App() {
   };
 
   const undoLast = () => {
+    if (!authUser || !db) return;
     const event = undo.event;
     if (!event) return;
 
@@ -428,6 +441,7 @@ export default function App() {
   }, [modal, app.events]);
 
   const resetAll = () => {
+    if (!authUser || !db) return;
     if (!confirm("全てのデータを削除しますか？")) return;
     setApp(initialState); // Optimistically update local state
     void saveAppToFirestore(initialState);
@@ -610,56 +624,58 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  if (!authReady) {
+  if (!firebaseEnabled) {
     return (
       <AppContainer>
-        <div className="grid h-screen place-items-center">
-          <p>読み込み中...</p>
-        </div>
-      </AppContainer>
-    );
-  }
-
-  if (!familyId) {
-    return (
-      <AppContainer>
-        <div className="mx-auto grid h-screen max-w-md place-items-center p-4">
-          <div className="space-y-6 rounded-xl border bg-card p-8 text-card-foreground">
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold">Twinlyへようこそ</h1>
-              <p className="text-muted-foreground">
-                データを同期するために、ファミリーIDを設定してください。
-              </p>
-            </div>
-            <div className="space-y-4">
-              <Button className="w-full" onClick={() => setFamilyId(uid())}>
-                新しいファミリーを作成
-              </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">または</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={familyInput}
-                  onChange={(e) => setFamilyInput(e.target.value)}
-                  placeholder="既存のファミリーID"
-                />
-                <Button variant="secondary" onClick={() => setFamilyId(familyInput)}>
-                  参加
-                </Button>
-              </div>
-            </div>
+        <div className="grid h-screen place-items-center p-6">
+          <div className="max-w-md space-y-3 text-center">
+            <h1 className="text-2xl font-bold">Twinly</h1>
+            <p className="text-muted-foreground">
+              Firebase env vars are missing. Set VITE_FIREBASE_* in .env.local.
+            </p>
           </div>
         </div>
       </AppContainer>
     );
   }
 
+  if (!authReady) {
+    return (
+      <AppContainer>
+        <div className="grid h-screen place-items-center">
+          <p>Loading...</p>
+        </div>
+      </AppContainer>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <AppContainer>
+        <div className="grid h-screen place-items-center p-4">
+          <div className="w-full max-w-md space-y-6 rounded-xl border bg-card p-8 text-card-foreground">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">Twinly</h1>
+              <p className="text-muted-foreground">Sign in with Google to start.</p>
+            </div>
+            <Button className="w-full" onClick={handleSignIn}>
+              Sign in with Google
+            </Button>
+          </div>
+        </div>
+      </AppContainer>
+    );
+  }
+
+  if (appLoading) {
+    return (
+      <AppContainer>
+        <div className="grid h-screen place-items-center">
+          <p>Loading your data...</p>
+        </div>
+      </AppContainer>
+    );
+  }
   return (
     <AppContainer>
       <div className="mx-auto max-w-7xl p-2 sm:p-4">
