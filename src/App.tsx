@@ -15,7 +15,7 @@ import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
-import { BabyTabTrigger } from "./components/BabyTabTrigger";
+import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
 
 const LS_FAMILY_KEY = "twinly-family-id";
 const LS_GOOGLE_TOKEN = "twinly-google-access-token";
@@ -157,7 +157,7 @@ export default function App() {
   >(null);
 
   const saveAppToFirestore = async (nextApp: AppState) => {
-    setApp(nextApp);
+    console.log("saveAppToFirestore: Saving app", nextApp);
     if (!familyId || !db || !authUser) return;
     setCloudStatus("saving");
     try {
@@ -171,9 +171,10 @@ export default function App() {
         },
         { merge: true }
       );
+      console.log("saveAppToFirestore: Data saved to Firestore");
       setCloudStatus("done");
     } catch (e) {
-      console.error(e);
+      console.error("saveAppToFirestore: Error saving data", e);
       setCloudStatus("error");
     }
   };
@@ -182,13 +183,15 @@ export default function App() {
     if (!familyId || !db) return;
     const appRef = doc(db, "families", familyId, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
-    if (snap.exists()) {
-      const data = snap.data();
-      if (data.app) {
-        setApp(data.app as AppState);
+      if (snap.exists()) {
+        console.log("onSnapshot: Data received from Firestore", snap.data());
+        const data = snap.data();
+        if (data.app) {
+          setApp(data.app as AppState);
+          console.log("onSnapshot: App state updated from Firestore", data.app);
+        }
       }
-    }
-  });
+    });
     return () => unsub();
   }, [familyId, db]);
 
@@ -216,14 +219,18 @@ export default function App() {
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
-    const originalEvent = app.events.find((e) => e.id === eventId);
-    if (!originalEvent) return;
-    const updatedEvent = { ...originalEvent, ...payload };
-    const nextEvents = app.events.map((e) => (e.id === eventId ? updatedEvent : e));
-    void saveAppToFirestore({ ...app, events: nextEvents });
-    if (googleToken) {
-      void syncEventToCalendar(updatedEvent);
-    }
+    setApp((prevApp) => {
+      const originalEvent = prevApp.events.find((e) => e.id === eventId);
+      if (!originalEvent) return prevApp;
+      const updatedEvent = { ...originalEvent, ...payload };
+      const nextEvents = prevApp.events.map((e) => (e.id === eventId ? updatedEvent : e));
+      const nextApp = { ...prevApp, events: nextEvents };
+      void saveAppToFirestore(nextApp);
+      if (googleToken) {
+        void syncEventToCalendar(updatedEvent);
+      }
+      return nextApp;
+    });
   };
 
   const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
@@ -296,6 +303,35 @@ export default function App() {
     );
   }, [authUser, familyId, db]);
 
+  const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
+    setApp((prevApp) => {
+      const nextProfiles = { ...prevApp.profiles };
+      // 選択された赤ちゃんの在庫を更新
+      nextProfiles[babyId] = {
+        ...nextProfiles[babyId],
+        diaperStockBySize: {
+          ...nextProfiles[babyId].diaperStockBySize,
+          [size]: stock,
+        },
+      };
+
+      // 他の赤ちゃんの同じサイズのおむつ在庫も更新
+      (Object.keys(nextProfiles) as BabyId[]).forEach((otherBabyId) => {
+        if (otherBabyId !== babyId) {
+          nextProfiles[otherBabyId] = {
+            ...nextProfiles[otherBabyId],
+            diaperStockBySize: {
+              ...nextProfiles[otherBabyId].diaperStockBySize,
+              [size]: stock,
+            },
+          };
+        }
+      });
+
+      return { ...prevApp, profiles: nextProfiles };
+    });
+  };
+
   const scheduleUndo = (event: LogEvent) => {
     if (undoTimerRef.current) {
       window.clearTimeout(undoTimerRef.current);
@@ -316,24 +352,16 @@ export default function App() {
       ...payload,
     };
 
-    console.log("addEvent: Initial event status", { eventId: event.id, calendarStatus: event.calendarStatus, shouldSync });
+    console.log("addEvent: Event created", event);
 
-    let nextApp = { ...app, events: [event, ...app.events] };
-    if (type === "diaper") {
-      const p = app.profiles[babyId];
-      const size = p.diaperSize;
-      const remaining = (p.diaperStockBySize[size] ?? 0) - 1;
-      const nextProfiles = {
-        ...app.profiles,
-        [babyId]: {
-          ...p,
-          diaperStockBySize: { ...p.diaperStockBySize, [size]: Math.max(0, remaining) },
-        },
-      };
-      nextApp = { ...nextApp, profiles: nextProfiles };
-    }
+    // Perform optimistic local update here
+    setApp((prevApp) => {
+      const nextApp = { ...prevApp, events: [event, ...prevApp.events] };
+      console.log("addEvent: Local app state updated optimistically", nextApp);
+      void saveAppToFirestore(nextApp); // Persist this state
+      return nextApp;
+    });
 
-    void saveAppToFirestore(nextApp);
     scheduleUndo(event);
 
     if (shouldSync) {
@@ -342,29 +370,24 @@ export default function App() {
   };
 
   const removeEvent = (eventId: string) => {
-    const nextApp = { ...app, events: app.events.filter((e) => e.id !== eventId) };
-    void saveAppToFirestore(nextApp);
+    setApp((prevApp) => {
+      const nextApp = { ...prevApp, events: prevApp.events.filter((e) => e.id !== eventId) };
+      void saveAppToFirestore(nextApp);
+      return nextApp;
+    });
   };
 
   const undoLast = () => {
     const event = undo.event;
     if (!event) return;
 
-    let nextApp = { ...app, events: app.events.filter((e) => e.id !== event.id) };
-    if (event.type === "diaper") {
-      const p = app.profiles[event.babyId];
-      const size = p.diaperSize;
-      const nextProfiles = {
-        ...app.profiles,
-        [event.babyId]: {
-          ...p,
-          diaperStockBySize: { ...p.diaperStockBySize, [size]: (p.diaperStockBySize[size] ?? 0) + 1 },
-        },
-      };
-      nextApp = { ...nextApp, profiles: nextProfiles };
-    }
+    console.log("undoLast: Undoing event", event.id);
+    setApp((prevApp) => {
+      const nextApp = { ...prevApp, events: prevApp.events.filter((e) => e.id !== event.id) };
+      void saveAppToFirestore(nextApp);
+      return nextApp;
+    });
 
-    void saveAppToFirestore(nextApp);
     setUndo({ open: false });
     if (undoTimerRef.current) {
       window.clearTimeout(undoTimerRef.current);
@@ -379,6 +402,7 @@ export default function App() {
 
   const resetAll = () => {
     if (!confirm("全てのデータを削除しますか？")) return;
+    setApp(initialState); // Optimistically update local state
     void saveAppToFirestore(initialState);
     setActiveDate(fmtDate(new Date()));
     setModal(null);
@@ -387,8 +411,12 @@ export default function App() {
 
   const updateEventInState = (eventId: string, patch: Partial<LogEvent>) => {
     console.log("updateEventInState: Applying patch", { eventId, patch });
-    const nextEvents = app.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e));
-    void saveAppToFirestore({ ...app, events: nextEvents });
+    setApp((prevApp) => {
+      const nextEvents = prevApp.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e));
+      const nextApp = { ...prevApp, events: nextEvents };
+      void saveAppToFirestore(nextApp);
+      return nextApp;
+    });
   };
 
   const fetchCalendarApi = async (path: string, options: RequestInit = {}) => {
@@ -451,11 +479,29 @@ export default function App() {
     const list = await fetchCalendarApi("/users/me/calendarList");
     const found = (list.items ?? []).find((item: any) => item.summary === p.calendarName);
     if (!found) {
-      console.warn("ensureCalendarId: Calendar not found", p.calendarName);
-      return "";
+      console.warn("ensureCalendarId: Calendar not found, creating new one", p.calendarName);
+      const newCalendar = await fetchCalendarApi("/calendars", {
+        method: "POST",
+        body: JSON.stringify({ summary: p.calendarName }),
+      });
+      if (!newCalendar || !newCalendar.id) {
+        console.error("ensureCalendarId: Failed to create calendar", p.calendarName);
+        return "";
+      }
+      setApp((prevApp) => {
+        const nextProfiles = { ...prevApp.profiles, [babyId]: { ...p, calendarId: newCalendar.id } };
+        const nextApp = { ...prevApp, profiles: nextProfiles };
+        void saveAppToFirestore(nextApp);
+        return nextApp;
+      });
+      return newCalendar.id as string;
     }
-    const nextProfiles = { ...app.profiles, [babyId]: { ...p, calendarId: found.id } };
-    void saveAppToFirestore({ ...app, profiles: nextProfiles });
+    setApp((prevApp) => {
+      const nextProfiles = { ...prevApp.profiles, [babyId]: { ...p, calendarId: found.id } };
+      const nextApp = { ...prevApp, profiles: nextProfiles };
+      void saveAppToFirestore(nextApp);
+      return nextApp;
+    });
     return found.id as string;
   };
 
@@ -527,6 +573,7 @@ export default function App() {
         const json = ev.target?.result as string;
         const importedState = JSON.parse(json) as AppState;
         // TODO: Add validation logic
+        setApp(importedState); // Optimistically update local state
         void saveAppToFirestore(importedState);
         alert("データをインポートしました");
       } catch {
@@ -672,6 +719,10 @@ export default function App() {
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
         onSave={onSaveDiaper}
+        diaperStockBySize={modal?.kind === "diaper" ? app.profiles[modal.babyId].diaperStockBySize : {}}
+        onUpdateDiaperStock={(size, stock) =>
+          modal?.kind === "diaper" && onUpdateDiaperStock(modal.babyId, size, stock)
+        }
       />
       <SettingsModal
         open={modal?.kind === "settings"}
