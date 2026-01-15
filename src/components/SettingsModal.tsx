@@ -5,11 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "./ui/label";
 import React, { useEffect, useState } from "react"; // Import useEffect, useState
+import type { User } from "firebase/auth";
 import { AppState, BabyId, BabyProfile } from "@/types"; // Import BabyProfile
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
 import { iconGradients } from "@/lib/utils"; // Import iconGradients from utils
 
 // ... (rest of the file)
+
+type SettingsModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  app: AppState;
+  setApp: (updater: AppState | ((prev: AppState) => AppState)) => void;
+  user: User | null;
+  onSignIn: () => void | Promise<void>;
+  onSignOut: () => void | Promise<void>;
+  onExport: () => void;
+  onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onResetAll: () => void;
+  googleToken: string;
+  hasGoogleOauthClientId: boolean;
+};
 
 export function SettingsModal({
   open,
@@ -23,6 +39,7 @@ export function SettingsModal({
   onImport,
   onResetAll,
   googleToken,
+  hasGoogleOauthClientId,
 }: SettingsModalProps) {
   const importRef = React.useRef<HTMLInputElement>(null);
 
@@ -174,6 +191,11 @@ export function SettingsModal({
               <p className="text-sm text-muted-foreground">
                 記録をGoogleカレンダーに自動で同期します。同期を有効にするには、クラウド同期をONにしてください。
               </p>
+              {!hasGoogleOauthClientId && (
+                <div className="rounded-md border border-rose-500/40 bg-rose-950/30 p-3 text-sm text-rose-100">
+                  Google OAuth クライアントID（VITE_GOOGLE_OAUTH_CLIENT_ID）が未設定のため、トークン更新に失敗します。
+                </div>
+              )}
               {user ? (
                 <div className="space-y-4">
                   <p className="text-sm font-medium text-emerald-600">✓ カレンダー連携は有効です</p>
@@ -211,6 +233,14 @@ export function SettingsModal({
                   </div>
                   <p className="text-sm text-muted-foreground">
                     Googleトークン: {googleToken ? <span className="text-emerald-600">取得済み</span> : <span className="text-rose-600">未取得</span>}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    OAuthクライアントID:{" "}
+                    {hasGoogleOauthClientId ? (
+                      <span className="text-emerald-600">設定済み</span>
+                    ) : (
+                      <span className="text-rose-600">未設定</span>
+                    )}
                   </p>
                   <Button variant="outline" onClick={onSignOut}>
                     サインアウト
