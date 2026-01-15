@@ -1,6 +1,8 @@
+const SHELL_CACHE = "twinly-shell-v2";
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("twinly-shell-v1").then((cache) =>
+    caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
         "/",
         "/index.html",
@@ -16,7 +18,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => (key === "twinly-shell-v1" ? null : caches.delete(key))))
+      Promise.all(keys.map((key) => (key === SHELL_CACHE ? null : caches.delete(key))))
     )
   );
   self.clients.claim();
@@ -41,7 +43,7 @@ self.addEventListener("fetch", (event) => {
       const fetchPromise = fetch(req)
         .then((res) => {
           const clone = res.clone();
-          caches.open("twinly-shell-v1").then((cache) => cache.put(req, clone));
+          caches.open(SHELL_CACHE).then((cache) => cache.put(req, clone));
           return res;
         })
         .catch(() => cached);
