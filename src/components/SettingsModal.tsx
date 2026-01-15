@@ -6,12 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "./ui/label";
 import React, { useEffect, useState } from "react"; // Import useEffect, useState
 import { AppState, BabyId, BabyProfile } from "@/types"; // Import BabyProfile
-
-const iconGradients = [
-  { value: "red", label: "Red" },
-  { value: "blue", label: "Blue" },
-  { value: "green", label: "Green" },
-];
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Import Select components
+import { iconGradients } from "@/lib/utils"; // Import iconGradients from utils
 
 // ... (rest of the file)
 
@@ -121,18 +117,24 @@ export function SettingsModal({
                     </div>
                     <div className="space-y-2">
                       <Label>アイコンカラー</Label>
-                      {/* TODO: Replace with Select component */}
-                      <select
-                        className="w-full rounded-md border bg-background p-2"
+                      <Select
                         value={p.iconGradient ?? ""}
-                        onChange={(e) => handleProfileChange(babyId, "iconGradient", e.target.value)}
+                        onValueChange={(value) => handleProfileChange(babyId, "iconGradient", value)}
                       >
-                        {iconGradients.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="アイコンカラーを選択" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {iconGradients.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <div className="flex items-center gap-2">
+                                <span className={`h-4 w-4 rounded-full ${opt.bgColor}`}></span>
+                                {opt.label}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label>カレンダー名</Label>

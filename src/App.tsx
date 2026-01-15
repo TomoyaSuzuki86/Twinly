@@ -16,6 +16,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
+import { iconGradients } from "./lib/utils"; // Import iconGradients
 
 const LS_FAMILY_KEY = "twinly-family-id";
 const LS_GOOGLE_TOKEN = "twinly-google-access-token";
@@ -712,6 +713,7 @@ export default function App() {
                 lowStock={lowStock.A}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
+                themeDimmedBgColor={iconGradients.find(g => g.value === app.profiles.A.iconGradient)?.dimmedBgColor ?? "bg-background"}
               />
             </TabsContent>
             <TabsContent value="B" className="mt-4">
@@ -721,6 +723,7 @@ export default function App() {
                 lowStock={lowStock.B}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
+                themeDimmedBgColor={iconGradients.find(g => g.value === app.profiles.B.iconGradient)?.dimmedBgColor ?? "bg-background"}
               />
             </TabsContent>
           </Tabs>

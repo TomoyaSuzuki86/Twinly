@@ -31,3 +31,34 @@ export const daysSince = (iso: string) => {
   const days = Math.floor(ms / 1000 / 60 / 60 / 24);
   return Math.max(0, days);
 };
+
+// Recursively remove undefined properties from an object
+export const removeUndefined = <T extends object>(obj: T): T => {
+  const newObj: Partial<T> = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (value !== undefined) {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          newObj[key] = removeUndefined(value as object) as T[Extract<keyof T, string>];
+        } else if (Array.isArray(value)) {
+          newObj[key] = value.map(item => (typeof item === 'object' && item !== null ? removeUndefined(item) : item)) as T[Extract<keyof T, string>];
+        } else {
+          newObj[key] = value;
+        }
+      }
+    }
+  }
+  return newObj as T;
+};
+
+export const iconGradients = [
+  { value: "from-violet-500 to-fuchsia-500", label: "バイオレット", bgColor: "bg-gradient-to-br from-violet-500 to-fuchsia-500", dimmedBgColor: "bg-violet-900/20" },
+  { value: "from-sky-500 to-cyan-400", label: "スカイブルー", bgColor: "bg-gradient-to-br from-sky-500 to-cyan-400", dimmedBgColor: "bg-sky-900/20" },
+  { value: "from-emerald-500 to-teal-400", label: "エメラルド", bgColor: "bg-gradient-to-br from-emerald-500 to-teal-400", dimmedBgColor: "bg-emerald-900/20" },
+  { value: "from-amber-500 to-orange-400", label: "アンバー", bgColor: "bg-gradient-to-br from-amber-500 to-orange-400", dimmedBgColor: "bg-amber-900/20" },
+  { value: "from-rose-500 to-red-400", label: "ローズ", bgColor: "bg-gradient-to-br from-rose-500 to-red-400", dimmedBgColor: "bg-rose-900/20" },
+  { value: "from-indigo-500 to-blue-400", label: "インディゴ", bgColor: "bg-gradient-to-br from-indigo-500 to-blue-400", dimmedBgColor: "bg-indigo-900/20" },
+  { value: "from-lime-500 to-green-400", label: "ライム", bgColor: "bg-gradient-to-br from-lime-500 to-green-400", dimmedBgColor: "bg-lime-900/20" },
+  { value: "from-pink-500 to-purple-400", label: "ピンク", bgColor: "bg-gradient-to-br from-pink-500 to-purple-400", dimmedBgColor: "bg-pink-900/20" },
+];

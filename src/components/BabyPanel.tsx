@@ -1,4 +1,4 @@
-import { Baby, FileText, Milk, Droplets } from "lucide-react";
+import { Baby, Milk, Droplets } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
-import { daysSince } from "@/lib/utils";
+import { daysSince, fmtTime } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 
 type BabyPanelProps = {
@@ -21,8 +21,8 @@ type BabyPanelProps = {
     kind: "milk" | "diaper" | "edit",
     payload: { babyId: BabyId } | { eventId: string }
   ) => void;
-  onAddDailyReport: (babyId: BabyId, events: LogEvent[]) => void;
   onDeleteEvent: (eventId: string) => void;
+  themeDimmedBgColor: string; // New prop for dimmed background color
 };
 
 export function BabyPanel({
@@ -30,8 +30,8 @@ export function BabyPanel({
   events,
   lowStock,
   onOpenModal,
-  onAddDailyReport,
   onDeleteEvent,
+  themeDimmedBgColor, // Destructure new prop
 }: BabyPanelProps) {
   const p = profile;
   const babyId = p.babyId;
@@ -46,42 +46,41 @@ export function BabyPanel({
 
   const purchaseUrl = p.diaperPurchaseUrl?.trim();
 
+  const lastMilkEvent = milkEvents.length > 0 ? milkEvents[0] : null;
+  const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
+
   return (
-    <Card className="flex flex-col border-border/60">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <div
-              className={`grid h-14 w-14 flex-shrink-0 place-items-center rounded-full bg-gradient-to-br ${
-                p.iconGradient ?? "from-violet-500 to-fuchsia-500"
-              }`}
-            >
-              {p.iconEmoji ? (
-                <span className="text-3xl">{p.iconEmoji}</span>
-              ) : (
-                <Baby className="h-8 w-8 text-white" />
-              )}
-            </div>
-            <div>
-              <CardTitle>{p.displayName}</CardTitle>
-              <CardDescription className="mt-1">生後{ageDays}日</CardDescription>
-            </div>
-          </div>
+    <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
+      <CardContent className="p-4">
+        <div className="grid grid-cols-2 gap-4">
           <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onAddDailyReport(babyId, events)}
-            title="日次レポート"
-            className="flex-shrink-0"
+            size="lg"
+            className="h-24 flex-col bg-sky-600 text-2xl font-bold hover:bg-sky-500"
+            onClick={() => onOpenModal("milk", { babyId })}
           >
-            <FileText className="mr-2 h-4 w-4" />
-            まとめ
+            <div className="flex items-center">
+              <Milk className="mr-3 h-7 w-7" />
+              ミルク
+            </div>
+            <span className="mt-1 text-base font-normal opacity-80">最終: {lastMilkTime}</span>
+          </Button>
+          <Button
+            size="lg"
+            className="h-24 flex-col bg-amber-600 text-2xl font-bold hover:bg-amber-500"
+            onClick={() => onOpenModal("diaper", { babyId })}
+          >
+            <div className="flex items-center">
+              <Droplets className="mr-3 h-7 w-7" />
+              おむつ
+            </div>
+            <span className="mt-1 text-base font-normal opacity-80">
+              {p.diaperSize}・残り {rem}
+            </span>
           </Button>
         </div>
-        <div className="pt-4 flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">
-            おむつ {p.diaperSize}・残り {rem}
-          </Badge>
+      </CardContent>
+      <CardHeader className="pt-0">
+        <div className="flex flex-wrap items-center gap-2">
           {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
           {lowStock && purchaseUrl ? (
             <a href={purchaseUrl} target="_blank" rel="noreferrer">
@@ -94,53 +93,25 @@ export function BabyPanel({
       </CardHeader>
       <CardContent className="flex-grow space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Button
-            size="lg"
-            className="h-20 bg-sky-600 text-xl hover:bg-sky-500"
-            onClick={() => onOpenModal("milk", { babyId })}
-          >
-            <Milk className="mr-2 h-6 w-6" />
-            ミルク
-          </Button>
-          <Button
-            size="lg"
-            className="h-20 bg-amber-600 text-xl hover:bg-amber-500"
-            onClick={() => onOpenModal("diaper", { babyId })}
-          >
-            <Droplets className="mr-2 h-6 w-6" />
-            おむつ
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">
-                ミルク合計
-              </CardTitle>
+              <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-sky-300">
-                  {milkTotal}
-                </span>
+                <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
                 <span className="font-semibold text-muted-foreground">ml</span>
-                <span className="ml-auto text-sm text-muted-foreground">
-                  {milkEvents.length}回
-                </span>
+                <span className="ml-auto text-sm text-muted-foreground">{milkEvents.length}回</span>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">
-                おむつ
-              </CardTitle>
+              <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-amber-300">
-                  {diaperCount}
-                </span>
+                <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
                 <span className="font-semibold text-muted-foreground">回</span>
               </div>
             </CardContent>
@@ -148,9 +119,7 @@ export function BabyPanel({
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          今日のログ
-        </h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">今日のログ</h3>
         <div className="flex w-full flex-col gap-3">
           {events.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
@@ -173,3 +142,4 @@ export function BabyPanel({
     </Card>
   );
 }
+
