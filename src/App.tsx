@@ -222,14 +222,19 @@ export default function App() {
     });
   };
 
+  const googleOAuthClientId = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined)?.trim();
+  const hasGoogleOauthClientId = Boolean(googleOAuthClientId);
+
   const requestGoogleTokenSilently = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined;
-    if (!clientId) return null;
+    if (!hasGoogleOauthClientId) {
+      console.warn("requestGoogleTokenSilently: missing VITE_GOOGLE_OAUTH_CLIENT_ID");
+      return null;
+    }
     try {
       await loadGsiScript();
       return await new Promise<string | null>((resolve) => {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
+          client_id: googleOAuthClientId,
           scope: GOOGLE_CALENDAR_SCOPE,
           prompt: "",
           callback: (resp: any) => {
@@ -374,7 +379,7 @@ export default function App() {
       } else {
         setApp(initialState);
         setGoogleToken("");
-    setGoogleTokenExpiresAt(0);
+        setGoogleTokenExpiresAt(0);
         setAppLoading(false);
       }
       setAuthReady(true);
@@ -383,9 +388,10 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!authUser) return;
+    if (!hasGoogleOauthClientId) return;
     if (isGoogleTokenValid(googleToken, googleTokenExpiresAt)) return;
     void requestGoogleTokenSilently();
-  }, [authUser, googleToken, googleTokenExpiresAt]);
+  }, [authUser, googleToken, googleTokenExpiresAt, hasGoogleOauthClientId]);
 
 
   useEffect(() => {
@@ -910,6 +916,7 @@ export default function App() {
         onImport={handleImport}
         onResetAll={resetAll}
         googleToken={googleToken}
+        hasGoogleOauthClientId={hasGoogleOauthClientId}
       />
       <EditModal
         open={modal?.kind === "edit"}
