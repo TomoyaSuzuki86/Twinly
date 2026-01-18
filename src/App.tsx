@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, CircleUser, Settings, Trash2, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, db, isFirebaseConfigured } from "./firebase";
+import { auth, db, ensureAuthPersistence, isFirebaseConfigured } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
 import { AppState, BabyId, BabyProfile, DiaperKind, EventType, LogEvent, MilkMethod } from "./types";
 import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
@@ -225,7 +225,7 @@ export default function App() {
   const googleOAuthClientId = (import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID as string | undefined)?.trim();
   const hasGoogleOauthClientId = Boolean(googleOAuthClientId);
 
-  const requestGoogleTokenSilently = async () => {
+  const requestGoogleTokenSilently = async (loginHint?: string) => {
     if (!hasGoogleOauthClientId) {
       console.warn("requestGoogleTokenSilently: missing VITE_GOOGLE_OAUTH_CLIENT_ID");
       return null;
@@ -236,7 +236,9 @@ export default function App() {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: googleOAuthClientId,
           scope: GOOGLE_CALENDAR_SCOPE,
+          include_granted_scopes: true,
           prompt: "",
+          hint: loginHint,
           callback: (resp: any) => {
             if (resp?.access_token) {
               setGoogleToken(resp.access_token);
@@ -258,7 +260,7 @@ export default function App() {
 
   const ensureGoogleToken = async () => {
     if (isGoogleTokenValid(googleToken, googleTokenExpiresAt)) return googleToken;
-    const refreshed = await requestGoogleTokenSilently();
+    const refreshed = await requestGoogleTokenSilently(authUser?.email ?? undefined);
     return refreshed;
   };
 
@@ -372,25 +374,45 @@ export default function App() {
       setAuthReady(true);
       return undefined;
     }
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setAuthUser(user);
-      if (user) {
-        void ensureUserDocument(user);
-      } else {
-        setApp(initialState);
-        setGoogleToken("");
-        setGoogleTokenExpiresAt(0);
-        setAppLoading(false);
-      }
-      setAuthReady(true);
-    });
-    return () => unsub();
+    let unsub = () => {};
+    let cancelled = false;
+    const init = async () => {
+      await ensureAuthPersistence();
+      if (cancelled) return;
+      unsub = onAuthStateChanged(auth, (user) => {
+        setAuthUser(user);
+        if (user) {
+          void ensureUserDocument(user);
+        } else {
+          setApp(initialState);
+          setGoogleToken("");
+          setGoogleTokenExpiresAt(0);
+          setAppLoading(false);
+        }
+        setAuthReady(true);
+      });
+    };
+    void init();
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, []);
   useEffect(() => {
     if (!authUser) return;
     if (!hasGoogleOauthClientId) return;
     if (isGoogleTokenValid(googleToken, googleTokenExpiresAt)) return;
-    void requestGoogleTokenSilently();
+    void requestGoogleTokenSilently(authUser.email ?? undefined);
+  }, [authUser, googleToken, googleTokenExpiresAt, hasGoogleOauthClientId]);
+  useEffect(() => {
+    if (!authUser) return;
+    if (!hasGoogleOauthClientId) return;
+    if (!googleToken || !googleTokenExpiresAt) return;
+    const refreshInMs = Math.max(googleTokenExpiresAt - Date.now() - 5 * 60 * 1000, 0);
+    const timer = window.setTimeout(() => {
+      void requestGoogleTokenSilently(authUser.email ?? undefined);
+    }, refreshInMs);
+    return () => window.clearTimeout(timer);
   }, [authUser, googleToken, googleTokenExpiresAt, hasGoogleOauthClientId]);
 
 
@@ -711,7 +733,7 @@ export default function App() {
       const cred = GoogleAuthProvider.credentialFromResult(res);
       if (cred?.accessToken) {
         setGoogleToken(cred.accessToken);
-        setGoogleTokenExpiresAt(0);
+        setGoogleTokenExpiresAt(Date.now() + 55 * 60 * 1000);
       }
     } catch (e) {
       console.error(e);
