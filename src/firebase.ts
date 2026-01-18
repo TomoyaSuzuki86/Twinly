@@ -1,6 +1,6 @@
 import { FirebaseApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -40,6 +40,20 @@ const app: FirebaseApp | null = isFirebaseConfigured
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
+
+export async function ensureAuthPersistence() {
+  if (!auth) return;
+  try {
+    await setPersistence(auth, indexedDBLocalPersistence);
+  } catch (error) {
+    console.warn("[Twinly] IndexedDB persistence unavailable, falling back to localStorage.", error);
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+    } catch (fallbackError) {
+      console.warn("[Twinly] Auth persistence setup failed.", fallbackError);
+    }
+  }
+}
 
 export async function initAnalytics() {
   if (!app || import.meta.env.DEV) return null;
