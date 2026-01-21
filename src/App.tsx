@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
 import { iconGradients } from "./lib/utils"; // Import iconGradients
 import { WeightChartModal } from "./components/WeightChartModal.tsx";
+import { SkeletonLoader } from "./components/SkeletonLoader";
 
 
 declare global {
@@ -826,9 +827,7 @@ export default function App() {
   if (!authReady) {
     return (
       <AppContainer>
-        <div className="grid h-screen place-items-center">
-          <p>Loading...</p>
-        </div>
+        <SkeletonLoader />
       </AppContainer>
     );
   }
@@ -854,9 +853,7 @@ export default function App() {
   if (appLoading) {
     return (
       <AppContainer>
-        <div className="grid h-screen place-items-center">
-          <p>Loading your data...</p>
-        </div>
+        <SkeletonLoader />
       </AppContainer>
     );
   }
