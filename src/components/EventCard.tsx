@@ -6,7 +6,15 @@ import {
 } from "@/components/ui/card";
 import { LogEvent } from "@/types";
 import { fmtTime } from "@/lib/utils";
-import { Droplets, FileText, Milk, Pencil, Trash2 } from "lucide-react";
+import {
+  Droplets,
+  FileText,
+  Milk,
+  Pencil,
+  Thermometer,
+  Trash2,
+  Weight,
+} from "lucide-react";
 import { Button } from "./ui/button";
 
 export function EventCard({
@@ -24,12 +32,20 @@ export function EventCard({
       ? "bg-sky-500/20"
       : event.type === "diaper"
       ? "bg-amber-500/20"
+      : event.type === "temperature"
+      ? "bg-rose-500/20"
+      : event.type === "weight"
+      ? "bg-lime-500/20"
       : "bg-violet-500/20";
   const icon =
     event.type === "milk" ? (
       <Milk className="h-5 w-5 text-sky-300" />
     ) : event.type === "diaper" ? (
       <Droplets className="h-5 w-5 text-amber-300" />
+    ) : event.type === "temperature" ? (
+      <Thermometer className="h-5 w-5 text-rose-300" />
+    ) : event.type === "weight" ? (
+      <Weight className="h-5 w-5 text-lime-300" />
     ) : (
       <FileText className="h-5 w-5 text-violet-300" />
     );
@@ -47,6 +63,10 @@ export function EventCard({
             ? "うんち"
             : "両方"
         }`
+      : event.type === "temperature"
+      ? `体温: ${event.temperature?.toFixed(1)}°C`
+      : event.type === "weight"
+      ? `体重: ${event.weight?.toFixed(2)}kg`
       : "日次レポート";
   const statusDot =
     event.calendarStatus === "synced"

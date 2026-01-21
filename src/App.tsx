@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, CircleUser, Settings, Trash2, Undo2 } from "lucide-react";
+import { Baby, Check, CircleUser, LineChart, Settings, Trash2, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured } from "./firebase";
@@ -17,6 +17,7 @@ import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger.tsx";
 import { iconGradients } from "./lib/utils"; // Import iconGradients
+import { WeightChartModal } from "./components/WeightChartModal.tsx";
 
 
 declare global {
@@ -165,6 +166,7 @@ export default function App() {
     | { kind: "edit"; eventId: string }
     | null
   >(null);
+  const [chartModalOpen, setChartModalOpen] = useState(false);
 
   const saveAppToFirestore = async (nextApp: AppState) => {
     console.log("saveAppToFirestore: Saving app", nextApp);
@@ -438,6 +440,27 @@ export default function App() {
     return out;
   }, [eventsToday]);
 
+  const lastWeights = useMemo(() => {
+    const out: Record<BabyId, number | null> = { A: null, B: null };
+    const sortedEvents = [...app.events].sort((a, b) => b.timestamp - a.timestamp);
+
+    const lastWeightA = sortedEvents.find(
+      (e) => e.babyId === "A" && e.type === "weight" && e.weight !== undefined
+    );
+    if (lastWeightA && lastWeightA.weight !== undefined) {
+      out.A = lastWeightA.weight;
+    }
+
+    const lastWeightB = sortedEvents.find(
+      (e) => e.babyId === "B" && e.type === "weight" && e.weight !== undefined
+    );
+    if (lastWeightB && lastWeightB.weight !== undefined) {
+      out.B = lastWeightB.weight;
+    }
+
+    return out;
+  }, [app.events]);
+
   const syncStatus = useMemo<LogEvent["calendarStatus"]>(() => {
     if (eventsToday.some((e) => e.calendarStatus === "error")) return "error";
     if (eventsToday.some((e) => e.calendarStatus === "pending")) return "pending";
@@ -495,7 +518,10 @@ export default function App() {
 
   const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
     if (!authUser || !db) return;
-    const shouldSync = Boolean(authUser && googleToken);
+
+    const isHealthRecord = type === "temperature" || type === "weight";
+    const shouldSync = Boolean(authUser && googleToken) && !isHealthRecord;
+
     const event: LogEvent = {
       id: uid(),
       babyId,
@@ -520,6 +546,11 @@ export default function App() {
     if (shouldSync) {
       void syncEventToCalendar(event);
     }
+  };
+
+  const handleAddEvent = (eventData: Omit<LogEvent, "id" | "timestamp" | "calendarStatus">) => {
+    const { babyId, type, ...payload } = eventData;
+    addEvent(babyId, type, payload);
   };
 
   const removeEvent = (eventId: string) => {
@@ -843,6 +874,9 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" onClick={() => setChartModalOpen(true)} aria-label="show chart">
+                <LineChart className="h-5 w-5" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                 <Settings className="h-5 w-5" />
               </Button>
@@ -882,6 +916,8 @@ export default function App() {
                 lowStock={lowStock.A}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
+                onAddEvent={handleAddEvent}
+                lastWeight={lastWeights.A}
                 themeDimmedBgColor={iconGradients.find(g => g.value === app.profiles.A.iconGradient)?.dimmedBgColor ?? "bg-background"}
               />
             </TabsContent>
@@ -892,6 +928,8 @@ export default function App() {
                 lowStock={lowStock.B}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
+                onAddEvent={handleAddEvent}
+                lastWeight={lastWeights.B}
                 themeDimmedBgColor={iconGradients.find(g => g.value === app.profiles.B.iconGradient)?.dimmedBgColor ?? "bg-background"}
               />
             </TabsContent>
@@ -945,6 +983,12 @@ export default function App() {
         onOpenChange={(open) => !open && setModal(null)}
         event={editTarget}
         onSave={onSaveEdit}
+      />
+      <WeightChartModal
+        open={chartModalOpen}
+        onOpenChange={setChartModalOpen}
+        events={app.events}
+        profiles={app.profiles}
       />
     </AppContainer>
   );

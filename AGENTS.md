@@ -380,4 +380,17 @@
 - clone: `git clone git@github.com:TomoyaSuzuki86/Twinly.git`
 - install/build/test は package.json / README に従う（見つからない場合は作る）
 
+## 13. Env Vars (CI only)
+
+- Do not use local `.env.local`.
+- Use GitHub Actions Secrets.
+- Required keys:
+  - VITE_FIREBASE_API_KEY
+  - VITE_FIREBASE_APP_ID
+  - VITE_FIREBASE_AUTH_DOMAIN
+  - VITE_FIREBASE_MEASUREMENT_ID
+  - VITE_FIREBASE_MESSAGING_SENDER_ID
+  - VITE_FIREBASE_PROJECT_ID
+  - VITE_FIREBASE_STORAGE_BUCKET
+  - VITE_GOOGLE_OAUTH_CLIENT_ID
 
