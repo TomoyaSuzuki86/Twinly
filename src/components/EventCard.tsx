@@ -14,6 +14,7 @@ import {
   Thermometer,
   Trash2,
   Weight,
+  Ruler,
 } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -36,6 +37,8 @@ export function EventCard({
       ? "bg-rose-500/20"
       : event.type === "weight"
       ? "bg-lime-500/20"
+      : event.type === "height"
+      ? "bg-blue-500/20"
       : "bg-violet-500/20";
   const icon =
     event.type === "milk" ? (
@@ -46,6 +49,8 @@ export function EventCard({
       <Thermometer className="h-5 w-5 text-rose-300" />
     ) : event.type === "weight" ? (
       <Weight className="h-5 w-5 text-lime-300" />
+    ) : event.type === "height" ? (
+      <Ruler className="h-5 w-5 text-blue-300" />
     ) : (
       <FileText className="h-5 w-5 text-violet-300" />
     );
@@ -67,7 +72,9 @@ export function EventCard({
       ? `体温: ${event.temperature?.toFixed(1)}°C`
       : event.type === "weight"
       ? `体重: ${event.weight?.toFixed(2)}kg`
-      : "日次レポート";
+      : event.type === "height"
+      ? `身長: ${event.height?.toFixed(1)}cm`
+      : "一言日記";
   const statusDot =
     event.calendarStatus === "synced"
       ? "bg-emerald-400"

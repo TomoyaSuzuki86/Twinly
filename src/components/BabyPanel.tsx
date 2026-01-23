@@ -9,6 +9,8 @@ import {
   ChevronRight,
   ChevronsRight,
   Check,
+  Ruler,
+  FileText,
 } from "lucide-react";
 import {
   Card,
@@ -38,6 +40,7 @@ type BabyPanelProps = {
     event: Omit<LogEvent, "id" | "timestamp" | "calendarStatus">
   ) => void;
   lastWeight: number | null;
+  lastHeight: number | null;
   themeDimmedBgColor: string;
 };
 
@@ -59,6 +62,7 @@ export function BabyPanel({
   onDeleteEvent,
   onAddEvent,
   lastWeight,
+  lastHeight,
   themeDimmedBgColor,
 }: BabyPanelProps) {
   const p = profile;
@@ -66,6 +70,8 @@ export function BabyPanel({
 
   const [temperature, setTemperature] = useState("36.0");
   const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [dailyNote, setDailyNote] = useState("");
 
   useEffect(() => {
     if (lastWeight) {
@@ -75,7 +81,15 @@ export function BabyPanel({
     }
   }, [lastWeight]);
 
-  const handleSaveHealthRecord = (type: "temperature" | "weight") => {
+  useEffect(() => {
+    if (lastHeight) {
+      setHeight(lastHeight.toFixed(1));
+    } else {
+      setHeight("");
+    }
+  }, [lastHeight]);
+
+  const handleSaveHealthRecord = (type: "temperature" | "weight" | "height") => {
     if (type === "temperature" && temperature) {
       onAddEvent({
         babyId,
@@ -92,6 +106,25 @@ export function BabyPanel({
       });
       // Do not reset weight, it will be updated by useEffect
     }
+    if (type === "height" && height) {
+      onAddEvent({
+        babyId,
+        type: "height",
+        height: parseFloat(height),
+      });
+      // Do not reset height, it will be updated by useEffect
+    }
+  };
+
+  const handleSaveDailyNote = () => {
+    const note = dailyNote.trim();
+    if (!note) return;
+    onAddEvent({
+      babyId,
+      type: "daily",
+      note,
+    });
+    setDailyNote("");
   };
 
   const milkEvents = events.filter((e) => e.type === "milk");
@@ -141,6 +174,32 @@ export function BabyPanel({
         </div>
 
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* One-line Diary Input */}
+          <div className="flex items-center gap-2 rounded-lg border bg-card p-2 justify-between sm:col-span-2">
+            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+              <FileText className="h-4 w-4" />
+              <span>一言日記</span>
+            </div>
+            <Input
+              type="text"
+              placeholder="ひとことメモ"
+              value={dailyNote}
+              onChange={(e) => setDailyNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveDailyNote();
+              }}
+              className="flex-1 text-sm h-7 px-2"
+            />
+            <Button
+              size="icon"
+              className="h-7 w-7 flex-shrink-0"
+              onClick={handleSaveDailyNote}
+              disabled={!dailyNote.trim()}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* Temperature Input */}
           <div className="flex items-center gap-1 rounded-lg border bg-card p-2 justify-between">
             <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
@@ -250,6 +309,61 @@ export function BabyPanel({
               <Check className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Height Input */}
+          <div className="flex items-center gap-1 rounded-lg border bg-card p-2 justify-between">
+            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+              <Ruler className="h-4 w-4" />
+              <span>身長</span>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-10"
+              onClick={() => setHeight((h) => adjustNumber(h, -0.5, 1))}
+            >
+              <ChevronsLeft className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-10"
+              onClick={() => setHeight((h) => adjustNumber(h, -0.1, 1))}
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </Button>
+            <Input
+              type="number"
+              placeholder={lastHeight?.toFixed(1) ?? "0.0"}
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              className="w-20 text-center text-base font-bold h-7 px-1"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-10"
+              onClick={() => setHeight((h) => adjustNumber(h, 0.1, 1))}
+            >
+              <ChevronRight className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-10"
+              onClick={() => setHeight((h) => adjustNumber(h, 0.5, 1))}
+            >
+              <ChevronsRight className="h-3 w-3" />
+            </Button>
+            <Button
+              size="icon"
+              className="h-7 w-7 flex-shrink-0"
+              onClick={() => handleSaveHealthRecord("height")}
+              disabled={!height}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardContent>
       <CardHeader className="pt-0">
@@ -327,4 +441,3 @@ export function BabyPanel({
     </Card>
   );
 }
-

@@ -1,4 +1,3 @@
-
 import {
   Dialog,
   DialogContent,
@@ -6,7 +5,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BabyId, LogEvent } from "@/types";
 import { useMemo, useState } from "react";
 import {
@@ -20,13 +26,16 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { fmtDate } from "@/lib/utils";
+import { Ruler, Weight } from "lucide-react";
 
-type WeightChartModalProps = {
+type HealthChartModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   events: LogEvent[];
   profiles: Record<BabyId, { displayName: string }>;
 };
+
+type ChartType = "weight" | "height";
 
 type ChartData = {
   date: string;
@@ -36,34 +45,39 @@ type ChartData = {
 
 const processEventsForChart = (
   events: LogEvent[],
-  days: number
+  days: number,
+  chartType: ChartType
 ): ChartData[] => {
   const now = new Date();
   const timeThreshold = now.getTime() - days * 24 * 60 * 60 * 1000;
 
-  const weightEvents = events.filter(
+  const filteredEvents = events.filter(
     (e) =>
-      e.type === "weight" &&
-      e.weight !== undefined &&
+      e.type === chartType &&
+      (chartType === "weight" ? e.weight !== undefined : e.height !== undefined) &&
       e.timestamp >= timeThreshold
   );
 
   // Sort events by timestamp ascending to process in order
-  weightEvents.sort((a, b) => a.timestamp - b.timestamp);
+  filteredEvents.sort((a, b) => a.timestamp - b.timestamp);
 
   const dailyData = new Map<string, { A?: number; B?: number }>();
 
-  for (const event of weightEvents) {
+  for (const event of filteredEvents) {
     const dateStr = fmtDate(new Date(event.timestamp));
     const day = dailyData.get(dateStr) ?? {};
-    day[event.babyId] = event.weight;
+    if (chartType === "weight" && event.weight !== undefined) {
+      day[event.babyId] = event.weight;
+    } else if (chartType === "height" && event.height !== undefined) {
+      day[event.babyId] = event.height;
+    }
     dailyData.set(dateStr, day);
   }
 
   const chartData: ChartData[] = Array.from(dailyData.entries()).map(
-    ([date, weights]) => ({
+    ([date, values]) => ({
       date,
-      ...weights,
+      ...values,
     })
   );
 
@@ -73,35 +87,65 @@ const processEventsForChart = (
   );
 };
 
-export function WeightChartModal({
+export function HealthChartModal({
   open,
   onOpenChange,
   events,
   profiles,
-}: WeightChartModalProps) {
+}: HealthChartModalProps) {
   const [timeRange, setTimeRange] = useState("1M");
+  const [chartType, setChartType] = useState<ChartType>("weight");
 
   const chartData = useMemo(() => {
     const days =
       timeRange === "1W" ? 7 : timeRange === "1M" ? 30 : 365;
-    return processEventsForChart(events, days);
-  }, [events, timeRange]);
+    return processEventsForChart(events, days, chartType);
+  }, [events, timeRange, chartType]);
 
   const yDomain = useMemo(() => {
-    const allWeights = chartData.flatMap(d => [d.A, d.B]).filter(w => w !== undefined) as number[];
-    if (allWeights.length === 0) return [0, 10];
-    const min = Math.min(...allWeights);
-    const max = Math.max(...allWeights);
+    const allValues = chartData.flatMap(d => [d.A, d.B]).filter(v => v !== undefined) as number[];
+    if (allValues.length === 0) return [0, 10]; // Default for weight
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
     return [Math.floor(min - 1), Math.ceil(max + 1)];
   }, [chartData]);
+
+  const yAxisLabel = chartType === "weight" ? "体重 (kg)" : "身長 (cm)";
+  const tooltipFormatter = (value: number) => [
+    `${value.toFixed(chartType === "weight" ? 2 : 1)} ${chartType === "weight" ? "kg" : "cm"}`,
+    chartType === "weight" ? "体重" : "身長",
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[60vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>体重グラフ</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Select
+              value={chartType}
+              onValueChange={(value) => setChartType(value as ChartType)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="グラフタイプを選択" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="weight">
+                  <div className="flex items-center gap-2">
+                    <Weight className="h-4 w-4" />
+                    <span>体重グラフ</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="height">
+                  <div className="flex items-center gap-2">
+                    <Ruler className="h-4 w-4" />
+                    <span>身長グラフ</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </DialogTitle>
           <DialogDescription>
-            日々の体重の推移（成長曲線）を確認できます。
+            日々の{chartType === "weight" ? "体重" : "身長"}の推移（成長曲線）を確認できます。
           </DialogDescription>
         </DialogHeader>
         <div className="flex-grow pr-8">
@@ -121,15 +165,13 @@ export function WeightChartModal({
                 domain={yDomain}
                 tick={{ fontSize: 12 }}
                 label={{
-                  value: "体重 (kg)",
+                  value: yAxisLabel,
                   angle: -90,
                   position: "insideLeft",
                   style: { textAnchor: "middle" },
                 }}
               />
-              <Tooltip
-                formatter={(value: number) => [`${value.toFixed(2)} kg`, "体重"]}
-              />
+              <Tooltip formatter={tooltipFormatter} />
               <Legend />
               <Line
                 type="monotone"

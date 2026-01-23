@@ -1,5 +1,5 @@
 export type BabyId = "A" | "B";
-export type EventType = "milk" | "diaper" | "daily" | "temperature" | "weight";
+export type EventType = "milk" | "diaper" | "daily" | "temperature" | "weight" | "height";
 export type DiaperKind = "pee" | "poop" | "mix";
 export type MilkMethod = "bottle" | "breast";
 
@@ -13,6 +13,7 @@ export type LogEvent = {
   diaperKind?: DiaperKind;
   temperature?: number;
   weight?: number;
+  height?: number;
   note?: string;
   calendarStatus?: "pending" | "synced" | "error";
   calendarEventId?: string;
