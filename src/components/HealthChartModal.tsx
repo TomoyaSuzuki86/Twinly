@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BabyId, LogEvent } from "@/types";
+import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { useMemo, useState } from "react";
 import {
   LineChart,
@@ -25,14 +25,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, iconGradients } from "@/lib/utils";
 import { Ruler, Weight } from "lucide-react";
 
 type HealthChartModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   events: LogEvent[];
-  profiles: Record<BabyId, { displayName: string }>;
+  profiles: Record<BabyId, BabyProfile>;
 };
 
 type ChartType = "weight" | "height";
@@ -41,6 +41,17 @@ type ChartData = {
   date: string;
   A?: number;
   B?: number;
+};
+
+const gradientStrokeMap: Record<string, string> = {
+  "from-violet-500 to-fuchsia-500": "#8b5cf6",
+  "from-sky-500 to-cyan-400": "#0ea5e9",
+  "from-emerald-500 to-teal-400": "#10b981",
+  "from-amber-500 to-orange-400": "#f59e0b",
+  "from-rose-500 to-red-400": "#f43f5e",
+  "from-indigo-500 to-blue-400": "#6366f1",
+  "from-lime-500 to-green-400": "#84cc16",
+  "from-pink-500 to-purple-400": "#ec4899",
 };
 
 const processEventsForChart = (
@@ -116,6 +127,13 @@ export function HealthChartModal({
     chartType === "weight" ? "体重" : "身長",
   ];
 
+  const resolveStroke = (babyId: BabyId) => {
+    const gradient = profiles[babyId].iconGradient;
+    if (gradient && gradientStrokeMap[gradient]) return gradientStrokeMap[gradient];
+    const fallback = iconGradients[0]?.value;
+    return (fallback && gradientStrokeMap[fallback]) || "#8884d8";
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[60vh] flex flex-col">
@@ -177,7 +195,7 @@ export function HealthChartModal({
                 type="monotone"
                 dataKey="A"
                 name={profiles.A.displayName}
-                stroke="#8884d8"
+                stroke={resolveStroke("A")}
                 strokeWidth={2}
                 connectNulls
               />
@@ -185,7 +203,7 @@ export function HealthChartModal({
                 type="monotone"
                 dataKey="B"
                 name={profiles.B.displayName}
-                stroke="#82ca9d"
+                stroke={resolveStroke("B")}
                 strokeWidth={2}
                 connectNulls
               />

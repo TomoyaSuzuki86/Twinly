@@ -77,9 +77,9 @@ export function DailyReportModal({
                 <SelectValue placeholder="表示対象" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">A/B 両方</SelectItem>
-                <SelectItem value="A">赤ちゃんAのみ</SelectItem>
-                <SelectItem value="B">赤ちゃんBのみ</SelectItem>
+                <SelectItem value="all">両方</SelectItem>
+                <SelectItem value="A">{profiles.A.displayName}</SelectItem>
+                <SelectItem value="B">{profiles.B.displayName}</SelectItem>
               </SelectContent>
             </Select>
           </DialogTitle>
