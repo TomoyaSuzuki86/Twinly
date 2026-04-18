@@ -20,6 +20,7 @@ import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
 import { createInitialAppState, stripLegacyCalendarFields } from "./lib/app-state";
+import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 
 const createEmptyState = () => createInitialAppState(new Date());
 
@@ -240,12 +241,17 @@ export default function App() {
     scheduleUndo(event);
   };
 
-  const onSaveMilk = (payload: { milkMl: number; milkMethod: MilkMethod; note: string }) => {
+  const onSaveMilk = (payload: { milkMl: number; milkMethod: MilkMethod; note: string; timestamp: number }) => {
     if (!modal || modal.kind !== "milk") return;
     addEvent(modal.babyId, "milk", payload);
   };
 
-  const onSaveDiaper = (payload: { diaperKind: DiaperKind; note: string; selectedDiaperSize: string }) => {
+  const onSaveDiaper = (payload: {
+    diaperKind: DiaperKind;
+    note: string;
+    selectedDiaperSize: string;
+    timestamp: number;
+  }) => {
     if (!modal || modal.kind !== "diaper") return;
 
     const babyId = modal.babyId;
@@ -457,6 +463,20 @@ export default function App() {
     return result;
   }, [app.profiles]);
 
+  const milkDraft = useMemo(() => {
+    if (!modal || modal.kind !== "milk") {
+      return createDefaultMilkDraft(app.events, "A");
+    }
+    return createDefaultMilkDraft(app.events, modal.babyId);
+  }, [app.events, modal]);
+
+  const diaperDraft = useMemo(() => {
+    if (!modal || modal.kind !== "diaper") {
+      return createDefaultDiaperDraft(app.profiles.A.diaperSize);
+    }
+    return createDefaultDiaperDraft(app.profiles[modal.babyId].diaperSize);
+  }, [app.profiles, modal]);
+
   if (!firebaseEnabled) {
     return (
       <AppContainer>
@@ -594,12 +614,14 @@ export default function App() {
         open={modal?.kind === "milk"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "milk" ? app.profiles[modal.babyId].displayName : ""}
+        initialDraft={milkDraft}
         onSave={onSaveMilk}
       />
       <DiaperModal
         open={modal?.kind === "diaper"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
+        initialDraft={diaperDraft}
         onSave={onSaveDiaper}
         diaperStockBySize={modal?.kind === "diaper" ? app.profiles[modal.babyId].diaperStockBySize : {}}
         onUpdateDiaperStock={(size, stock) =>

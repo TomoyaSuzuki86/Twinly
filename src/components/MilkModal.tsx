@@ -1,40 +1,48 @@
 import {
   Dialog,
+  DialogClose,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BabyId, MilkMethod } from "@/types";
-import { clamp } from "@/lib/utils";
+import { MilkMethod } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
+import { MilkDraft, formatDateTimeLocalValue, parseDateTimeLocalValue, stepMilkAmount } from "@/lib/entry-drafts";
 
 type MilkModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   displayName: string;
-  onSave: (payload: { milkMl: number; milkMethod: MilkMethod; note: string }) => void;
+  initialDraft: MilkDraft;
+  onSave: (payload: { milkMl: number; milkMethod: MilkMethod; note: string; timestamp: number }) => void;
 };
 
-export function MilkModal({ open, onOpenChange, displayName, onSave }: MilkModalProps) {
-  const [milkMl, setMilkMl] = useState(140);
-  const [milkMethod, setMilkMethod] = useState<MilkMethod>("breast");
-  const [note, setNote] = useState("");
+export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSave }: MilkModalProps) {
+  const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
+  const [milkMethod, setMilkMethod] = useState<MilkMethod>(initialDraft.milkMethod);
+  const [note, setNote] = useState(initialDraft.note);
+  const [dateTimeValue, setDateTimeValue] = useState(formatDateTimeLocalValue(initialDraft.timestamp));
 
   useEffect(() => {
-    if (open) {
-      setMilkMl(140);
-      setMilkMethod("breast");
-      setNote("");
-    }
-  }, [open]);
+    if (!open) return;
+    setMilkMl(initialDraft.milkMl);
+    setMilkMethod(initialDraft.milkMethod);
+    setNote(initialDraft.note);
+    setDateTimeValue(formatDateTimeLocalValue(initialDraft.timestamp));
+  }, [open, initialDraft]);
 
   const handleSave = () => {
-    onSave({ milkMl, milkMethod, note });
+    onSave({
+      milkMl,
+      milkMethod,
+      note,
+      timestamp: parseDateTimeLocalValue(dateTimeValue),
+    });
     onOpenChange(false);
   };
 
@@ -43,29 +51,28 @@ export function MilkModal({ open, onOpenChange, displayName, onSave }: MilkModal
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{displayName}: ミルク記録</DialogTitle>
+          <DialogDescription>量、方法、記録時刻を確認して保存できます。</DialogDescription>
         </DialogHeader>
         <div className="space-y-8 py-4">
           <div className="text-center">
-            <Label className="text-sm font-semibold text-muted-foreground">
-              量 (ml)
-            </Label>
+            <Label className="text-sm font-semibold text-muted-foreground">量 (ml)</Label>
             <div className="mt-4 flex items-center justify-center gap-6">
               <Button
                 variant="outline"
                 size="icon"
                 className="h-16 w-16 rounded-full"
-                onClick={() => setMilkMl((v) => clamp(v - 10, 0, 999))}
+                aria-label="ミルク量を減らす"
+                onClick={() => setMilkMl((value) => stepMilkAmount(value, -1))}
               >
                 <span className="text-3xl font-semibold">-</span>
               </Button>
-              <div className="w-32 text-center text-7xl font-extrabold tracking-tight text-sky-300">
-                {milkMl}
-              </div>
+              <div className="w-32 text-center text-7xl font-extrabold tracking-tight text-sky-300">{milkMl}</div>
               <Button
                 variant="outline"
                 size="icon"
                 className="h-16 w-16 rounded-full"
-                onClick={() => setMilkMl((v) => clamp(v + 10, 0, 999))}
+                aria-label="ミルク量を増やす"
+                onClick={() => setMilkMl((value) => stepMilkAmount(value, 1))}
               >
                 <span className="text-3xl font-semibold">+</span>
               </Button>
@@ -88,8 +95,22 @@ export function MilkModal({ open, onOpenChange, displayName, onSave }: MilkModal
             </Button>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">メモ（任意）</Label>
+            <Label htmlFor="milk-datetime" className="text-xs text-muted-foreground">
+              時刻
+            </Label>
             <Input
+              id="milk-datetime"
+              type="datetime-local"
+              value={dateTimeValue}
+              onChange={(e) => setDateTimeValue(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="milk-note" className="text-xs text-muted-foreground">
+              メモ（任意）
+            </Label>
+            <Input
+              id="milk-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="例：途中でゲップ"
