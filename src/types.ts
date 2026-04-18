@@ -15,8 +15,6 @@ export type LogEvent = {
   weight?: number;
   height?: number;
   note?: string;
-  calendarStatus?: "pending" | "synced" | "error";
-  calendarEventId?: string;
 };
 
 export type BabyProfile = {
@@ -26,8 +24,6 @@ export type BabyProfile = {
   diaperSize: string;
   diaperStockBySize: Record<string, number>;
   diaperPurchaseUrl?: string;
-  calendarName: string;
-  calendarId?: string;
   iconEmoji?: string;
   iconGradient?: string;
 };

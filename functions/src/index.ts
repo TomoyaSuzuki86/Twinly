@@ -60,7 +60,6 @@ export const nightlyDailySummary = onSchedule(
           type: "daily",
           timestamp: rangeEnd,
           note,
-          calendarStatus: "pending",
         });
         changed = true;
       }

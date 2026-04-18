@@ -37,7 +37,7 @@ type BabyPanelProps = {
   ) => void;
   onDeleteEvent: (eventId: string) => void;
   onAddEvent: (
-    event: Omit<LogEvent, "id" | "timestamp" | "calendarStatus">
+    event: Omit<LogEvent, "id" | "timestamp">
   ) => void;
   lastWeight: number | null;
   lastHeight: number | null;
