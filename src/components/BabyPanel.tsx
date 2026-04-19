@@ -1,5 +1,4 @@
 import {
-  Baby,
   Milk,
   Droplets,
   Thermometer,
@@ -12,17 +11,11 @@ import {
   Ruler,
   FileText,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
-import { daysSince, fmtTime } from "@/lib/utils";
+import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 import { useEffect, useState } from "react";
 import { Input } from "./ui/input";
@@ -36,19 +29,13 @@ type BabyPanelProps = {
     payload: { babyId: BabyId } | { eventId: string }
   ) => void;
   onDeleteEvent: (eventId: string) => void;
-  onAddEvent: (
-    event: Omit<LogEvent, "id" | "timestamp">
-  ) => void;
+  onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
   lastWeight: number | null;
   lastHeight: number | null;
   themeDimmedBgColor: string;
 };
 
-const adjustNumber = (
-  current: string,
-  amount: number,
-  precision: number
-) => {
+const adjustNumber = (current: string, amount: number, precision: number) => {
   const num = parseFloat(current);
   if (isNaN(num)) return (0).toFixed(precision);
   return (num + amount).toFixed(precision);
@@ -65,28 +52,18 @@ export function BabyPanel({
   lastHeight,
   themeDimmedBgColor,
 }: BabyPanelProps) {
-  const p = profile;
-  const babyId = p.babyId;
-
+  const babyId = profile.babyId;
   const [temperature, setTemperature] = useState("36.0");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [dailyNote, setDailyNote] = useState("");
 
   useEffect(() => {
-    if (lastWeight) {
-      setWeight(lastWeight.toFixed(2));
-    } else {
-      setWeight("");
-    }
+    setWeight(lastWeight ? lastWeight.toFixed(2) : "");
   }, [lastWeight]);
 
   useEffect(() => {
-    if (lastHeight) {
-      setHeight(lastHeight.toFixed(1));
-    } else {
-      setHeight("");
-    }
+    setHeight(lastHeight ? lastHeight.toFixed(1) : "");
   }, [lastHeight]);
 
   const handleSaveHealthRecord = (type: "temperature" | "weight" | "height") => {
@@ -96,7 +73,7 @@ export function BabyPanel({
         type: "temperature",
         temperature: parseFloat(temperature),
       });
-      setTemperature("36.0"); // Reset to default
+      setTemperature("36.0");
     }
     if (type === "weight" && weight) {
       onAddEvent({
@@ -104,7 +81,6 @@ export function BabyPanel({
         type: "weight",
         weight: parseFloat(weight),
       });
-      // Do not reset weight, it will be updated by useEffect
     }
     if (type === "height" && height) {
       onAddEvent({
@@ -112,7 +88,6 @@ export function BabyPanel({
         type: "height",
         height: parseFloat(height),
       });
-      // Do not reset height, it will be updated by useEffect
     }
   };
 
@@ -127,19 +102,20 @@ export function BabyPanel({
     setDailyNote("");
   };
 
-  const milkEvents = events.filter((e) => e.type === "milk");
-  const diaperEvents = events.filter((e) => e.type === "diaper");
-
-  const milkTotal = milkEvents.reduce((sum, e) => sum + (e.milkMl ?? 0), 0);
+  const milkEvents = events.filter((event) => event.type === "milk");
+  const diaperEvents = events.filter((event) => event.type === "diaper");
+  const milkTotal = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
   const diaperCount = diaperEvents.length;
-  const rem = p.diaperStockBySize[p.diaperSize] ?? 0;
+  const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
+  const purchaseUrl = profile.diaperPurchaseUrl?.trim();
 
-  const purchaseUrl = p.diaperPurchaseUrl?.trim();
+  const lastMilkEvent = milkEvents[0] ?? null;
+  const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
+  const lastMilkElapsed = lastMilkEvent ? `${minutesSince(lastMilkEvent.timestamp)}分経過` : "未記録";
 
-  const lastMilkEvent = milkEvents.length > 0 ? milkEvents[0] : null;
-  const lastMilkTime = lastMilkEvent
-    ? fmtTime(new Date(lastMilkEvent.timestamp))
-    : "-";
+  const lastDiaperEvent = diaperEvents[0] ?? null;
+  const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
+  const lastDiaperElapsed = lastDiaperEvent ? `${minutesSince(lastDiaperEvent.timestamp)}分経過` : "未記録";
 
   return (
     <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
@@ -154,9 +130,8 @@ export function BabyPanel({
               <Milk className="mr-3 h-7 w-7" />
               ミルク
             </div>
-            <span className="mt-1 text-base font-normal opacity-80">
-              最終: {lastMilkTime}
-            </span>
+            <span className="mt-1 text-base font-normal opacity-80">前回 {lastMilkTime}</span>
+            <span className="text-sm font-normal opacity-80">{lastMilkElapsed}</span>
           </Button>
           <Button
             size="lg"
@@ -168,15 +143,17 @@ export function BabyPanel({
               おむつ
             </div>
             <span className="mt-1 text-base font-normal opacity-80">
-              {p.diaperSize}・残り {rem}
+              {profile.diaperSize}・残り {remainingDiapers}
+            </span>
+            <span className="text-sm font-normal opacity-80">
+              前回 {lastDiaperTime} / {lastDiaperElapsed}
             </span>
           </Button>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* One-line Diary Input */}
-          <div className="flex items-center gap-2 rounded-lg border bg-card p-2 justify-between sm:col-span-2">
-            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">
+            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <FileText className="h-4 w-4" />
               <span>一言日記</span>
             </div>
@@ -188,7 +165,7 @@ export function BabyPanel({
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSaveDailyNote();
               }}
-              className="flex-1 text-sm h-7 px-2"
+              className="h-7 flex-1 px-2 text-sm"
             />
             <Button
               size="icon"
@@ -200,9 +177,8 @@ export function BabyPanel({
             </Button>
           </div>
 
-          {/* Temperature Input */}
-          <div className="flex items-center gap-1 rounded-lg border bg-card p-2 justify-between">
-            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <Thermometer className="h-4 w-4" />
               <span>体温</span>
             </div>
@@ -210,7 +186,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setTemperature((t) => adjustNumber(t, -0.5, 1))}
+              onClick={() => setTemperature((value) => adjustNumber(value, -0.5, 1))}
             >
               <ChevronsLeft className="h-3 w-3" />
             </Button>
@@ -218,7 +194,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setTemperature((t) => adjustNumber(t, -0.1, 1))}
+              onClick={() => setTemperature((value) => adjustNumber(value, -0.1, 1))}
             >
               <ChevronLeft className="h-3 w-3" />
             </Button>
@@ -227,13 +203,13 @@ export function BabyPanel({
               placeholder="36.0"
               value={temperature}
               onChange={(e) => setTemperature(e.target.value)}
-              className="w-20 text-center text-base font-bold h-7 px-1"
+              className="h-7 w-20 px-1 text-center text-base font-bold"
             />
             <Button
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setTemperature((t) => adjustNumber(t, 0.1, 1))}
+              onClick={() => setTemperature((value) => adjustNumber(value, 0.1, 1))}
             >
               <ChevronRight className="h-3 w-3" />
             </Button>
@@ -241,7 +217,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setTemperature((t) => adjustNumber(t, 0.5, 1))}
+              onClick={() => setTemperature((value) => adjustNumber(value, 0.5, 1))}
             >
               <ChevronsRight className="h-3 w-3" />
             </Button>
@@ -255,9 +231,8 @@ export function BabyPanel({
             </Button>
           </div>
 
-          {/* Weight Input */}
-          <div className="flex items-center gap-1 rounded-lg border bg-card p-2 justify-between">
-            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <Weight className="h-4 w-4" />
               <span>体重</span>
             </div>
@@ -265,7 +240,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setWeight((w) => adjustNumber(w, -0.5, 2))}
+              onClick={() => setWeight((value) => adjustNumber(value, -0.5, 2))}
             >
               <ChevronsLeft className="h-3 w-3" />
             </Button>
@@ -273,7 +248,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setWeight((w) => adjustNumber(w, -0.1, 2))}
+              onClick={() => setWeight((value) => adjustNumber(value, -0.1, 2))}
             >
               <ChevronLeft className="h-3 w-3" />
             </Button>
@@ -282,13 +257,13 @@ export function BabyPanel({
               placeholder={lastWeight?.toFixed(2) ?? "0.00"}
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              className="w-20 text-center text-base font-bold h-7 px-1"
+              className="h-7 w-20 px-1 text-center text-base font-bold"
             />
             <Button
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setWeight((w) => adjustNumber(w, 0.1, 2))}
+              onClick={() => setWeight((value) => adjustNumber(value, 0.1, 2))}
             >
               <ChevronRight className="h-3 w-3" />
             </Button>
@@ -296,7 +271,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setWeight((w) => adjustNumber(w, 0.5, 2))}
+              onClick={() => setWeight((value) => adjustNumber(value, 0.5, 2))}
             >
               <ChevronsRight className="h-3 w-3" />
             </Button>
@@ -310,9 +285,8 @@ export function BabyPanel({
             </Button>
           </div>
 
-          {/* Height Input */}
-          <div className="flex items-center gap-1 rounded-lg border bg-card p-2 justify-between">
-            <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground flex-shrink-0">
+          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <Ruler className="h-4 w-4" />
               <span>身長</span>
             </div>
@@ -320,7 +294,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setHeight((h) => adjustNumber(h, -0.5, 1))}
+              onClick={() => setHeight((value) => adjustNumber(value, -0.5, 1))}
             >
               <ChevronsLeft className="h-3 w-3" />
             </Button>
@@ -328,7 +302,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setHeight((h) => adjustNumber(h, -0.1, 1))}
+              onClick={() => setHeight((value) => adjustNumber(value, -0.1, 1))}
             >
               <ChevronLeft className="h-3 w-3" />
             </Button>
@@ -337,13 +311,13 @@ export function BabyPanel({
               placeholder={lastHeight?.toFixed(1) ?? "0.0"}
               value={height}
               onChange={(e) => setHeight(e.target.value)}
-              className="w-20 text-center text-base font-bold h-7 px-1"
+              className="h-7 w-20 px-1 text-center text-base font-bold"
             />
             <Button
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setHeight((h) => adjustNumber(h, 0.1, 1))}
+              onClick={() => setHeight((value) => adjustNumber(value, 0.1, 1))}
             >
               <ChevronRight className="h-3 w-3" />
             </Button>
@@ -351,7 +325,7 @@ export function BabyPanel({
               variant="outline"
               size="icon"
               className="h-7 w-10"
-              onClick={() => setHeight((h) => adjustNumber(h, 0.5, 1))}
+              onClick={() => setHeight((value) => adjustNumber(value, 0.5, 1))}
             >
               <ChevronsRight className="h-3 w-3" />
             </Button>
@@ -366,6 +340,7 @@ export function BabyPanel({
           </div>
         </div>
       </CardContent>
+
       <CardHeader className="pt-0">
         <div className="flex flex-wrap items-center gap-2">
           {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
@@ -378,63 +353,51 @@ export function BabyPanel({
           ) : null}
         </div>
       </CardHeader>
+
       <CardContent className="flex-grow space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Card>
             <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">
-                ミルク合計
-              </CardTitle>
+              <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-sky-300">
-                  {milkTotal}
-                </span>
+                <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
                 <span className="font-semibold text-muted-foreground">ml</span>
-                <span className="ml-auto text-sm text-muted-foreground">
-                  {milkEvents.length}回
-                </span>
+                <span className="ml-auto text-sm text-muted-foreground">{milkEvents.length}回</span>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">
-                おむつ
-              </CardTitle>
+              <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-amber-300">
-                  {diaperCount}
-                </span>
+                <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
                 <span className="font-semibold text-muted-foreground">回</span>
               </div>
             </CardContent>
           </Card>
         </div>
       </CardContent>
-      <CardFooter className="flex flex-col items-start gap-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          今日のログ
-        </h3>
-        <div className="flex w-full flex-col gap-3">
+
+      <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
+        <h3 className="text-sm font-semibold text-muted-foreground">今日のログ</h3>
+        <div className="flex max-h-[42vh] w-full flex-col gap-3 overflow-y-auto pr-1">
           {events.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
               まだ記録がありません
             </div>
           ) : (
-            events
-              .slice(0, 4)
-              .map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onEdit={() => onOpenModal("edit", { eventId: event.id })}
-                  onDelete={() => onDeleteEvent(event.id)}
-                />
-              ))
+            events.map((event) => (
+              <EventCard
+                key={event.id}
+                event={event}
+                onEdit={() => onOpenModal("edit", { eventId: event.id })}
+                onDelete={() => onDeleteEvent(event.id)}
+              />
+            ))
           )}
         </div>
       </CardFooter>

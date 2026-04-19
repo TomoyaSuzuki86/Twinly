@@ -32,6 +32,11 @@ export const daysSince = (iso: string) => {
   return Math.max(0, days);
 };
 
+export const minutesSince = (timestamp: number, now: Date = new Date()) => {
+  const ms = now.getTime() - timestamp;
+  return Math.max(0, Math.floor(ms / 1000 / 60));
+};
+
 // Recursively remove undefined properties from an object
 export const removeUndefined = <T extends object>(obj: T): T => {
   const newObj: Partial<T> = {};
