@@ -24,6 +24,7 @@ type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
   lowStock: { size: string; remaining: number } | null;
+  onOpenHistory: (type: "milk" | "diaper", babyId: BabyId) => void;
   onOpenModal: (
     kind: "milk" | "diaper" | "edit",
     payload: { babyId: BabyId } | { eventId: string }
@@ -45,6 +46,7 @@ export function BabyPanel({
   profile,
   events,
   lowStock,
+  onOpenHistory,
   onOpenModal,
   onDeleteEvent,
   onAddEvent,
@@ -356,29 +358,43 @@ export function BabyPanel({
 
       <CardContent className="flex-grow space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
-                <span className="font-semibold text-muted-foreground">ml</span>
-                <span className="ml-auto text-sm text-muted-foreground">{milkEvents.length}回</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="p-4">
-              <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
-                <span className="font-semibold text-muted-foreground">回</span>
-              </div>
-            </CardContent>
-          </Card>
+          <button
+            type="button"
+            className="text-left"
+            onClick={() => onOpenHistory("milk", babyId)}
+            aria-label={`${profile.displayName}のミルク履歴を開く`}
+          >
+            <Card className="transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
+              <CardHeader className="p-4">
+                <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
+                  <span className="font-semibold text-muted-foreground">ml</span>
+                  <span className="ml-auto text-sm text-muted-foreground">{milkEvents.length}回</span>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
+          <button
+            type="button"
+            className="text-left"
+            onClick={() => onOpenHistory("diaper", babyId)}
+            aria-label={`${profile.displayName}のおむつ履歴を開く`}
+          >
+            <Card className="transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
+              <CardHeader className="p-4">
+                <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
+                  <span className="font-semibold text-muted-foreground">回</span>
+                </div>
+              </CardContent>
+            </Card>
+          </button>
         </div>
       </CardContent>
 

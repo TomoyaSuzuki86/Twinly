@@ -19,6 +19,7 @@ import { iconGradients } from "./lib/utils";
 import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
+import { EventHistoryModal } from "./components/EventHistoryModal";
 import { createInitialAppState, stripLegacyCalendarFields } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 
@@ -84,6 +85,7 @@ export default function App() {
   >(null);
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
+  const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
   const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
   const undoTimerRef = useRef<number | null>(null);
 
@@ -572,6 +574,7 @@ export default function App() {
                 profile={app.profiles.A}
                 events={byBaby.A}
                 lowStock={lowStock.A}
+                onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
@@ -588,6 +591,7 @@ export default function App() {
                 profile={app.profiles.B}
                 events={byBaby.B}
                 lowStock={lowStock.B}
+                onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
@@ -650,6 +654,15 @@ export default function App() {
       <EditModal open={modal?.kind === "edit"} onOpenChange={(open) => !open && setModal(null)} event={editTarget} onSave={onSaveEdit} />
       <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />
       <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />
+      {historyModal ? (
+        <EventHistoryModal
+          open={Boolean(historyModal)}
+          onOpenChange={(open) => !open && setHistoryModal(null)}
+          historyType={historyModal.type}
+          events={app.events}
+          profile={app.profiles[historyModal.babyId]}
+        />
+      ) : null}
     </AppContainer>
   );
 }
