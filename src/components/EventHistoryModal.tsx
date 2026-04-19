@@ -132,7 +132,7 @@ export function EventHistoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[75vh] max-w-4xl flex-col">
+      <DialogContent className="flex h-[75vh] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className="h-5 w-5" />
@@ -143,8 +143,8 @@ export function EventHistoryModal({
           <DialogDescription>{formatHistoryDescription(historyType)}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-          <div className="space-y-4">
+        <div className="grid flex-1 gap-4 overflow-y-auto md:min-h-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] md:overflow-hidden">
+          <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border bg-card p-4">
                 <div className="text-sm text-muted-foreground">累計回数</div>
