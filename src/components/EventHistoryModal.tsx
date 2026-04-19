@@ -195,7 +195,7 @@ export function EventHistoryModal({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col rounded-xl border bg-card p-4">
+          <div className="flex min-h-[320px] flex-col overflow-hidden rounded-xl border bg-card p-4 md:min-h-0">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-medium">履歴一覧</div>
               <div className="text-xs text-muted-foreground">{filteredEvents.length}件</div>
