@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, CircleUser, FileText, LineChart, Settings, Undo2 } from "lucide-react";
+import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, FileText, LineChart, Settings, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured } from "./firebase";
@@ -28,6 +28,12 @@ const createEmptyState = () => createInitialAppState(new Date());
 function AppContainer({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-background text-foreground">{children}</div>;
 }
+
+const shiftDate = (isoDate: string, days: number) => {
+  const date = new Date(`${isoDate}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return fmtDate(date);
+};
 
 function SnackbarUndo({
   open,
@@ -75,6 +81,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [appLoading, setAppLoading] = useState(false);
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
+  const todayDate = fmtDate(new Date());
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -551,10 +558,27 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm text-muted-foreground">表示日</label>
+            <label className="text-sm text-muted-foreground">{"\u8868\u793a\u65e5"}</label>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="previous day"
+              onClick={() => setActiveDate((current) => shiftDate(current, -1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             <Input type="date" className="w-auto" value={activeDate} onChange={(e) => setActiveDate(e.target.value)} />
-            <Button variant="outline" onClick={() => setActiveDate(fmtDate(new Date()))}>
-              今日
+            <Button variant="outline" onClick={() => setActiveDate(todayDate)}>
+              {"\u4eca\u65e5"}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="next day"
+              onClick={() => setActiveDate((current) => shiftDate(current, 1))}
+              disabled={activeDate >= todayDate}
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </header>
