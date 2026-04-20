@@ -264,8 +264,8 @@ export default function App() {
     if (!modal || modal.kind !== "diaper") return;
 
     const babyId = modal.babyId;
-    const { diaperKind, note, selectedDiaperSize } = payload;
-    addEvent(babyId, "diaper", { diaperKind, note });
+    const { diaperKind, note, selectedDiaperSize, timestamp } = payload;
+    addEvent(babyId, "diaper", { diaperKind, note, timestamp });
 
     setApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };

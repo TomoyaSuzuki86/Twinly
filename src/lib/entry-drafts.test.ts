@@ -20,6 +20,14 @@ describe("createDefaultMilkDraft", () => {
         milkMethod: "breast",
       },
       {
+        id: "milk-a-breast",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T06:30:00+09:00").getTime(),
+        milkMl: 90,
+        milkMethod: "breast",
+      },
+      {
         id: "milk-a",
         babyId: "A",
         type: "milk",
@@ -34,6 +42,10 @@ describe("createDefaultMilkDraft", () => {
 
     expect(draft.milkMl).toBe(50);
     expect(draft.milkMethod).toBe("bottle");
+    expect(draft.milkMlByMethod).toEqual({
+      bottle: 50,
+      breast: 90,
+    });
     expect(draft.timestamp).toBe(now.getTime());
   });
 
@@ -43,6 +55,10 @@ describe("createDefaultMilkDraft", () => {
 
     expect(draft.milkMl).toBe(140);
     expect(draft.milkMethod).toBe("breast");
+    expect(draft.milkMlByMethod).toEqual({
+      bottle: 140,
+      breast: 140,
+    });
     expect(draft.timestamp).toBe(now.getTime());
   });
 });

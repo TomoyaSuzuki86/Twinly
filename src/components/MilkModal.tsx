@@ -25,6 +25,7 @@ type MilkModalProps = {
 export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSave }: MilkModalProps) {
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
   const [milkMethod, setMilkMethod] = useState<MilkMethod>(initialDraft.milkMethod);
+  const [milkMlByMethod, setMilkMlByMethod] = useState(initialDraft.milkMlByMethod);
   const [note, setNote] = useState(initialDraft.note);
   const [dateTimeValue, setDateTimeValue] = useState(formatDateTimeLocalValue(initialDraft.timestamp));
 
@@ -32,9 +33,23 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
     if (!open) return;
     setMilkMl(initialDraft.milkMl);
     setMilkMethod(initialDraft.milkMethod);
+    setMilkMlByMethod(initialDraft.milkMlByMethod);
     setNote(initialDraft.note);
     setDateTimeValue(formatDateTimeLocalValue(initialDraft.timestamp));
   }, [open, initialDraft]);
+
+  const handleMilkAmountChange = (nextValue: number) => {
+    setMilkMl(nextValue);
+    setMilkMlByMethod((current) => ({
+      ...current,
+      [milkMethod]: nextValue,
+    }));
+  };
+
+  const handleMethodChange = (nextMethod: MilkMethod) => {
+    setMilkMethod(nextMethod);
+    setMilkMl(milkMlByMethod[nextMethod]);
+  };
 
   const handleSave = () => {
     onSave({
@@ -51,7 +66,7 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{displayName}: ミルク記録</DialogTitle>
-          <DialogDescription>量、方法、記録時刻を確認して保存できます。</DialogDescription>
+          <DialogDescription>量や方法、記録日時を確認して保存できます。</DialogDescription>
         </DialogHeader>
         <div className="space-y-8 py-4">
           <div className="text-center">
@@ -62,7 +77,7 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
                 size="icon"
                 className="h-16 w-16 rounded-full"
                 aria-label="ミルク量を減らす"
-                onClick={() => setMilkMl((value) => stepMilkAmount(value, -1))}
+                onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, -1))}
               >
                 <span className="text-3xl font-semibold">-</span>
               </Button>
@@ -72,7 +87,7 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
                 size="icon"
                 className="h-16 w-16 rounded-full"
                 aria-label="ミルク量を増やす"
-                onClick={() => setMilkMl((value) => stepMilkAmount(value, 1))}
+                onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, 1))}
               >
                 <span className="text-3xl font-semibold">+</span>
               </Button>
@@ -82,21 +97,21 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
             <Button
               variant={milkMethod === "bottle" ? "secondary" : "outline"}
               className="py-6 text-base"
-              onClick={() => setMilkMethod("bottle")}
+              onClick={() => handleMethodChange("bottle")}
             >
               哺乳瓶
             </Button>
             <Button
               variant={milkMethod === "breast" ? "default" : "outline"}
               className="py-6 text-base"
-              onClick={() => setMilkMethod("breast")}
+              onClick={() => handleMethodChange("breast")}
             >
               母乳
             </Button>
           </div>
           <div className="space-y-2">
             <Label htmlFor="milk-datetime" className="text-xs text-muted-foreground">
-              時刻
+              日時
             </Label>
             <Input
               id="milk-datetime"
@@ -113,7 +128,7 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
               id="milk-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="例：途中でゲップ"
+              placeholder="機嫌や飲み方など"
             />
           </div>
         </div>
