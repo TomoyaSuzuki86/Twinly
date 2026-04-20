@@ -558,7 +558,6 @@ export default function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm text-muted-foreground">{"\u8868\u793a\u65e5"}</label>
             <Button
               variant="outline"
               size="icon"
