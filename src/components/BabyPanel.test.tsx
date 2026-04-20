@@ -112,4 +112,68 @@ describe("BabyPanel", () => {
     expect(onOpenHistory).toHaveBeenNthCalledWith(1, "milk", "A");
     expect(onOpenHistory).toHaveBeenNthCalledWith(2, "diaper", "A");
   });
+
+  it("shows milk and diaper breakdown totals in the summary cards", () => {
+    const app = createInitialAppState(new Date("2026-04-18T10:20:00+09:00"));
+    const events: LogEvent[] = [
+      {
+        id: "milk-bottle",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+        milkMl: 120,
+        milkMethod: "bottle",
+      },
+      {
+        id: "milk-breast",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(),
+        milkMl: 80,
+        milkMethod: "breast",
+      },
+      {
+        id: "diaper-pee",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+        diaperKind: "pee",
+      },
+      {
+        id: "diaper-mix",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+        diaperKind: "mix",
+      },
+      {
+        id: "diaper-poop",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T10:10:00+09:00").getTime(),
+        diaperKind: "poop",
+      },
+    ];
+
+    render(
+      <BabyPanel
+        profile={app.profiles.A}
+        events={events}
+        lowStock={null}
+        onOpenHistory={vi.fn()}
+        onOpenModal={vi.fn()}
+        onDeleteEvent={vi.fn()}
+        onAddEvent={vi.fn()}
+        lastWeight={null}
+        lastHeight={null}
+        themeDimmedBgColor="bg-background"
+      />
+    );
+
+    expect(screen.getByText("200")).toBeTruthy();
+    expect(screen.getByText("120ml")).toBeTruthy();
+    expect(screen.getByText("80ml")).toBeTruthy();
+    expect(screen.getByText("4")).toBeTruthy();
+    expect(screen.getAllByText("2回")).toHaveLength(2);
+  });
 });

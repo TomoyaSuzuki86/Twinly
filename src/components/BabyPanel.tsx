@@ -107,7 +107,23 @@ export function BabyPanel({
   const milkEvents = events.filter((event) => event.type === "milk");
   const diaperEvents = events.filter((event) => event.type === "diaper");
   const milkTotal = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
-  const diaperCount = diaperEvents.length;
+  const bottleMilkTotal = milkEvents.reduce(
+    (sum, event) => sum + (event.milkMethod === "bottle" ? event.milkMl ?? 0 : 0),
+    0
+  );
+  const breastMilkTotal = milkEvents.reduce(
+    (sum, event) => sum + (event.milkMethod === "breast" ? event.milkMl ?? 0 : 0),
+    0
+  );
+  const peeCount = diaperEvents.reduce(
+    (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
+    0
+  );
+  const poopCount = diaperEvents.reduce(
+    (count, event) => count + (event.diaperKind === "poop" || event.diaperKind === "mix" ? 1 : 0),
+    0
+  );
+  const diaperCount = peeCount + poopCount;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const purchaseUrl = profile.diaperPurchaseUrl?.trim();
 
@@ -372,7 +388,16 @@ export function BabyPanel({
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
                   <span className="font-semibold text-muted-foreground">ml</span>
-                  <span className="ml-auto text-sm text-muted-foreground">{milkEvents.length}回</span>
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>哺乳瓶</span>
+                    <span>{bottleMilkTotal}ml</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>母乳</span>
+                    <span>{breastMilkTotal}ml</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -391,6 +416,16 @@ export function BabyPanel({
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
                   <span className="font-semibold text-muted-foreground">回</span>
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>おしっこ</span>
+                    <span>{peeCount}回</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>うんち</span>
+                    <span>{poopCount}回</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
