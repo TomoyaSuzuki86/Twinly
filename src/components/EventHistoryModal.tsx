@@ -8,7 +8,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BabyProfile, LogEvent } from "@/types";
 import { fmtDate, fmtTime } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,11 +17,27 @@ import {
   XAxis,
   YAxis,
   Tooltip,
+  Cell,
 } from "recharts";
 import { Droplets, Milk } from "lucide-react";
+import {
+  buildDiaperChartData,
+  buildMilkChartData,
+  filterEventsForTimeRange,
+  formatAverageDiaperCount,
+  formatAverageMilkAmount,
+  getDefaultHistoryRange,
+  rangeDays,
+  summarizeDiaperEvents,
+  summarizeMilkEvents,
+  type DiaperChartDatum,
+  type DiaperStats,
+  type MilkChartDatum,
+  type MilkStats,
+  type TimeRange,
+} from "@/lib/event-history";
 
 type HistoryType = "milk" | "diaper";
-type TimeRange = "1W" | "1M" | "3M";
 
 type EventHistoryModalProps = {
   open: boolean;
@@ -29,11 +45,6 @@ type EventHistoryModalProps = {
   historyType: HistoryType;
   events: LogEvent[];
   profile: BabyProfile;
-};
-
-type ChartDatum = {
-  label: string;
-  count: number;
 };
 
 const strokeMap: Record<string, string> = {
@@ -47,48 +58,13 @@ const strokeMap: Record<string, string> = {
   "from-pink-500 to-purple-400": "#ec4899",
 };
 
-const rangeDays: Record<TimeRange, number> = {
-  "1W": 7,
-  "1M": 30,
-  "3M": 90,
-};
-
-const toPeriodLabel = (date: Date, timeRange: TimeRange) => {
-  if (timeRange === "3M") {
-    const start = new Date(date);
-    const day = start.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    start.setDate(start.getDate() + diff);
-    return fmtDate(start).slice(5);
-  }
-
-  return fmtDate(date).slice(5);
-};
-
-const buildChartData = (events: LogEvent[], timeRange: TimeRange): ChartDatum[] => {
-  const now = new Date();
-  const threshold = now.getTime() - rangeDays[timeRange] * 24 * 60 * 60 * 1000;
-  const counts = new Map<string, number>();
-
-  for (const event of events) {
-    if (event.timestamp < threshold) continue;
-    const label = toPeriodLabel(new Date(event.timestamp), timeRange);
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-
-  return Array.from(counts.entries()).map(([label, count]) => ({
-    label,
-    count,
-  }));
-};
-
 const formatHistoryTitle = (historyType: HistoryType) =>
   historyType === "milk" ? "ミルク履歴" : "おむつ履歴";
 
 const formatHistoryDescription = (historyType: HistoryType) =>
   historyType === "milk"
-    ? "期間ごとの回数推移と、ミルク記録の一覧を確認できます。"
-    : "期間ごとの回数推移と、おむつ記録の一覧を確認できます。";
+    ? "表示期間の累計回数、ミルク量、平均量と、期間別の詳細を確認できます。"
+    : "表示期間のうんち・おしっこ回数と、期間別の詳細を確認できます。";
 
 const describeEvent = (event: LogEvent) => {
   if (event.type === "milk") {
@@ -97,13 +73,141 @@ const describeEvent = (event: LogEvent) => {
   }
 
   if (event.type === "diaper") {
-    const kind =
-      event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方";
+    const kind = event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方";
     return `おむつ・${kind}`;
   }
 
   return "";
 };
+
+function MilkSummaryCard({ title, stats }: { title: string; stats: MilkStats }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="text-sm text-muted-foreground">{title}</div>
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">累計回数</span>
+          <span className="font-semibold">{stats.count}回</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">累計量</span>
+          <span className="font-semibold">{stats.amount}ml</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">平均量</span>
+          <span className="font-semibold">{formatAverageMilkAmount(stats.average)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiaperSummaryCard({ title, stats }: { title: string; stats: DiaperStats }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="text-sm text-muted-foreground">{title}</div>
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">累計回数</span>
+          <span className="font-semibold">{stats.count}回</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">1日平均</span>
+          <span className="font-semibold">{formatAverageDiaperCount(stats.dailyAverage)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MilkPeriodTooltipCard({ title, datum }: { title: string; datum: MilkChartDatum }) {
+  return (
+    <div className="min-w-[220px] rounded-lg border bg-background/95 p-3 shadow-xl backdrop-blur">
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="mt-3 space-y-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">合算</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.total.count}回</span>
+            <span>{datum.total.amount}ml</span>
+            <span>{formatAverageMilkAmount(datum.total.average)}</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">哺乳瓶</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.bottle.count}回</span>
+            <span>{datum.bottle.amount}ml</span>
+            <span>{formatAverageMilkAmount(datum.bottle.average)}</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">母乳</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.breast.count}回</span>
+            <span>{datum.breast.amount}ml</span>
+            <span>{formatAverageMilkAmount(datum.breast.average)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiaperPeriodTooltipCard({ title, datum }: { title: string; datum: DiaperChartDatum }) {
+  return (
+    <div className="min-w-[220px] rounded-lg border bg-background/95 p-3 shadow-xl backdrop-blur">
+      <div className="text-sm font-semibold">{title}</div>
+      <div className="mt-3 space-y-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">合算</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.total.count}回</span>
+            <span>{formatAverageDiaperCount(datum.total.dailyAverage)}</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">おしっこ</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.pee.count}回</span>
+            <span>{formatAverageDiaperCount(datum.pee.dailyAverage)}</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground">うんち</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.poop.count}回</span>
+            <span>{formatAverageDiaperCount(datum.poop.dailyAverage)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CustomMilkTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: MilkChartDatum }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0].payload;
+  return <MilkPeriodTooltipCard title={`${datum.label} の集計`} datum={datum} />;
+}
+
+function CustomDiaperTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: DiaperChartDatum }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0].payload;
+  return <DiaperPeriodTooltipCard title={`${datum.label} の集計`} datum={datum} />;
+}
 
 export function EventHistoryModal({
   open,
@@ -112,7 +216,32 @@ export function EventHistoryModal({
   events,
   profile,
 }: EventHistoryModalProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>("1M");
+  const [timeRange, setTimeRange] = useState<TimeRange>(getDefaultHistoryRange(historyType));
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState<string | null>(null);
+  const chartAreaRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setTimeRange(getDefaultHistoryRange(historyType));
+    setSelectedPeriodKey(null);
+  }, [open, historyType]);
+
+  useEffect(() => {
+    setSelectedPeriodKey(null);
+  }, [timeRange, historyType, profile.babyId]);
+
+  useEffect(() => {
+    if (!selectedPeriodKey) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!chartAreaRef.current?.contains(event.target as Node)) {
+        setSelectedPeriodKey(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [selectedPeriodKey]);
 
   const filteredEvents = useMemo(
     () =>
@@ -122,13 +251,41 @@ export function EventHistoryModal({
     [events, historyType, profile.babyId]
   );
 
-  const chartData = useMemo(() => buildChartData(filteredEvents, timeRange), [filteredEvents, timeRange]);
-
-  const totalCount = filteredEvents.length;
-  const totalMilkAmount = filteredEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
+  const now = useMemo(() => new Date(), [open, timeRange, historyType, filteredEvents.length]);
+  const visibleEvents = useMemo(
+    () => filterEventsForTimeRange(filteredEvents, timeRange, now),
+    [filteredEvents, timeRange, now]
+  );
+  const milkChartData = useMemo(
+    () => buildMilkChartData(filteredEvents, timeRange, now),
+    [filteredEvents, timeRange, now]
+  );
+  const diaperChartData = useMemo(
+    () => buildDiaperChartData(filteredEvents, timeRange, now),
+    [filteredEvents, timeRange, now]
+  );
+  const visibleMilkSummary = useMemo(() => summarizeMilkEvents(visibleEvents), [visibleEvents]);
+  const visibleDiaperSummary = useMemo(
+    () => summarizeDiaperEvents(visibleEvents, rangeDays[timeRange]),
+    [visibleEvents, timeRange]
+  );
+  const selectedMilkDatum = milkChartData.find((datum) => datum.key === selectedPeriodKey) ?? null;
+  const selectedDiaperDatum = diaperChartData.find((datum) => datum.key === selectedPeriodKey) ?? null;
   const chartColor =
     strokeMap[profile.iconGradient ?? ""] ?? (historyType === "milk" ? "#0ea5e9" : "#f59e0b");
   const Icon = historyType === "milk" ? Milk : Droplets;
+
+  const handleChartClick = (state: { activePayload?: Array<{ payload?: { key?: string } }> } | undefined) => {
+    const clickedKey = state?.activePayload?.[0]?.payload?.key;
+    if (!clickedKey) {
+      setSelectedPeriodKey(null);
+      return;
+    }
+
+    setSelectedPeriodKey((current) => (current === clickedKey ? null : clickedKey));
+  };
+
+  const chartData = historyType === "milk" ? milkChartData : diaperChartData;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -145,31 +302,28 @@ export function EventHistoryModal({
 
         <div className="grid flex-1 gap-4 overflow-y-auto md:min-h-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] md:overflow-hidden">
           <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-xl border bg-card p-4">
-                <div className="text-sm text-muted-foreground">累計回数</div>
-                <div className="mt-2 text-3xl font-bold">{totalCount}</div>
+            {historyType === "milk" ? (
+              <div className="grid gap-4 md:grid-cols-3">
+                <MilkSummaryCard title="合算" stats={visibleMilkSummary.total} />
+                <MilkSummaryCard title="哺乳瓶" stats={visibleMilkSummary.bottle} />
+                <MilkSummaryCard title="母乳" stats={visibleMilkSummary.breast} />
               </div>
-              <div className="rounded-xl border bg-card p-4">
-                <div className="text-sm text-muted-foreground">
-                  {historyType === "milk" ? "累計ミルク量" : "直近の記録"}
-                </div>
-                <div className="mt-2 text-3xl font-bold">
-                  {historyType === "milk"
-                    ? `${totalMilkAmount}ml`
-                    : filteredEvents[0]
-                    ? fmtDate(new Date(filteredEvents[0].timestamp)).slice(5)
-                    : "-"}
-                </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                <DiaperSummaryCard title="合算" stats={visibleDiaperSummary.total} />
+                <DiaperSummaryCard title="おしっこ" stats={visibleDiaperSummary.pee} />
+                <DiaperSummaryCard title="うんち" stats={visibleDiaperSummary.poop} />
               </div>
-            </div>
+            )}
 
             <div className="rounded-xl border bg-card p-4">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
-                  <div className="text-sm font-medium">期間ごとの回数推移</div>
+                  <div className="text-sm font-medium">表示期間の推移</div>
                   <div className="text-xs text-muted-foreground">
-                    {timeRange === "3M" ? "3か月は週単位、それ以外は日単位で集計しています。" : "日ごとの記録回数を表示します。"}
+                    {historyType === "milk"
+                      ? "表示範囲の集計を上部に表示します。バーを選ぶと期間別の詳細を確認できます。"
+                      : "表示範囲の回数を上部に表示します。バーを選ぶと期間別の詳細を確認できます。"}
                   </div>
                 </div>
                 <Tabs value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
@@ -181,14 +335,43 @@ export function EventHistoryModal({
                 </Tabs>
               </div>
 
-              <div className="h-[280px]">
+              <div ref={chartAreaRef} className="relative h-[320px]">
+                {historyType === "milk" && selectedMilkDatum ? (
+                  <div className="pointer-events-none absolute right-3 top-3 z-10">
+                    <MilkPeriodTooltipCard title={`${selectedMilkDatum.label} を選択中`} datum={selectedMilkDatum} />
+                  </div>
+                ) : null}
+                {historyType === "diaper" && selectedDiaperDatum ? (
+                  <div className="pointer-events-none absolute right-3 top-3 z-10">
+                    <DiaperPeriodTooltipCard title={`${selectedDiaperDatum.label} を選択中`} datum={selectedDiaperDatum} />
+                  </div>
+                ) : null}
+
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+                  <BarChart data={chartData} margin={{ top: 8, right: 16, left: -16, bottom: 0 }} onClick={handleChartClick}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value: number) => [`${value}回`, "回数"]} />
-                    <Bar dataKey="count" fill={chartColor} radius={[8, 8, 0, 0]} />
+                    {historyType === "milk" ? (
+                      <Tooltip content={<CustomMilkTooltip />} />
+                    ) : (
+                      <Tooltip content={<CustomDiaperTooltip />} />
+                    )}
+                    <Bar dataKey={historyType === "milk" ? "total.count" : "total.count"} fill={chartColor} radius={[8, 8, 0, 0]}>
+                      {chartData.map((datum) => {
+                        const isSelected = selectedPeriodKey === datum.key;
+                        const dimmed = selectedPeriodKey !== null && !isSelected;
+                        return (
+                          <Cell
+                            key={datum.key}
+                            fill={chartColor}
+                            fillOpacity={dimmed ? 0.35 : 1}
+                            stroke={isSelected ? "#ffffff" : undefined}
+                            strokeWidth={isSelected ? 2 : 0}
+                          />
+                        );
+                      })}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
