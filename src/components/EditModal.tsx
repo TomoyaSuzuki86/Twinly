@@ -1,6 +1,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -24,7 +25,6 @@ type EditModalProps = {
 const diaperKindOptions = [
   { k: "pee", label: "おしっこ" },
   { k: "poop", label: "うんち" },
-  { k: "mix", label: "両方" },
 ] as const;
 
 export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps) {
@@ -56,11 +56,14 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
 
   if (!event) return null;
 
+  const requiresDiaperKindReselection = event.type === "diaper" && diaperKind === "mix";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>記録の編集</DialogTitle>
+          <DialogDescription>記録内容を必要に応じて修正できます。</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           {event.type === "milk" && (
@@ -98,7 +101,12 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
           {event.type === "diaper" && (
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">おむつ</h3>
-              <div className="grid grid-cols-3 gap-2">
+              {requiresDiaperKindReselection ? (
+                <p className="text-sm text-muted-foreground">
+                  以前の「両方」記録です。保存する場合は「おしっこ」か「うんち」を選び直してください。
+                </p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
                 {diaperKindOptions.map((x) => (
                   <Button
                     key={x.k}
@@ -120,7 +128,9 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
           <DialogClose asChild>
             <Button variant="ghost">キャンセル</Button>
           </DialogClose>
-          <Button onClick={handleSave}>保存する</Button>
+          <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
+            保存する
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

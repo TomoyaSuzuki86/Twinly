@@ -29,7 +29,6 @@ type DiaperModalProps = {
 const diaperKindOptions = [
   { kind: "pee" as const, label: "おしっこ" },
   { kind: "poop" as const, label: "うんち" },
-  { kind: "mix" as const, label: "両方" },
 ];
 
 export function DiaperModal({
@@ -82,12 +81,12 @@ export function DiaperModal({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{displayName}: おむつ記録</DialogTitle>
-          <DialogDescription>種類、サイズ、記録時刻を確認して保存できます。</DialogDescription>
+          <DialogDescription>種類、サイズ、記録日時を確認して保存できます。</DialogDescription>
         </DialogHeader>
         <div className="space-y-8 py-4">
           <div>
             <Label className="text-sm font-semibold text-muted-foreground">種類</Label>
-            <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-2 gap-3">
               {diaperKindOptions.map((option) => (
                 <Button
                   key={option.kind}
@@ -155,7 +154,7 @@ export function DiaperModal({
 
           <div className="space-y-2">
             <Label htmlFor="diaper-datetime" className="text-xs text-muted-foreground">
-              時刻
+              日時
             </Label>
             <Input
               id="diaper-datetime"
@@ -173,7 +172,7 @@ export function DiaperModal({
               id="diaper-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="例：漏れ防止で交換"
+              placeholder="機嫌や様子など"
             />
           </div>
         </div>
