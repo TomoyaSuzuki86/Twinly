@@ -1,4 +1,4 @@
-const SHELL_CACHE = "twinly-shell-v3";
+const SHELL_CACHE = "twinly-shell-v4";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -48,6 +48,49 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => cached);
       return cached || fetchPromise;
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  const payload = event.data.json();
+  const title = payload.title || "Twinly";
+  const options = {
+    body: payload.body,
+    icon: "/icons/icon-192.svg",
+    badge: "/icons/icon-192.svg",
+    tag: payload.tag || "twinly-notification",
+    data: {
+      url: payload.url || "/",
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) {
+            return client.navigate(targetUrl);
+          }
+          return client;
+        }
+      }
+
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+
+      return undefined;
     })
   );
 });

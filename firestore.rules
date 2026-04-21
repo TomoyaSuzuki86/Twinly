@@ -17,6 +17,10 @@ service cloud.firestore {
       match /settings/{docId} {
         allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
+
+      match /devices/{deviceId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
     match /{document=**} {

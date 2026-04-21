@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, FileText, LineChart, Settings, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, db, ensureAuthPersistence, isFirebaseConfigured } from "./firebase";
+import { deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
 import { AppState, BabyId, DiaperKind, EventType, LogEvent, MilkMethod } from "./types";
 import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
@@ -22,6 +22,16 @@ import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
 import { createInitialAppState, stripLegacyCalendarFields } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
+import {
+  getDeviceId,
+  getExistingPushSubscription,
+  getNotificationPermission,
+  isWebPushSupported,
+  requestNotificationPermission,
+  serializePushSubscription,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+} from "./lib/web-push";
 
 const createEmptyState = () => createInitialAppState(new Date());
 
@@ -82,6 +92,11 @@ export default function App() {
   const [appLoading, setAppLoading] = useState(false);
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
   const todayDate = fmtDate(new Date());
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
+    getNotificationPermission()
+  );
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -114,6 +129,53 @@ export default function App() {
     }
   };
 
+  const ensureNotificationSettingsDocument = async (user: User) => {
+    if (!db) return;
+    const settingsRef = doc(db, "users", user.uid, "settings", "notifications");
+    await setDoc(
+      settingsRef,
+      {
+        milkReminder: {
+          enabled: true,
+          intervalMinutes: 150,
+          mergeWindowMinutes: 15,
+          lastSentByBaby: {},
+        },
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  };
+
+  const syncPushSubscriptionToFirestore = async (user: User) => {
+    if (!db || !isWebPushSupported()) return false;
+    const subscription = await getExistingPushSubscription();
+    if (!subscription || Notification.permission !== "granted") return false;
+
+    const deviceId = getDeviceId();
+    const deviceRef = doc(db, "users", user.uid, "devices", deviceId);
+    await setDoc(
+      deviceRef,
+      {
+        deviceId,
+        platform: navigator.userAgent,
+        notificationsEnabled: true,
+        permission: Notification.permission,
+        subscription: serializePushSubscription(subscription),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return true;
+  };
+
+  const removePushSubscriptionFromFirestore = async (user: User | null) => {
+    if (!db || !user) return;
+    const deviceId = getDeviceId();
+    await deleteDoc(doc(db, "users", user.uid, "devices", deviceId));
+  };
+
   const ensureUserDocument = async (user: User) => {
     if (!db) return;
     const userRef = doc(db, "users", user.uid);
@@ -128,6 +190,7 @@ export default function App() {
       },
       { merge: true }
     );
+    await ensureNotificationSettingsDocument(user);
   };
 
   useEffect(() => {
@@ -163,6 +226,26 @@ export default function App() {
       unsub();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isWebPushSupported()) {
+      setPushPermission("unsupported");
+      setPushSubscribed(false);
+      return;
+    }
+
+    setPushPermission(Notification.permission);
+    void getExistingPushSubscription().then((subscription) => {
+      setPushSubscribed(Boolean(subscription));
+    });
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser || pushPermission !== "granted") return;
+    void syncPushSubscriptionToFirestore(authUser).then((synced) => {
+      if (synced) setPushSubscribed(true);
+    });
+  }, [authUser, pushPermission]);
 
   useEffect(() => {
     if (!authUser || !db) return;
@@ -387,7 +470,42 @@ export default function App() {
 
   const handleSignOut = async () => {
     if (!auth) return;
+    await removePushSubscriptionFromFirestore(authUser);
     await signOut(auth);
+  };
+
+  const handleEnablePushNotifications = async () => {
+    if (!authUser || !webPushPublicKey) return;
+    setPushBusy(true);
+    try {
+      const permission = await requestNotificationPermission();
+      setPushPermission(permission);
+      if (permission !== "granted") {
+        setPushSubscribed(false);
+        return;
+      }
+
+      await subscribeToPushNotifications(webPushPublicKey);
+      const synced = await syncPushSubscriptionToFirestore(authUser);
+      setPushSubscribed(synced);
+    } catch (error) {
+      console.error("Failed to enable push notifications", error);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePushNotifications = async () => {
+    setPushBusy(true);
+    try {
+      await unsubscribeFromPushNotifications();
+      await removePushSubscriptionFromFirestore(authUser);
+      setPushSubscribed(false);
+    } catch (error) {
+      console.error("Failed to disable push notifications", error);
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const handleExport = () => {
@@ -670,6 +788,12 @@ export default function App() {
         user={authUser}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
+        pushPermission={pushPermission}
+        pushSubscribed={pushSubscribed}
+        pushBusy={pushBusy}
+        webPushConfigured={Boolean(webPushPublicKey)}
+        onEnablePushNotifications={handleEnablePushNotifications}
+        onDisablePushNotifications={handleDisablePushNotifications}
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}

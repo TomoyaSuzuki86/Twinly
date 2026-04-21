@@ -23,6 +23,12 @@ type SettingsModalProps = {
   user: User | null;
   onSignIn: () => void | Promise<void>;
   onSignOut: () => void | Promise<void>;
+  pushPermission: NotificationPermission | "unsupported";
+  pushSubscribed: boolean;
+  pushBusy: boolean;
+  webPushConfigured: boolean;
+  onEnablePushNotifications: () => void | Promise<void>;
+  onDisablePushNotifications: () => void | Promise<void>;
   onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onResetAll: () => void;
@@ -36,6 +42,12 @@ export function SettingsModal({
   user,
   onSignIn,
   onSignOut,
+  pushPermission,
+  pushSubscribed,
+  pushBusy,
+  webPushConfigured,
+  onEnablePushNotifications,
+  onDisablePushNotifications,
   onExport,
   onImport,
   onResetAll,
@@ -92,13 +104,13 @@ export function SettingsModal({
         <DialogComponents.DialogHeader>
           <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
           <DialogComponents.DialogDescription>
-            赤ちゃん情報、共有設定、データ管理をここでまとめて変更できます。
+            赤ちゃん情報、通知、データ管理をここでまとめて確認できます。
           </DialogComponents.DialogDescription>
         </DialogComponents.DialogHeader>
         <Tabs defaultValue="profile" className="py-4">
           <TabsList className="flex flex-wrap justify-between">
             <TabsTrigger value="profile">プロフィール</TabsTrigger>
-            <TabsTrigger value="cloud">クラウド共有</TabsTrigger>
+            <TabsTrigger value="cloud">クラウド連携</TabsTrigger>
             <TabsTrigger value="data">データ管理</TabsTrigger>
             <TabsTrigger value="diaper-stock">おむつ在庫</TabsTrigger>
           </TabsList>
@@ -117,7 +129,7 @@ export function SettingsModal({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>アイコン文字</Label>
+                      <Label>アイコン絵文字</Label>
                       <Input
                         maxLength={2}
                         value={profile.iconEmoji ?? ""}
@@ -168,9 +180,9 @@ export function SettingsModal({
           </TabsContent>
           <TabsContent value="cloud">
             <div className="space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">クラウド共有</h3>
+              <h3 className="font-semibold">クラウド連携</h3>
               <p className="text-sm text-muted-foreground">
-                Googleアカウントでログインすると、別端末でも同じ記録を見られます。
+                Google アカウントでログインすると、複数端末でも同じ記録を共有できます。
               </p>
               {user ? (
                 <div className="space-y-4">
@@ -184,9 +196,50 @@ export function SettingsModal({
                   <Button variant="outline" onClick={onSignOut}>
                     サインアウト
                   </Button>
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <h4 className="font-semibold">プッシュ通知</h4>
+                    {!webPushConfigured ? (
+                      <p className="text-sm text-muted-foreground">
+                        通知用の公開鍵が未設定のため、この端末ではまだ通知を有効化できません。
+                      </p>
+                    ) : pushPermission === "unsupported" ? (
+                      <p className="text-sm text-muted-foreground">
+                        この端末・ブラウザでは PWA のプッシュ通知に対応していません。
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          ミルクから2時間30分経過すると通知します。A/B の通知時刻が15分以内ならまとめて1通にします。
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          状態:{" "}
+                          {pushSubscribed && pushPermission === "granted"
+                            ? "有効"
+                            : pushPermission === "denied"
+                            ? "ブラウザで拒否されています"
+                            : "未設定"}
+                        </p>
+                        <div className="flex gap-3">
+                          <Button
+                            onClick={onEnablePushNotifications}
+                            disabled={pushBusy || pushPermission === "granted" || !webPushConfigured}
+                          >
+                            通知を有効化
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={onDisablePushNotifications}
+                            disabled={pushBusy || !pushSubscribed}
+                          >
+                            通知を解除
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <Button onClick={onSignIn}>Googleでサインイン</Button>
+                <Button onClick={onSignIn}>Google でサインイン</Button>
               )}
             </div>
           </TabsContent>
@@ -194,7 +247,7 @@ export function SettingsModal({
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">データ管理</h3>
               <p className="text-sm text-muted-foreground">
-                端末のデータをJSONで書き出したり、バックアップから復元できます。
+                現在のデータを JSON で書き出したり、バックアップから復元できます。
               </p>
               <div className="flex gap-4">
                 <Button variant="outline" onClick={onExport}>
