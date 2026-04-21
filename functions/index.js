@@ -14,10 +14,18 @@ const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
 const publicKey = process.env.WEB_PUSH_PUBLIC_KEY;
 const privateKey = process.env.WEB_PUSH_PRIVATE_KEY;
 const subject = process.env.WEB_PUSH_SUBJECT || "mailto:no-reply@twinly.local";
+const tokyoTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
 
 if (publicKey && privateKey) {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
+
+const formatReminderTime = (timestamp) => tokyoTimeFormatter.format(new Date(timestamp));
 
 const buildLatestMilkCandidate = ({ appState, babyId, lastSentByBaby, nowMs }) => {
   const events = Array.isArray(appState?.events) ? appState.events : [];
@@ -61,11 +69,7 @@ const groupCandidatesForNotification = (candidates, nowMs) => {
 const buildNotificationPayload = (group) => {
   if (group.length === 1) {
     const candidate = group[0];
-    const time = new Date(candidate.milkAt).toLocaleTimeString("ja-JP", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    const time = formatReminderTime(candidate.milkAt);
 
     return {
       title: `${candidate.displayName}のミルク確認タイミングです`,
@@ -77,11 +81,7 @@ const buildNotificationPayload = (group) => {
 
   const body = group
     .map((candidate) => {
-      const time = new Date(candidate.milkAt).toLocaleTimeString("ja-JP", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
+      const time = formatReminderTime(candidate.milkAt);
       return `${candidate.displayName}: 前回 ${time}`;
     })
     .join("\n");
