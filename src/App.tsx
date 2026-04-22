@@ -22,6 +22,7 @@ import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
 import { createInitialAppState, stripLegacyCalendarFields } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
+import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -590,6 +591,20 @@ export default function App() {
     return result;
   }, [app.profiles]);
 
+  const diaperEstimates = useMemo(() => {
+    const result: Record<BabyId, ReturnType<typeof estimateDiaperStockBySize> | null> = { A: null, B: null };
+    (Object.keys(app.profiles) as BabyId[]).forEach((babyId) => {
+      const size = app.profiles[babyId].diaperSize;
+      result[babyId] = estimateDiaperStockBySize({
+        profiles: app.profiles,
+        events: app.events,
+        size,
+        now: new Date(),
+      });
+    });
+    return result;
+  }, [app.profiles, app.events]);
+
   const milkDraft = useMemo(() => {
     if (!modal || modal.kind !== "milk") {
       return createDefaultMilkDraft(app.events, "A");
@@ -715,6 +730,7 @@ export default function App() {
                 profile={app.profiles.A}
                 events={byBaby.A}
                 lowStock={lowStock.A}
+                diaperEstimate={diaperEstimates.A}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
@@ -732,6 +748,7 @@ export default function App() {
                 profile={app.profiles.B}
                 events={byBaby.B}
                 lowStock={lowStock.B}
+                diaperEstimate={diaperEstimates.B}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}

@@ -11,19 +11,21 @@ import {
   Ruler,
   FileText,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
+import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
-import { useEffect, useState } from "react";
-import { Input } from "./ui/input";
 
 type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
   lowStock: { size: string; remaining: number } | null;
+  diaperEstimate: DiaperStockEstimate | null;
   onOpenHistory: (type: "milk" | "diaper", babyId: BabyId) => void;
   onOpenModal: (
     kind: "milk" | "diaper" | "edit",
@@ -42,10 +44,36 @@ const adjustNumber = (current: string, amount: number, precision: number) => {
   return (num + amount).toFixed(precision);
 };
 
+const formatElapsed = (timestamp: number | null) =>
+  timestamp ? `${minutesSince(timestamp)}分前` : "未記録";
+
+const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
+  if (!estimate) return null;
+  if (estimate.level === "unknown") {
+    return {
+      title: "在庫予測は準備中",
+      detail: "記録が3件以上たまると表示します",
+    };
+  }
+  if (estimate.level === "urgent") {
+    return {
+      title: "今日なくなりそう",
+      detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
+    };
+  }
+
+  const roundedDays = Math.max(1, Math.ceil(estimate.daysRemaining ?? 0));
+  return {
+    title: `このペースだとあと約${roundedDays}日`,
+    detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
+  };
+};
+
 export function BabyPanel({
   profile,
   events,
   lowStock,
+  diaperEstimate,
   onOpenHistory,
   onOpenModal,
   onDeleteEvent,
@@ -126,14 +154,15 @@ export function BabyPanel({
   const diaperCount = peeCount + poopCount;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const purchaseUrl = profile.diaperPurchaseUrl?.trim();
+  const diaperEstimateSummary = formatDiaperEstimateSummary(diaperEstimate);
 
   const lastMilkEvent = milkEvents[0] ?? null;
   const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
-  const lastMilkElapsed = lastMilkEvent ? `${minutesSince(lastMilkEvent.timestamp)}分経過` : "未記録";
+  const lastMilkElapsed = formatElapsed(lastMilkEvent?.timestamp ?? null);
 
   const lastDiaperEvent = diaperEvents[0] ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
-  const lastDiaperElapsed = lastDiaperEvent ? `${minutesSince(lastDiaperEvent.timestamp)}分経過` : "未記録";
+  const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
 
   return (
     <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
@@ -173,7 +202,7 @@ export function BabyPanel({
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">
             <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span>一言日記</span>
+              <span>一言メモ</span>
             </div>
             <Input
               type="text"
@@ -362,6 +391,8 @@ export function BabyPanel({
       <CardHeader className="pt-0">
         <div className="flex flex-wrap items-center gap-2">
           {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
+          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3日以内</Badge> : null}
+          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7日以内</Badge> : null}
           {lowStock && purchaseUrl ? (
             <a href={purchaseUrl} target="_blank" rel="noreferrer">
               <Button variant="outline" size="sm">
@@ -370,6 +401,12 @@ export function BabyPanel({
             </a>
           ) : null}
         </div>
+        {diaperEstimateSummary ? (
+          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm">
+            <p className="font-semibold text-amber-100">{diaperEstimateSummary.title}</p>
+            <p className="text-xs text-amber-100/80">{diaperEstimateSummary.detail}</p>
+          </div>
+        ) : null}
       </CardHeader>
 
       <CardContent className="flex-grow space-y-4">

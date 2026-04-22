@@ -38,6 +38,7 @@ describe("BabyPanel", () => {
         profile={app.profiles.A}
         events={events}
         lowStock={null}
+        diaperEstimate={null}
         onOpenHistory={vi.fn()}
         onOpenModal={vi.fn()}
         onDeleteEvent={vi.fn()}
@@ -49,10 +50,8 @@ describe("BabyPanel", () => {
     );
 
     expect(screen.getByText("前回 09:45")).toBeTruthy();
-    expect(screen.getByText("35分経過")).toBeTruthy();
-    expect(
-      screen.getByText((_, element) => element?.textContent === "前回 10:05 / 15分経過")
-    ).toBeTruthy();
+    expect(screen.getByText("35分前")).toBeTruthy();
+    expect(screen.getByText((_, element) => element?.textContent === "前回 10:05 / 15分前")).toBeTruthy();
   });
 
   it("renders every event instead of limiting the list to four items", () => {
@@ -72,6 +71,7 @@ describe("BabyPanel", () => {
         profile={app.profiles.A}
         events={events}
         lowStock={null}
+        diaperEstimate={null}
         onOpenHistory={vi.fn()}
         onOpenModal={vi.fn()}
         onDeleteEvent={vi.fn()}
@@ -96,6 +96,7 @@ describe("BabyPanel", () => {
         profile={app.profiles.A}
         events={[]}
         lowStock={null}
+        diaperEstimate={null}
         onOpenHistory={onOpenHistory}
         onOpenModal={vi.fn()}
         onDeleteEvent={vi.fn()}
@@ -160,6 +161,7 @@ describe("BabyPanel", () => {
         profile={app.profiles.A}
         events={events}
         lowStock={null}
+        diaperEstimate={null}
         onOpenHistory={vi.fn()}
         onOpenModal={vi.fn()}
         onDeleteEvent={vi.fn()}
@@ -175,5 +177,66 @@ describe("BabyPanel", () => {
     expect(screen.getByText("80ml")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getAllByText("2回")).toHaveLength(2);
+  });
+
+  it("shows diaper stock forecast details when an estimate is available", () => {
+    const app = createInitialAppState(new Date("2026-04-18T10:20:00+09:00"));
+
+    render(
+      <BabyPanel
+        profile={app.profiles.A}
+        events={[]}
+        lowStock={{ size: "新生児", remaining: 8 }}
+        diaperEstimate={{
+          size: "新生児",
+          remaining: 8,
+          dailyAverage: 2.3,
+          daysRemaining: 3.4,
+          estimatedRunOutDate: "2026-04-21",
+          level: "warning",
+        }}
+        onOpenHistory={vi.fn()}
+        onOpenModal={vi.fn()}
+        onDeleteEvent={vi.fn()}
+        onAddEvent={vi.fn()}
+        lastWeight={null}
+        lastHeight={null}
+        themeDimmedBgColor="bg-background"
+      />
+    );
+
+    expect(screen.getByText("このペースだとあと約4日")).toBeTruthy();
+    expect(screen.getByText("在庫切れ予測: 2026-04-21")).toBeTruthy();
+    expect(screen.getByText("3日以内")).toBeTruthy();
+  });
+
+  it("shows an unknown forecast message when there is not enough diaper history", () => {
+    const app = createInitialAppState(new Date("2026-04-18T10:20:00+09:00"));
+
+    render(
+      <BabyPanel
+        profile={app.profiles.A}
+        events={[]}
+        lowStock={null}
+        diaperEstimate={{
+          size: "新生児",
+          remaining: 80,
+          dailyAverage: 0,
+          daysRemaining: null,
+          estimatedRunOutDate: null,
+          level: "unknown",
+        }}
+        onOpenHistory={vi.fn()}
+        onOpenModal={vi.fn()}
+        onDeleteEvent={vi.fn()}
+        onAddEvent={vi.fn()}
+        lastWeight={null}
+        lastHeight={null}
+        themeDimmedBgColor="bg-background"
+      />
+    );
+
+    expect(screen.getByText("在庫予測は準備中")).toBeTruthy();
+    expect(screen.getByText("記録が3件以上たまると表示します")).toBeTruthy();
   });
 });
