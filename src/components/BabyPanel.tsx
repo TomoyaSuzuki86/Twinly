@@ -18,12 +18,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
+import { buildMilkProgressComparison } from "@/lib/milk-progress";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 
 type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
+  allEvents: LogEvent[];
+  activeDate: string;
+  now: Date;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
   onOpenHistory: (type: "milk" | "diaper", babyId: BabyId) => void;
@@ -45,33 +49,42 @@ const adjustNumber = (current: string, amount: number, precision: number) => {
 };
 
 const formatElapsed = (timestamp: number | null) =>
-  timestamp ? `${minutesSince(timestamp)}分前` : "未記録";
+  timestamp ? `${minutesSince(timestamp)}刁E��` : "未記録";
 
 const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
   if (!estimate) return null;
   if (estimate.level === "unknown") {
     return {
-      title: "在庫予測は準備中",
-      detail: "記録が3件以上たまると表示します",
+      title: "Forecast unavailable",
+      detail: "More diaper records are needed before we can estimate the runout date.",
     };
   }
   if (estimate.level === "urgent") {
     return {
-      title: "今日なくなりそう",
-      detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
+      title: "Running out today",
+      detail: `Estimated runout: ${estimate.estimatedRunOutDate ?? "-"}`,
     };
   }
 
   const roundedDays = Math.max(1, Math.ceil(estimate.daysRemaining ?? 0));
   return {
-    title: `このペースだとあと約${roundedDays}日`,
-    detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
+    title: `${roundedDays} day${roundedDays === 1 ? "" : "s"} left at this pace`,
+    detail: `Estimated runout: ${estimate.estimatedRunOutDate ?? "-"}`,
   };
+};
+
+const formatMilkComparison = (difference: number) => {
+  const rounded = Math.round(Math.abs(difference));
+  if (rounded === 0) return "On average";
+  return difference > 0 ? `Above avg by ${rounded}ml` : `Below avg by ${rounded}ml`;
 };
 
 export function BabyPanel({
   profile,
   events,
+  allEvents,
+  activeDate,
+  now,
   lowStock,
   diaperEstimate,
   onOpenHistory,
@@ -143,6 +156,12 @@ export function BabyPanel({
     (sum, event) => sum + (event.milkMethod === "breast" ? event.milkMl ?? 0 : 0),
     0
   );
+  const milkProgress = buildMilkProgressComparison({
+    events: allEvents,
+    babyId,
+    targetDate: activeDate,
+    now,
+  });
   const peeCount = diaperEvents.reduce(
     (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
     0
@@ -187,7 +206,7 @@ export function BabyPanel({
           >
             <div className="flex items-center">
               <Droplets className="mr-3 h-7 w-7" />
-              おむつ
+              お�Eつ
             </div>
             <span className="mt-1 text-base font-normal opacity-80">
               {profile.diaperSize}・残り {remainingDiapers}
@@ -390,13 +409,13 @@ export function BabyPanel({
 
       <CardHeader className="pt-0">
         <div className="flex flex-wrap items-center gap-2">
-          {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
-          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3日以内</Badge> : null}
-          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7日以内</Badge> : null}
+          {lowStock ? <Badge variant="destructive">Low stock</Badge> : null}
+          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3 days left</Badge> : null}
+          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7 days left</Badge> : null}
           {lowStock && purchaseUrl ? (
             <a href={purchaseUrl} target="_blank" rel="noreferrer">
               <Button variant="outline" size="sm">
-                購入サイトへ
+                Buy more
               </Button>
             </a>
           ) : null}
@@ -415,11 +434,11 @@ export function BabyPanel({
             type="button"
             className="text-left"
             onClick={() => onOpenHistory("milk", babyId)}
-            aria-label={`${profile.displayName}のミルク履歴を開く`}
+            aria-label={`${profile.displayName} milk history`}
           >
             <Card className="transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-4">
-                <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">Milk summary</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="flex items-baseline gap-2">
@@ -428,12 +447,27 @@ export function BabyPanel({
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
-                    <span>哺乳瓶</span>
+                    <span>Bottle</span>
                     <span>{bottleMilkTotal}ml</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>母乳</span>
+                    <span>Breast</span>
                     <span>{breastMilkTotal}ml</span>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-lg border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Now</span>
+                    <span>{milkProgress.currentAmount}ml</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3">
+                    <span>7d avg</span>
+                    <span>{Math.round(milkProgress.trailingAverage)}ml</span>
+                  </div>
+                  <div className="mt-2 font-medium">
+                    {milkProgress.status === "no-history"
+                      ? "No 7-day history yet"
+                      : formatMilkComparison(milkProgress.difference)}
                   </div>
                 </div>
               </CardContent>
@@ -443,25 +477,25 @@ export function BabyPanel({
             type="button"
             className="text-left"
             onClick={() => onOpenHistory("diaper", babyId)}
-            aria-label={`${profile.displayName}のおむつ履歴を開く`}
+            aria-label={`${profile.displayName} diaper history`}
           >
             <Card className="transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
               <CardHeader className="p-4">
-                <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">お�Eつ</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
-                  <span className="font-semibold text-muted-foreground">回</span>
+                  <span className="font-semibold text-muted-foreground">times</span>
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
-                    <span>おしっこ</span>
-                    <span>{peeCount}回</span>
+                    <span>Pee</span>
+                    <span>{peeCount} times</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>うんち</span>
-                    <span>{poopCount}回</span>
+                    <span>ぁE��ち</span>
+                    <span>{poopCount} times</span>
                   </div>
                 </div>
               </CardContent>
@@ -492,3 +526,6 @@ export function BabyPanel({
     </Card>
   );
 }
+
+
+

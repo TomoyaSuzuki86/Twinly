@@ -739,6 +739,9 @@ export default function App() {
               <BabyPanel
                 profile={app.profiles.A}
                 events={byBaby.A}
+                allEvents={app.events}
+                activeDate={activeDate}
+                now={now}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
@@ -757,6 +760,9 @@ export default function App() {
               <BabyPanel
                 profile={app.profiles.B}
                 events={byBaby.B}
+                allEvents={app.events}
+                activeDate={activeDate}
+                now={now}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
