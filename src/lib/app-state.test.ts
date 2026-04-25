@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialAppState, stripLegacyCalendarFields } from "./app-state";
+import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./app-state";
 
 describe("stripLegacyCalendarFields", () => {
   it("removes legacy Google Calendar fields from imported app state", () => {
@@ -69,5 +69,39 @@ describe("createInitialAppState", () => {
     expect(app.profiles.B).not.toHaveProperty("calendarName");
     expect(app.profiles.B).not.toHaveProperty("calendarId");
     expect(app.events).toEqual([]);
+  });
+});
+
+describe("shared app state helpers", () => {
+  it("removes ui state from Firestore payloads", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    const shared = toSharedAppState(app);
+
+    expect(shared).not.toHaveProperty("ui");
+    expect(shared.profiles).toEqual(app.profiles);
+    expect(shared.events).toEqual(app.events);
+  });
+
+  it("merges remote data with local ui state", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    const merged = mergeSharedAppState(
+      {
+        profiles: app.profiles,
+        events: [
+          {
+            id: "event-1",
+            babyId: "A",
+            type: "milk",
+            timestamp: 1,
+            milkMl: 100,
+          },
+        ],
+      },
+      { lastViewedDate: "2026-04-20" }
+    );
+
+    expect(merged.ui.lastViewedDate).toBe("2026-04-20");
+    expect(merged.events).toHaveLength(1);
+    expect(merged.events[0].id).toBe("event-1");
   });
 });

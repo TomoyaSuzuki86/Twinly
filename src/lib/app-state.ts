@@ -1,6 +1,8 @@
 import { AppState, BabyId, LogEvent } from "@/types";
 import { fmtDate } from "./utils";
 
+export type SharedAppState = Pick<AppState, "profiles" | "events">;
+
 type LegacyLogEvent = LogEvent & {
   calendarStatus?: "pending" | "synced" | "error";
   calendarEventId?: string;
@@ -54,6 +56,16 @@ export const createInitialAppState = (now: Date = new Date()): AppState =>
       lastViewedDate: fmtDate(now),
     },
   }) as AppState;
+
+export const toSharedAppState = (app: AppState): SharedAppState => ({
+  profiles: app.profiles,
+  events: app.events,
+});
+
+export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
+  ...shared,
+  ui,
+});
 
 export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
   const profiles = Object.fromEntries(

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, FileText, LineChart, Settings, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
-import { deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
 import { AppState, BabyId, DiaperKind, EventType, LogEvent, MilkMethod } from "./types";
@@ -20,7 +20,7 @@ import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
-import { createInitialAppState, stripLegacyCalendarFields } from "./lib/app-state";
+import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import {
@@ -35,6 +35,7 @@ import {
 } from "./lib/web-push";
 
 const createEmptyState = () => createInitialAppState(new Date());
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 function AppContainer({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-background text-foreground">{children}</div>;
@@ -88,11 +89,12 @@ function SnackbarUndo({
 export default function App() {
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
+  const [now, setNow] = useState(() => new Date());
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [appLoading, setAppLoading] = useState(false);
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
-  const todayDate = fmtDate(new Date());
+  const todayDate = fmtDate(now);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
     getNotificationPermission()
   );
@@ -111,22 +113,39 @@ export default function App() {
   const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
   const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
   const undoTimerRef = useRef<number | null>(null);
+  const lastKnownTodayRef = useRef(todayDate);
 
-  const saveAppToFirestore = async (nextApp: AppState) => {
+  const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
     if (!db || !authUser) return;
     try {
       const appRef = doc(db, "users", authUser.uid, "app", "state");
-      await setDoc(
-        appRef,
-        {
-          app: removeUndefined(nextApp),
-          updatedAt: serverTimestamp(),
-          updatedBy: authUser.uid,
-        },
-        { merge: true }
-      );
+      await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(appRef);
+        const currentState =
+          snap.exists() && snap.data().app
+            ? stripLegacyCalendarFields(snap.data().app as Parameters<typeof stripLegacyCalendarFields>[0])
+            : createEmptyState();
+        const nextApp = updater(currentState);
+
+        transaction.set(
+          appRef,
+          {
+            app: removeUndefined(toSharedAppState(nextApp)),
+            updatedAt: serverTimestamp(),
+            updatedBy: authUser.uid,
+          },
+          { merge: true }
+        );
+      });
     } catch (error) {
-      console.error("saveAppToFirestore failed", error);
+      console.error("syncAppToFirestore failed", error);
+    }
+  };
+
+  const updateApp = (updater: (prevApp: AppState) => AppState, syncRemote = true) => {
+    setApp((prevApp) => updater(prevApp));
+    if (syncRemote) {
+      void syncAppToFirestore(updater);
     }
   };
 
@@ -195,6 +214,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const previousToday = lastKnownTodayRef.current;
+    if (todayDate !== previousToday) {
+      setActiveDate((current) => (current === previousToday ? todayDate : current));
+      lastKnownTodayRef.current = todayDate;
+    }
+  }, [todayDate]);
+
+  useEffect(() => {
     if (!auth) {
       setAuthReady(true);
       return undefined;
@@ -214,6 +246,8 @@ export default function App() {
           const nextState = createEmptyState();
           setApp(nextState);
           setActiveDate(nextState.ui.lastViewedDate);
+          setNow(new Date());
+          lastKnownTodayRef.current = nextState.ui.lastViewedDate;
           setAppLoading(false);
         }
         setAuthReady(true);
@@ -256,7 +290,6 @@ export default function App() {
       if (!snap.exists()) {
         const nextState = createEmptyState();
         setApp(nextState);
-        setActiveDate(nextState.ui.lastViewedDate);
         setAppLoading(false);
         return;
       }
@@ -265,14 +298,12 @@ export default function App() {
       if (!data.app) {
         const nextState = createEmptyState();
         setApp(nextState);
-        setActiveDate(nextState.ui.lastViewedDate);
         setAppLoading(false);
         return;
       }
 
       const nextState = stripLegacyCalendarFields(data.app as Parameters<typeof stripLegacyCalendarFields>[0]);
-      setApp(nextState);
-      setActiveDate(nextState.ui.lastViewedDate);
+      setApp((prev) => mergeSharedAppState(toSharedAppState(nextState), prev.ui));
       setAppLoading(false);
     });
 
@@ -280,12 +311,10 @@ export default function App() {
   }, [authUser]);
 
   useEffect(() => {
-    setApp((prev) => {
+    updateApp((prev) => {
       if (prev.ui.lastViewedDate === activeDate) return prev;
-      const nextApp = { ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
-    });
+      return { ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } };
+    }, false);
   }, [activeDate]);
 
   const handleOpenModal = (
@@ -325,11 +354,7 @@ export default function App() {
       ...payload,
     };
 
-    setApp((prevApp) => {
-      const nextApp = { ...prevApp, events: [event, ...prevApp.events] };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
-    });
+    updateApp((prevApp) => ({ ...prevApp, events: [event, ...prevApp.events] }));
 
     scheduleUndo(event);
   };
@@ -351,7 +376,7 @@ export default function App() {
     const { diaperKind, note, selectedDiaperSize, timestamp } = payload;
     addEvent(babyId, "diaper", { diaperKind, note, timestamp });
 
-    setApp((prevApp) => {
+    updateApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
       const currentStock = nextProfiles[babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
 
@@ -366,21 +391,17 @@ export default function App() {
         };
       });
 
-      const nextApp = { ...prevApp, profiles: nextProfiles };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
+      return { ...prevApp, profiles: nextProfiles };
     });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
-    setApp((prevApp) => {
+    updateApp((prevApp) => {
       const originalEvent = prevApp.events.find((event) => event.id === eventId);
       if (!originalEvent) return prevApp;
       const updatedEvent = { ...originalEvent, ...payload };
       const nextEvents = prevApp.events.map((event) => (event.id === eventId ? updatedEvent : event));
-      const nextApp = { ...prevApp, events: nextEvents };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
+      return { ...prevApp, events: nextEvents };
     });
   };
 
@@ -391,21 +412,13 @@ export default function App() {
 
   const removeEvent = (eventId: string) => {
     if (!authUser || !db) return;
-    setApp((prevApp) => {
-      const nextApp = { ...prevApp, events: prevApp.events.filter((event) => event.id !== eventId) };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
-    });
+    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => event.id !== eventId) }));
   };
 
   const undoLast = () => {
     if (!authUser || !db || !undo.event) return;
 
-    setApp((prevApp) => {
-      const nextApp = { ...prevApp, events: prevApp.events.filter((event) => event.id !== undo.event?.id) };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
-    });
+    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => event.id !== undo.event?.id) }));
 
     setUndo({ open: false });
     if (undoTimerRef.current) {
@@ -423,15 +436,14 @@ export default function App() {
     if (!authUser || !db) return;
     if (!confirm("すべてのデータを削除しますか？")) return;
     const nextState = createEmptyState();
-    setApp(nextState);
-    void saveAppToFirestore(nextState);
+    updateApp(() => nextState);
     setActiveDate(nextState.ui.lastViewedDate);
     setModal(null);
     setUndo({ open: false });
   };
 
   const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
-    setApp((prevApp) => {
+    updateApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
       nextProfiles[babyId] = {
         ...nextProfiles[babyId],
@@ -452,9 +464,7 @@ export default function App() {
         };
       });
 
-      const nextApp = { ...prevApp, profiles: nextProfiles };
-      void saveAppToFirestore(nextApp);
-      return nextApp;
+      return { ...prevApp, profiles: nextProfiles };
     });
   };
 
@@ -531,7 +541,7 @@ export default function App() {
         );
         setApp(importedState);
         setActiveDate(importedState.ui.lastViewedDate);
-        void saveAppToFirestore(importedState);
+        void syncAppToFirestore(() => importedState);
         alert("データをインポートしました");
       } catch {
         alert("ファイルの読み込みに失敗しました");
@@ -599,11 +609,11 @@ export default function App() {
         profiles: app.profiles,
         events: app.events,
         size,
-        now: new Date(),
+        now,
       });
     });
     return result;
-  }, [app.profiles, app.events]);
+  }, [app.profiles, app.events, now]);
 
   const milkDraft = useMemo(() => {
     if (!modal || modal.kind !== "milk") {
@@ -796,9 +806,8 @@ export default function App() {
         onOpenChange={(open) => !open && setModal(null)}
         app={app}
         setApp={(updater) => {
-          setApp((prevApp) => {
+          updateApp((prevApp) => {
             const nextApp = typeof updater === "function" ? updater(prevApp) : updater;
-            void saveAppToFirestore(nextApp);
             return nextApp;
           });
         }}
