@@ -44,39 +44,40 @@ type BabyPanelProps = {
 
 const adjustNumber = (current: string, amount: number, precision: number) => {
   const num = parseFloat(current);
-  if (isNaN(num)) return (0).toFixed(precision);
+  if (Number.isNaN(num)) return (0).toFixed(precision);
   return (num + amount).toFixed(precision);
 };
 
-const formatElapsed = (timestamp: number | null) =>
-  timestamp ? `${minutesSince(timestamp)}刁E��` : "未記録";
-
 const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
   if (!estimate) return null;
+
   if (estimate.level === "unknown") {
     return {
-      title: "Forecast unavailable",
-      detail: "More diaper records are needed before we can estimate the runout date.",
+      title: "在庫予測は準備中",
+      detail: "記録が増えると、在庫切れの予測を表示します。",
     };
   }
+
   if (estimate.level === "urgent") {
     return {
-      title: "Running out today",
-      detail: `Estimated runout: ${estimate.estimatedRunOutDate ?? "-"}`,
+      title: "今日中になくなりそう",
+      detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
     };
   }
 
   const roundedDays = Math.max(1, Math.ceil(estimate.daysRemaining ?? 0));
   return {
-    title: `${roundedDays} day${roundedDays === 1 ? "" : "s"} left at this pace`,
-    detail: `Estimated runout: ${estimate.estimatedRunOutDate ?? "-"}`,
+    title: `このペースだとあと約${roundedDays}日`,
+    detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
   };
 };
 
 const formatMilkComparison = (difference: number) => {
   const rounded = Math.round(Math.abs(difference));
-  if (rounded === 0) return "On average";
-  return difference > 0 ? `Above avg by ${rounded}ml` : `Below avg by ${rounded}ml`;
+  if (rounded === 0) return "過去7日平均とほぼ同じペースです";
+  return difference > 0
+    ? `過去7日平均より ${rounded}ml 多めです`
+    : `過去7日平均より ${rounded}ml 少なめです`;
 };
 
 export function BabyPanel({
@@ -109,6 +110,9 @@ export function BabyPanel({
     setHeight(lastHeight ? lastHeight.toFixed(1) : "");
   }, [lastHeight]);
 
+  const formatElapsed = (timestamp: number | null) =>
+    timestamp ? `${minutesSince(timestamp, now)}分前` : "未記録";
+
   const handleSaveHealthRecord = (type: "temperature" | "weight" | "height") => {
     if (type === "temperature" && temperature) {
       onAddEvent({
@@ -118,6 +122,7 @@ export function BabyPanel({
       });
       setTemperature("36.0");
     }
+
     if (type === "weight" && weight) {
       onAddEvent({
         babyId,
@@ -125,6 +130,7 @@ export function BabyPanel({
         weight: parseFloat(weight),
       });
     }
+
     if (type === "height" && height) {
       onAddEvent({
         babyId,
@@ -137,6 +143,7 @@ export function BabyPanel({
   const handleSaveDailyNote = () => {
     const note = dailyNote.trim();
     if (!note) return;
+
     onAddEvent({
       babyId,
       type: "daily",
@@ -206,7 +213,7 @@ export function BabyPanel({
           >
             <div className="flex items-center">
               <Droplets className="mr-3 h-7 w-7" />
-              お�Eつ
+              おむつ
             </div>
             <span className="mt-1 text-base font-normal opacity-80">
               {profile.diaperSize}・残り {remainingDiapers}
@@ -409,13 +416,13 @@ export function BabyPanel({
 
       <CardHeader className="pt-0">
         <div className="flex flex-wrap items-center gap-2">
-          {lowStock ? <Badge variant="destructive">Low stock</Badge> : null}
-          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3 days left</Badge> : null}
-          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7 days left</Badge> : null}
+          {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
+          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3日以内</Badge> : null}
+          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7日以内</Badge> : null}
           {lowStock && purchaseUrl ? (
             <a href={purchaseUrl} target="_blank" rel="noreferrer">
               <Button variant="outline" size="sm">
-                Buy more
+                購入サイトへ
               </Button>
             </a>
           ) : null}
@@ -434,11 +441,11 @@ export function BabyPanel({
             type="button"
             className="text-left"
             onClick={() => onOpenHistory("milk", babyId)}
-            aria-label={`${profile.displayName} milk history`}
+            aria-label={`${profile.displayName}のミルク履歴を開く`}
           >
             <Card className="transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-4">
-                <CardTitle className="text-base font-medium text-muted-foreground">Milk summary</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="flex items-baseline gap-2">
@@ -447,55 +454,56 @@ export function BabyPanel({
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
-                    <span>Bottle</span>
+                    <span>哺乳瓶</span>
                     <span>{bottleMilkTotal}ml</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>Breast</span>
+                    <span>母乳</span>
                     <span>{breastMilkTotal}ml</span>
                   </div>
                 </div>
                 <div className="mt-3 rounded-lg border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
                   <div className="flex items-center justify-between gap-3">
-                    <span>Now</span>
+                    <span>現時点</span>
                     <span>{milkProgress.currentAmount}ml</span>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-3">
-                    <span>7d avg</span>
+                    <span>過去7日平均</span>
                     <span>{Math.round(milkProgress.trailingAverage)}ml</span>
                   </div>
                   <div className="mt-2 font-medium">
                     {milkProgress.status === "no-history"
-                      ? "No 7-day history yet"
+                      ? "比較できる過去7日分の記録がまだありません"
                       : formatMilkComparison(milkProgress.difference)}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </button>
+
           <button
             type="button"
             className="text-left"
             onClick={() => onOpenHistory("diaper", babyId)}
-            aria-label={`${profile.displayName} diaper history`}
+            aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
             <Card className="transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
               <CardHeader className="p-4">
-                <CardTitle className="text-base font-medium text-muted-foreground">お�Eつ</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
-                  <span className="font-semibold text-muted-foreground">times</span>
+                  <span className="font-semibold text-muted-foreground">回</span>
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
-                    <span>Pee</span>
-                    <span>{peeCount} times</span>
+                    <span>おしっこ</span>
+                    <span>{peeCount}回</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>ぁE��ち</span>
-                    <span>{poopCount} times</span>
+                    <span>うんち</span>
+                    <span>{poopCount}回</span>
                   </div>
                 </div>
               </CardContent>
@@ -526,6 +534,3 @@ export function BabyPanel({
     </Card>
   );
 }
-
-
-

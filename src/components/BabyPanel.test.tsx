@@ -72,14 +72,9 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText((_, element) => element?.textContent === "前回 09:45")).toBeTruthy();
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("35")).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, element) => {
-        const text = element?.textContent ?? "";
-        return text.includes("10:05") && text.includes("15");
-      }).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByText("前回 09:45")).toBeTruthy();
+    expect(screen.getByText("35分前")).toBeTruthy();
+    expect(screen.getByText("前回 10:05 / 15分前")).toBeTruthy();
   });
 
   it("renders every event instead of limiting the list to four items", () => {
@@ -105,13 +100,8 @@ describe("BabyPanel", () => {
 
     renderPanel({ onOpenHistory });
 
-    const historyButtons = screen.getAllByRole("button").filter((button) => {
-      const name = button.getAttribute("aria-label") ?? "";
-      return name.includes("history");
-    });
-
-    fireEvent.click(historyButtons[0]);
-    fireEvent.click(historyButtons[1]);
+    fireEvent.click(screen.getByLabelText(/ミルク履歴を開く/));
+    fireEvent.click(screen.getByLabelText(/おむつ履歴を開く/));
 
     expect(onOpenHistory).toHaveBeenNthCalledWith(1, "milk", "A");
     expect(onOpenHistory).toHaveBeenNthCalledWith(2, "diaper", "A");
@@ -164,7 +154,7 @@ describe("BabyPanel", () => {
     expect(screen.getByText("120ml")).toBeTruthy();
     expect(screen.getByText("80ml")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getAllByText((_, element) => element?.textContent === "2 times")).toHaveLength(2);
+    expect(screen.getAllByText("2回")).toHaveLength(2);
   });
 
   it("shows milk progress versus the previous 7-day average at the same time", () => {
@@ -205,18 +195,18 @@ describe("BabyPanel", () => {
 
     renderPanel({ events: allEvents.slice(0, 2), allEvents });
 
-    expect(screen.getByText("Now")).toBeTruthy();
-    expect(screen.getByText("7d avg")).toBeTruthy();
+    expect(screen.getByText("現時点")).toBeTruthy();
+    expect(screen.getByText("過去7日平均")).toBeTruthy();
     expect(screen.getByText("200ml")).toBeTruthy();
     expect(screen.getByText("27ml")).toBeTruthy();
-    expect(screen.getByText("Above avg by 173ml")).toBeTruthy();
+    expect(screen.getByText("過去7日平均より 173ml 多めです")).toBeTruthy();
   });
 
   it("shows diaper stock forecast details when an estimate is available", () => {
     renderPanel({
-      lowStock: { size: "Newborn", remaining: 8 },
+      lowStock: { size: "新生児", remaining: 8 },
       diaperEstimate: {
-        size: "Newborn",
+        size: "新生児",
         remaining: 8,
         dailyAverage: 2.3,
         daysRemaining: 3.4,
@@ -225,15 +215,15 @@ describe("BabyPanel", () => {
       },
     });
 
-    expect(screen.getByText("4 days left at this pace")).toBeTruthy();
-    expect(screen.getByText("Estimated runout: 2026-04-21")).toBeTruthy();
-    expect(screen.getByText("3 days left")).toBeTruthy();
+    expect(screen.getByText("このペースだとあと約4日")).toBeTruthy();
+    expect(screen.getByText("在庫切れ予測: 2026-04-21")).toBeTruthy();
+    expect(screen.getByText("3日以内")).toBeTruthy();
   });
 
   it("shows an unknown forecast message when there is not enough diaper history", () => {
     renderPanel({
       diaperEstimate: {
-        size: "Newborn",
+        size: "新生児",
         remaining: 80,
         dailyAverage: 0,
         daysRemaining: null,
@@ -242,7 +232,7 @@ describe("BabyPanel", () => {
       },
     });
 
-    expect(screen.getByText("Forecast unavailable")).toBeTruthy();
-    expect(screen.getByText("More diaper records are needed before we can estimate the runout date.")).toBeTruthy();
+    expect(screen.getByText("在庫予測は準備中")).toBeTruthy();
+    expect(screen.getByText("記録が増えると、在庫切れの予測を表示します。")).toBeTruthy();
   });
 });

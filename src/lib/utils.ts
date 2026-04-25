@@ -44,10 +44,12 @@ export const removeUndefined = <T extends object>(obj: T): T => {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       const value = obj[key];
       if (value !== undefined) {
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
           newObj[key] = removeUndefined(value as object) as T[Extract<keyof T, string>];
         } else if (Array.isArray(value)) {
-          newObj[key] = value.map(item => (typeof item === 'object' && item !== null ? removeUndefined(item) : item)) as T[Extract<keyof T, string>];
+          newObj[key] = value.map((item) =>
+            typeof item === "object" && item !== null ? removeUndefined(item) : item
+          ) as T[Extract<keyof T, string>];
         } else {
           newObj[key] = value;
         }
@@ -58,12 +60,52 @@ export const removeUndefined = <T extends object>(obj: T): T => {
 };
 
 export const iconGradients = [
-  { value: "from-violet-500 to-fuchsia-500", label: "バイオレット", bgColor: "bg-gradient-to-br from-violet-500 to-fuchsia-500", dimmedBgColor: "bg-violet-900/60" },
-  { value: "from-sky-500 to-cyan-400", label: "スカイブルー", bgColor: "bg-gradient-to-br from-sky-500 to-cyan-400", dimmedBgColor: "bg-sky-900/60" },
-  { value: "from-emerald-500 to-teal-400", label: "エメラルド", bgColor: "bg-gradient-to-br from-emerald-500 to-teal-400", dimmedBgColor: "bg-emerald-900/60" },
-  { value: "from-amber-500 to-orange-400", label: "アンバー", bgColor: "bg-gradient-to-br from-amber-500 to-orange-400", dimmedBgColor: "bg-amber-900/60" },
-  { value: "from-rose-500 to-red-400", label: "ローズ", bgColor: "bg-gradient-to-br from-rose-500 to-red-400", dimmedBgColor: "bg-rose-900/60" },
-  { value: "from-indigo-500 to-blue-400", label: "インディゴ", bgColor: "bg-gradient-to-br from-indigo-500 to-blue-400", dimmedBgColor: "bg-indigo-900/60" },
-  { value: "from-lime-500 to-green-400", label: "ライム", bgColor: "bg-gradient-to-br from-lime-500 to-green-400", dimmedBgColor: "bg-lime-900/60" },
-  { value: "from-pink-500 to-purple-400", label: "ピンク", bgColor: "bg-gradient-to-br from-pink-500 to-purple-400", dimmedBgColor: "bg-pink-900/60" },
+  {
+    value: "from-violet-500 to-fuchsia-500",
+    label: "バイオレット",
+    bgColor: "bg-gradient-to-br from-violet-500 to-fuchsia-500",
+    dimmedBgColor: "bg-violet-900/60",
+  },
+  {
+    value: "from-sky-500 to-cyan-400",
+    label: "スカイブルー",
+    bgColor: "bg-gradient-to-br from-sky-500 to-cyan-400",
+    dimmedBgColor: "bg-sky-900/60",
+  },
+  {
+    value: "from-emerald-500 to-teal-400",
+    label: "エメラルド",
+    bgColor: "bg-gradient-to-br from-emerald-500 to-teal-400",
+    dimmedBgColor: "bg-emerald-900/60",
+  },
+  {
+    value: "from-amber-500 to-orange-400",
+    label: "アンバー",
+    bgColor: "bg-gradient-to-br from-amber-500 to-orange-400",
+    dimmedBgColor: "bg-amber-900/60",
+  },
+  {
+    value: "from-rose-500 to-red-400",
+    label: "ローズ",
+    bgColor: "bg-gradient-to-br from-rose-500 to-red-400",
+    dimmedBgColor: "bg-rose-900/60",
+  },
+  {
+    value: "from-indigo-500 to-blue-400",
+    label: "インディゴ",
+    bgColor: "bg-gradient-to-br from-indigo-500 to-blue-400",
+    dimmedBgColor: "bg-indigo-900/60",
+  },
+  {
+    value: "from-lime-500 to-green-400",
+    label: "ライム",
+    bgColor: "bg-gradient-to-br from-lime-500 to-green-400",
+    dimmedBgColor: "bg-lime-900/60",
+  },
+  {
+    value: "from-pink-500 to-purple-400",
+    label: "ピンク",
+    bgColor: "bg-gradient-to-br from-pink-500 to-purple-400",
+    dimmedBgColor: "bg-pink-900/60",
+  },
 ];
