@@ -20,6 +20,7 @@ import {
   Cell,
 } from "recharts";
 import { Droplets, Milk } from "lucide-react";
+import { buildMilkProgressComparison } from "@/lib/milk-progress";
 import {
   buildDiaperChartData,
   buildMilkChartData,
@@ -45,6 +46,8 @@ type EventHistoryModalProps = {
   historyType: HistoryType;
   events: LogEvent[];
   profile: BabyProfile;
+  activeDate: string;
+  now: Date;
 };
 
 const strokeMap: Record<string, string> = {
@@ -65,6 +68,14 @@ const formatHistoryDescription = (historyType: HistoryType) =>
   historyType === "milk"
     ? "表示期間の累計回数、ミルク量、平均量と、期間別の詳細を確認できます。"
     : "表示期間のうんち・おしっこ回数と、期間別の詳細を確認できます。";
+
+const formatMilkComparison = (difference: number) => {
+  const rounded = Math.round(Math.abs(difference));
+  if (rounded === 0) return "過去7日平均とほぼ同じペースです";
+  return difference > 0
+    ? `過去7日平均より ${rounded}ml 多めです`
+    : `過去7日平均より ${rounded}ml 少なめです`;
+};
 
 const describeEvent = (event: LogEvent) => {
   if (event.type === "milk") {
@@ -215,6 +226,8 @@ export function EventHistoryModal({
   historyType,
   events,
   profile,
+  activeDate,
+  now,
 }: EventHistoryModalProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>(getDefaultHistoryRange(historyType));
   const [selectedPeriodKey, setSelectedPeriodKey] = useState<string | null>(null);
@@ -251,7 +264,6 @@ export function EventHistoryModal({
     [events, historyType, profile.babyId]
   );
 
-  const now = useMemo(() => new Date(), [open, timeRange, historyType, filteredEvents.length]);
   const visibleEvents = useMemo(
     () => filterEventsForTimeRange(filteredEvents, timeRange, now),
     [filteredEvents, timeRange, now]
@@ -265,6 +277,16 @@ export function EventHistoryModal({
     [filteredEvents, timeRange, now]
   );
   const visibleMilkSummary = useMemo(() => summarizeMilkEvents(visibleEvents), [visibleEvents]);
+  const milkProgress = useMemo(
+    () =>
+      buildMilkProgressComparison({
+        events,
+        babyId: profile.babyId,
+        targetDate: activeDate,
+        now,
+      }),
+    [activeDate, events, now, profile.babyId]
+  );
   const visibleDiaperSummary = useMemo(
     () => summarizeDiaperEvents(visibleEvents, rangeDays[timeRange]),
     [visibleEvents, timeRange]
@@ -303,10 +325,27 @@ export function EventHistoryModal({
         <div className="grid flex-1 gap-4 overflow-y-auto md:min-h-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] md:overflow-hidden">
           <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
             {historyType === "milk" ? (
-              <div className="grid gap-4 md:grid-cols-3">
-                <MilkSummaryCard title="合算" stats={visibleMilkSummary.total} />
-                <MilkSummaryCard title="哺乳瓶" stats={visibleMilkSummary.bottle} />
-                <MilkSummaryCard title="母乳" stats={visibleMilkSummary.breast} />
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <MilkSummaryCard title="合算" stats={visibleMilkSummary.total} />
+                  <MilkSummaryCard title="哺乳瓶" stats={visibleMilkSummary.bottle} />
+                  <MilkSummaryCard title="母乳" stats={visibleMilkSummary.breast} />
+                </div>
+                <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>現時点</span>
+                    <span className="font-semibold">{milkProgress.currentAmount}ml</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span>過去7日平均</span>
+                    <span className="font-semibold">{Math.round(milkProgress.trailingAverage)}ml</span>
+                  </div>
+                  <div className="mt-3 font-medium">
+                    {milkProgress.status === "no-history"
+                      ? "比較できる過去7日分の記録がまだありません"
+                      : formatMilkComparison(milkProgress.difference)}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-3">

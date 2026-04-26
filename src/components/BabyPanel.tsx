@@ -18,15 +18,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
-import { buildMilkProgressComparison } from "@/lib/milk-progress";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 
 type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
-  allEvents: LogEvent[];
-  activeDate: string;
   now: Date;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
@@ -72,19 +69,9 @@ const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
   };
 };
 
-const formatMilkComparison = (difference: number) => {
-  const rounded = Math.round(Math.abs(difference));
-  if (rounded === 0) return "過去7日平均とほぼ同じペースです";
-  return difference > 0
-    ? `過去7日平均より ${rounded}ml 多めです`
-    : `過去7日平均より ${rounded}ml 少なめです`;
-};
-
 export function BabyPanel({
   profile,
   events,
-  allEvents,
-  activeDate,
   now,
   lowStock,
   diaperEstimate,
@@ -163,12 +150,6 @@ export function BabyPanel({
     (sum, event) => sum + (event.milkMethod === "breast" ? event.milkMl ?? 0 : 0),
     0
   );
-  const milkProgress = buildMilkProgressComparison({
-    events: allEvents,
-    babyId,
-    targetDate: activeDate,
-    now,
-  });
   const peeCount = diaperEvents.reduce(
     (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
     0
@@ -460,21 +441,6 @@ export function BabyPanel({
                   <div className="flex items-center justify-between gap-3">
                     <span>母乳</span>
                     <span>{breastMilkTotal}ml</span>
-                  </div>
-                </div>
-                <div className="mt-3 rounded-lg border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>現時点</span>
-                    <span>{milkProgress.currentAmount}ml</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <span>過去7日平均</span>
-                    <span>{Math.round(milkProgress.trailingAverage)}ml</span>
-                  </div>
-                  <div className="mt-2 font-medium">
-                    {milkProgress.status === "no-history"
-                      ? "比較できる過去7日分の記録がまだありません"
-                      : formatMilkComparison(milkProgress.difference)}
                   </div>
                 </div>
               </CardContent>

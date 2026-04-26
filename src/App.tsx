@@ -739,8 +739,6 @@ export default function App() {
               <BabyPanel
                 profile={app.profiles.A}
                 events={byBaby.A}
-                allEvents={app.events}
-                activeDate={activeDate}
                 now={now}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
@@ -760,8 +758,6 @@ export default function App() {
               <BabyPanel
                 profile={app.profiles.B}
                 events={byBaby.B}
-                allEvents={app.events}
-                activeDate={activeDate}
                 now={now}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
@@ -840,6 +836,8 @@ export default function App() {
           historyType={historyModal.type}
           events={app.events}
           profile={app.profiles[historyModal.babyId]}
+          activeDate={activeDate}
+          now={now}
         />
       ) : null}
     </AppContainer>

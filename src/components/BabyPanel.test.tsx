@@ -9,13 +9,11 @@ const baseNow = new Date("2026-04-18T10:20:00+09:00");
 
 const renderPanel = ({
   events = [],
-  allEvents = events,
   diaperEstimate = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
 }: {
   events?: LogEvent[];
-  allEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
@@ -26,8 +24,6 @@ const renderPanel = ({
     <BabyPanel
       profile={app.profiles.A}
       events={events}
-      allEvents={allEvents}
-      activeDate="2026-04-18"
       now={baseNow}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
@@ -155,51 +151,6 @@ describe("BabyPanel", () => {
     expect(screen.getByText("80ml")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getAllByText("2回")).toHaveLength(2);
-  });
-
-  it("shows milk progress versus the previous 7-day average at the same time", () => {
-    const allEvents: LogEvent[] = [
-      {
-        id: "today-1",
-        babyId: "A",
-        type: "milk",
-        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
-        milkMl: 120,
-        milkMethod: "bottle",
-      },
-      {
-        id: "today-2",
-        babyId: "A",
-        type: "milk",
-        timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
-        milkMl: 80,
-        milkMethod: "breast",
-      },
-      {
-        id: "d1",
-        babyId: "A",
-        type: "milk",
-        timestamp: new Date("2026-04-17T09:00:00+09:00").getTime(),
-        milkMl: 100,
-        milkMethod: "bottle",
-      },
-      {
-        id: "d2",
-        babyId: "A",
-        type: "milk",
-        timestamp: new Date("2026-04-16T10:00:00+09:00").getTime(),
-        milkMl: 90,
-        milkMethod: "bottle",
-      },
-    ];
-
-    renderPanel({ events: allEvents.slice(0, 2), allEvents });
-
-    expect(screen.getByText("現時点")).toBeTruthy();
-    expect(screen.getByText("過去7日平均")).toBeTruthy();
-    expect(screen.getByText("200ml")).toBeTruthy();
-    expect(screen.getByText("27ml")).toBeTruthy();
-    expect(screen.getByText("過去7日平均より 173ml 多めです")).toBeTruthy();
   });
 
   it("shows diaper stock forecast details when an estimate is available", () => {
