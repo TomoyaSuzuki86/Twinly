@@ -4,4 +4,9 @@ dist
 .env
 .env.local
 .env.*.local
+wearos/.gradle/
+wearos/.kotlin/
+wearos/.idea/
+wearos/local.properties
+wearos/**/build/
 

@@ -20,9 +20,12 @@ import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
+import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
+import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
+import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -100,6 +103,8 @@ export default function App() {
   );
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [wearPairingToken, setWearPairingToken] = useState<string | null>(null);
+  const [wearPairingBusy, setWearPairingBusy] = useState(false);
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -112,7 +117,10 @@ export default function App() {
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
   const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
+  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
   const undoTimerRef = useRef<number | null>(null);
+  const voiceTimerRef = useRef<number | null>(null);
+  const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
 
   const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
@@ -343,15 +351,27 @@ export default function App() {
     undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
   };
 
+  const showVoiceMessage = (message: string) => {
+    if (voiceTimerRef.current) {
+      window.clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    setVoiceMessage(message);
+    voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
+  };
+
   const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
     if (!authUser || !db) return;
+    const payloadTimestamp = payload?.timestamp;
+    const timestamp =
+      typeof payloadTimestamp === "number" && Number.isFinite(payloadTimestamp) ? payloadTimestamp : Date.now();
 
     const event: LogEvent = {
       id: uid(),
       babyId,
       type,
-      timestamp: Date.now(),
       ...payload,
+      timestamp,
     };
 
     updateApp((prevApp) => ({ ...prevApp, events: [event, ...prevApp.events] }));
@@ -393,6 +413,45 @@ export default function App() {
 
       return { ...prevApp, profiles: nextProfiles };
     });
+  };
+
+  const handleVoiceCommand = (command: VoiceCommand) => {
+    for (const targetedCommand of expandVoiceCommandTargets(command)) {
+      if (targetedCommand.type === "milk") {
+        const milkMl = targetedCommand.milkMlByBaby?.[targetedCommand.babyId] ?? targetedCommand.milkMl;
+        addEvent(targetedCommand.babyId, "milk", {
+          timestamp: targetedCommand.timestamp,
+          milkMl,
+          milkMethod: targetedCommand.milkMethod,
+          note: targetedCommand.note,
+        });
+        continue;
+      }
+
+      addEvent(targetedCommand.babyId, "diaper", {
+        timestamp: targetedCommand.timestamp,
+        diaperKind: targetedCommand.diaperKind,
+        note: targetedCommand.note,
+      });
+
+      updateApp((prevApp) => {
+        const selectedDiaperSize = prevApp.profiles[targetedCommand.babyId].diaperSize;
+        const currentStock = prevApp.profiles[targetedCommand.babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
+        const nextProfiles = { ...prevApp.profiles };
+
+        (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
+          nextProfiles[id] = {
+            ...nextProfiles[id],
+            diaperStockBySize: {
+              ...nextProfiles[id].diaperStockBySize,
+              [selectedDiaperSize]: currentStock - 1,
+            },
+          };
+        });
+
+        return { ...prevApp, profiles: nextProfiles };
+      });
+    }
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -519,6 +578,36 @@ export default function App() {
     }
   };
 
+  const handleCreateWearPairingToken = async () => {
+    if (!authUser || !db) return;
+    setWearPairingBusy(true);
+    try {
+      const token = createWearPairingToken();
+      const tokenHash = await hashWearPairingToken(token);
+      await Promise.all([
+        setDoc(doc(db, "wearPairingTokens", tokenHash), {
+          uid: authUser.uid,
+          active: true,
+          createdAt: serverTimestamp(),
+        }),
+        setDoc(
+          doc(db, "users", authUser.uid, "settings", "wear"),
+          {
+            tokenHash,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+      ]);
+      setWearPairingToken(token);
+    } catch (error) {
+      console.error("Failed to create Wear OS pairing token", error);
+      alert("Watch連携キーの作成に失敗しました");
+    } finally {
+      setWearPairingBusy(false);
+    }
+  };
+
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(app, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -615,6 +704,21 @@ export default function App() {
     return result;
   }, [app.profiles, app.events, now]);
 
+  const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
+
+  const defaultVoiceMilkMlByBaby = useMemo(() => {
+    const result: Partial<Record<BabyId, number>> = {};
+    (["A", "B"] as BabyId[]).forEach((babyId) => {
+      const latestMilk = [...app.events]
+        .filter((event) => event.babyId === babyId && event.type === "milk" && typeof event.milkMl === "number")
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+      if (typeof latestMilk?.milkMl === "number") {
+        result[babyId] = latestMilk.milkMl;
+      }
+    });
+    return result;
+  }, [app.events]);
+
   const milkDraft = useMemo(() => {
     if (!modal || modal.kind !== "milk") {
       return createDefaultMilkDraft(app.events, "A");
@@ -671,7 +775,10 @@ export default function App() {
   return (
     <AppContainer>
       <div className="mx-auto max-w-7xl p-2 sm:p-4">
-        <header className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-4">
+        <header
+          className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-4"
+          onDoubleClick={() => voiceButtonRef.current?.startListening()}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
@@ -687,6 +794,14 @@ export default function App() {
               <Button variant="ghost" size="icon" onClick={() => setChartModalOpen(true)} aria-label="show chart">
                 <LineChart className="h-5 w-5" />
               </Button>
+              <VoiceCommandButton
+                ref={voiceButtonRef}
+                babyNames={voiceCommandBabyNames}
+                defaultMilkMlByBaby={defaultVoiceMilkMlByBaby}
+                now={now}
+                onCommand={handleVoiceCommand}
+                onMessage={showVoiceMessage}
+              />
               <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                 <Settings className="h-5 w-5" />
               </Button>
@@ -783,6 +898,18 @@ export default function App() {
         onUndo={undoLast}
         onClose={() => setUndo({ open: false })}
       />
+      <AnimatePresence>
+        {voiceMessage ? (
+          <motion.div
+            className="fixed bottom-24 left-1/2 z-50 w-[min(520px,calc(100%-16px))] -translate-x-1/2"
+            initial={{ y: 18, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 18, opacity: 0 }}
+          >
+            <div className="rounded-lg border bg-card px-4 py-3 text-sm font-semibold shadow-2xl">{voiceMessage}</div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <MilkModal
         open={modal?.kind === "milk"}
@@ -822,6 +949,9 @@ export default function App() {
         webPushConfigured={Boolean(webPushPublicKey)}
         onEnablePushNotifications={handleEnablePushNotifications}
         onDisablePushNotifications={handleDisablePushNotifications}
+        wearPairingToken={wearPairingToken}
+        wearPairingBusy={wearPairingBusy}
+        onCreateWearPairingToken={handleCreateWearPairingToken}
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}

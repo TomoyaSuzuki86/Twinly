@@ -29,10 +29,19 @@ type SettingsModalProps = {
   webPushConfigured: boolean;
   onEnablePushNotifications: () => void | Promise<void>;
   onDisablePushNotifications: () => void | Promise<void>;
+  wearPairingToken: string | null;
+  wearPairingBusy: boolean;
+  onCreateWearPairingToken: () => void | Promise<void>;
   onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onResetAll: () => void;
 };
+
+const parseVoiceAliases = (value: string) =>
+  value
+    .split(/[\s,、]+/)
+    .map((alias) => alias.trim())
+    .filter(Boolean);
 
 export function SettingsModal({
   open,
@@ -48,6 +57,9 @@ export function SettingsModal({
   webPushConfigured,
   onEnablePushNotifications,
   onDisablePushNotifications,
+  wearPairingToken,
+  wearPairingBusy,
+  onCreateWearPairingToken,
   onExport,
   onImport,
   onResetAll,
@@ -126,6 +138,14 @@ export function SettingsModal({
                       <Input
                         value={profile.displayName}
                         onChange={(e) => handleProfileChange(babyId, "displayName", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>音声入力名</Label>
+                      <Input
+                        value={(profile.voiceAliases ?? []).join(" ")}
+                        onChange={(e) => handleProfileChange(babyId, "voiceAliases", parseVoiceAliases(e.target.value))}
+                        placeholder="ひなた ひなちゃん"
                       />
                     </div>
                     <div className="space-y-2">
@@ -236,6 +256,20 @@ export function SettingsModal({
                         </div>
                       </>
                     )}
+                  </div>
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <h4 className="font-semibold">Pixel Watch連携</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Watchアプリの初回設定で使う連携キーを作成します。キーは作成直後だけ表示されます。
+                    </p>
+                    {wearPairingToken ? (
+                      <div className="rounded-lg border bg-background px-3 py-2 text-center font-mono text-lg font-bold tracking-widest">
+                        {wearPairingToken}
+                      </div>
+                    ) : null}
+                    <Button variant="outline" onClick={onCreateWearPairingToken} disabled={wearPairingBusy}>
+                      Watch連携キーを作成
+                    </Button>
                   </div>
                 </div>
               ) : (

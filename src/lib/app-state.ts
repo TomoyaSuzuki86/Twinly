@@ -35,6 +35,7 @@ const createBaseProfiles = (now: Date) =>
       diaperPurchaseUrl: "",
       iconEmoji: "A",
       iconGradient: "from-violet-500 to-fuchsia-500",
+      voiceAliases: [],
     },
     B: {
       babyId: "B",
@@ -45,6 +46,7 @@ const createBaseProfiles = (now: Date) =>
       diaperPurchaseUrl: "",
       iconEmoji: "B",
       iconGradient: "from-sky-500 to-cyan-400",
+      voiceAliases: [],
     },
   }) as AppState["profiles"];
 

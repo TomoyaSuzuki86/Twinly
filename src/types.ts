@@ -26,6 +26,7 @@ export type BabyProfile = {
   diaperPurchaseUrl?: string;
   iconEmoji?: string;
   iconGradient?: string;
+  voiceAliases?: string[];
 };
 
 export type AppState = {
