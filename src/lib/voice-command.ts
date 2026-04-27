@@ -83,7 +83,7 @@ const detectMilkAmount = (text: string) => {
 
 const detectDiaperKind = (text: string): DiaperKind => {
   const hasPee = includesAny(text, ["おしっこ", "しっこ", "尿", "pee"]);
-  const hasPoop = includesAny(text, ["うんち", "ウンチ", "便", "poop"]);
+  const hasPoop = includesAny(text, ["うんち", "ウンチ", "うんこ", "ウンコ", "便", "poop"]);
 
   if (hasPee && hasPoop) return "mix";
   if (includesAny(text, ["両方", "両方とも", "mix"])) return "mix";
@@ -149,6 +149,8 @@ export const parseVoiceCommand = (
     "しっこ",
     "うんち",
     "ウンチ",
+    "うんこ",
+    "ウンコ",
     "尿",
     "便",
     "diaper",

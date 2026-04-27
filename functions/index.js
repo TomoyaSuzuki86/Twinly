@@ -85,7 +85,7 @@ const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now
   const targetBabyId = babyId || "both";
 
   const isMilk = includesAny(normalizedText, ["ミルク", "授乳", "母乳", "哺乳", "milk"]);
-  const isDiaper = includesAny(normalizedText, ["おむつ", "オムツ", "おしっこ", "しっこ", "うんち", "尿", "便"]);
+  const isDiaper = includesAny(normalizedText, ["おむつ", "オムツ", "おしっこ", "しっこ", "うんち", "うんこ", "尿", "便"]);
   const timestamp = detectTimestamp(normalizedText, now);
 
   if (isMilk) {
@@ -118,7 +118,7 @@ const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now
 
   if (isDiaper) {
     const hasPee = includesAny(normalizedText, ["おしっこ", "しっこ", "尿"]);
-    const hasPoop = includesAny(normalizedText, ["うんち", "便"]);
+    const hasPoop = includesAny(normalizedText, ["うんち", "うんこ", "便"]);
     return {
       babyId: targetBabyId,
       type: "diaper",

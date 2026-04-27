@@ -36,6 +36,17 @@ describe("parseVoiceCommand", () => {
     });
   });
 
+  it("parses unko as a poop diaper command", () => {
+    expect(parseVoiceCommand("B うんこ")).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "diaper",
+        diaperKind: "poop",
+      },
+    });
+  });
+
   it("parses configured baby display names", () => {
     const babyNames = {
       A: ["奏汰"],
