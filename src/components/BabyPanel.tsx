@@ -11,7 +11,7 @@ import {
   Ruler,
   FileText,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,9 @@ import { EventCard } from "./EventCard";
 type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
+  latestEvents?: LogEvent[];
+  logEvents?: LogEvent[];
+  logDateControls?: ReactNode;
   now: Date;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
@@ -72,6 +75,9 @@ const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
 export function BabyPanel({
   profile,
   events,
+  latestEvents = events,
+  logEvents = events,
+  logDateControls,
   now,
   lowStock,
   diaperEstimate,
@@ -163,11 +169,14 @@ export function BabyPanel({
   const purchaseUrl = profile.diaperPurchaseUrl?.trim();
   const diaperEstimateSummary = formatDiaperEstimateSummary(diaperEstimate);
 
-  const lastMilkEvent = milkEvents[0] ?? null;
+  const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
+  const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
+
+  const lastMilkEvent = latestMilkEvents[0] ?? null;
   const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
   const lastMilkElapsed = formatElapsed(lastMilkEvent?.timestamp ?? null);
 
-  const lastDiaperEvent = diaperEvents[0] ?? null;
+  const lastDiaperEvent = latestDiaperEvents[0] ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
 
@@ -479,14 +488,15 @@ export function BabyPanel({
       </CardContent>
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">今日のログ</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
+        {logDateControls}
         <div className="flex max-h-[42vh] w-full flex-col gap-3 overflow-y-auto pr-1">
-          {events.length === 0 ? (
+          {logEvents.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
               まだ記録がありません
             </div>
           ) : (
-            events.map((event) => (
+            logEvents.map((event) => (
               <EventCard
                 key={event.id}
                 event={event}

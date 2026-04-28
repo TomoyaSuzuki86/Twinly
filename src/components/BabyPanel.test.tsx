@@ -9,11 +9,13 @@ const baseNow = new Date("2026-04-18T10:20:00+09:00");
 
 const renderPanel = ({
   events = [],
+  latestEvents,
   diaperEstimate = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
 }: {
   events?: LogEvent[];
+  latestEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
@@ -24,6 +26,7 @@ const renderPanel = ({
     <BabyPanel
       profile={app.profiles.A}
       events={events}
+      latestEvents={latestEvents}
       now={baseNow}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
@@ -71,6 +74,35 @@ describe("BabyPanel", () => {
     expect(screen.getByText("前回 09:45")).toBeTruthy();
     expect(screen.getByText("35分前")).toBeTruthy();
     expect(screen.getByText("前回 10:05 / 15分前")).toBeTruthy();
+  });
+
+  it("uses all latest events for last milk and diaper times even when daily totals are empty", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(baseNow);
+
+    const latestEvents: LogEvent[] = [
+      {
+        id: "diaper-yesterday",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-17T23:30:00+09:00").getTime(),
+        diaperKind: "poop",
+      },
+      {
+        id: "milk-yesterday",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-17T23:00:00+09:00").getTime(),
+        milkMl: 80,
+        milkMethod: "bottle",
+      },
+    ];
+
+    renderPanel({ events: [], latestEvents });
+
+    expect(screen.getByText("前回 23:00")).toBeTruthy();
+    expect(screen.getByText("前回 23:30 / 650分前")).toBeTruthy();
+    expect(screen.getAllByText("0")).toBeTruthy();
   });
 
   it("renders every event instead of limiting the list to four items", () => {

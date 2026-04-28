@@ -639,24 +639,50 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const dayRange = useMemo(() => {
+  const selectedLogDayRange = useMemo(() => {
     const date = new Date(`${activeDate}T00:00:00`);
     return { from: startOfDayMs(date), to: endOfDayMs(date) };
   }, [activeDate]);
 
-  const eventsToday = useMemo(
+  const currentDayRange = useMemo(() => {
+    const date = new Date(`${todayDate}T00:00:00`);
+    return { from: startOfDayMs(date), to: endOfDayMs(date) };
+  }, [todayDate]);
+
+  const selectedLogEvents = useMemo(
     () =>
       app.events
-        .filter((event) => event.timestamp >= dayRange.from && event.timestamp <= dayRange.to)
+        .filter((event) => event.timestamp >= selectedLogDayRange.from && event.timestamp <= selectedLogDayRange.to)
         .sort((a, b) => b.timestamp - a.timestamp),
-    [app.events, dayRange]
+    [app.events, selectedLogDayRange]
   );
 
-  const byBaby = useMemo(() => {
+  const currentDayEvents = useMemo(
+    () =>
+      app.events
+        .filter((event) => event.timestamp >= currentDayRange.from && event.timestamp <= currentDayRange.to)
+        .sort((a, b) => b.timestamp - a.timestamp),
+    [app.events, currentDayRange]
+  );
+
+  const currentEventsByBaby = useMemo(() => {
     const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
-    for (const event of eventsToday) grouped[event.babyId].push(event);
+    for (const event of currentDayEvents) grouped[event.babyId].push(event);
     return grouped;
-  }, [eventsToday]);
+  }, [currentDayEvents]);
+
+  const logEventsByBaby = useMemo(() => {
+    const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
+    for (const event of selectedLogEvents) grouped[event.babyId].push(event);
+    return grouped;
+  }, [selectedLogEvents]);
+
+  const latestEventsByBaby = useMemo(() => {
+    const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
+    const sortedEvents = [...app.events].sort((a, b) => b.timestamp - a.timestamp);
+    for (const event of sortedEvents) grouped[event.babyId].push(event);
+    return grouped;
+  }, [app.events]);
 
   const lastWeights = useMemo(() => {
     const result: Record<BabyId, number | null> = { A: null, B: null };
@@ -718,6 +744,32 @@ export default function App() {
     });
     return result;
   }, [app.events]);
+
+  const renderLogDateControls = () => (
+    <div className="flex w-full flex-wrap items-center gap-2">
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="previous day"
+        onClick={() => setActiveDate((current) => shiftDate(current, -1))}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <Input type="date" className="w-auto" value={activeDate} onChange={(e) => setActiveDate(e.target.value)} />
+      <Button variant="outline" onClick={() => setActiveDate(todayDate)}>
+        {"\u4eca\u65e5"}
+      </Button>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="next day"
+        onClick={() => setActiveDate((current) => shiftDate(current, 1))}
+        disabled={activeDate >= todayDate}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
 
   const milkDraft = useMemo(() => {
     if (!modal || modal.kind !== "milk") {
@@ -815,29 +867,6 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="previous day"
-              onClick={() => setActiveDate((current) => shiftDate(current, -1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Input type="date" className="w-auto" value={activeDate} onChange={(e) => setActiveDate(e.target.value)} />
-            <Button variant="outline" onClick={() => setActiveDate(todayDate)}>
-              {"\u4eca\u65e5"}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="next day"
-              onClick={() => setActiveDate((current) => shiftDate(current, 1))}
-              disabled={activeDate >= todayDate}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
         </header>
 
         <main>
@@ -853,7 +882,10 @@ export default function App() {
             <TabsContent value="A" className="mt-4">
               <BabyPanel
                 profile={app.profiles.A}
-                events={byBaby.A}
+                events={currentEventsByBaby.A}
+                latestEvents={latestEventsByBaby.A}
+                logEvents={logEventsByBaby.A}
+                logDateControls={renderLogDateControls()}
                 now={now}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
@@ -872,7 +904,10 @@ export default function App() {
             <TabsContent value="B" className="mt-4">
               <BabyPanel
                 profile={app.profiles.B}
-                events={byBaby.B}
+                events={currentEventsByBaby.B}
+                latestEvents={latestEventsByBaby.B}
+                logEvents={logEventsByBaby.B}
+                logDateControls={renderLogDateControls()}
                 now={now}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
