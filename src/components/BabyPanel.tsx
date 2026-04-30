@@ -417,12 +417,6 @@ export function BabyPanel({
             </a>
           ) : null}
         </div>
-        {diaperEstimateSummary ? (
-          <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm">
-            <p className="font-semibold text-amber-100">{diaperEstimateSummary.title}</p>
-            <p className="text-xs text-amber-100/80">{diaperEstimateSummary.detail}</p>
-          </div>
-        ) : null}
       </CardHeader>
 
       <CardContent className="flex-grow space-y-4">
@@ -467,9 +461,21 @@ export function BabyPanel({
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
-                  <span className="font-semibold text-muted-foreground">回</span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
+                    <span className="font-semibold text-muted-foreground">回</span>
+                  </div>
+                  {diaperEstimateSummary ? (
+                    <div className="max-w-[58%] rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right">
+                      <p className="truncate text-xs font-semibold leading-tight text-amber-100">
+                        {diaperEstimateSummary.title}
+                      </p>
+                      <p className="truncate text-[11px] leading-tight text-amber-100/80">
+                        {diaperEstimateSummary.detail}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
