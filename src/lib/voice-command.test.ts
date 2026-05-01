@@ -215,6 +215,44 @@ describe("parseVoiceCommand", () => {
     expect(result.ok && result.command.timestamp).toBe(new Date("2026-04-27T20:30:00+09:00").getTime());
   });
 
+  it("parses kanji milk amounts", () => {
+    expect(parseVoiceCommand("A milk \u516b\u5341")).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 80,
+      },
+    });
+
+    expect(parseVoiceCommand("A milk \u767e\u4e8c\u5341\u30df\u30ea")).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 120,
+      },
+    });
+  });
+
+  it("does not treat a kanji absolute time as a milk amount", () => {
+    const now = new Date("2026-04-27T16:00:00+09:00");
+    const result = parseVoiceCommand("A milk \u4e8c\u5341\u6642\u4e09\u5341\u5206", {
+      babyNames: {},
+      defaultMilkMlByBaby: { A: 90 },
+      now,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 90,
+      },
+    });
+  });
+
   it("uses each baby's previous milk amount when no baby name or amount is spoken", () => {
     expect(
       parseVoiceCommand("ミルク", {

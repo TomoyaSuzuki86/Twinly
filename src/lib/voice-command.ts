@@ -74,16 +74,65 @@ const detectBabyId = (text: string, babyNames: VoiceCommandBabyNames = {}): Baby
 };
 
 const detectMilkAmount = (text: string) => {
-  const mlMatch = text.match(/(\d{1,4})\s*(?:ml|\u30df\u30ea|\u307f\u308a)/);
-  if (mlMatch) return Number(mlMatch[1]);
+  const kanjiNumberPattern = "\u3007\u96f6\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343";
+  const parseKanjiNumber = (value: string) => {
+    const digits: Record<string, number> = {
+      "\u3007": 0,
+      "\u96f6": 0,
+      "\u4e00": 1,
+      "\u4e8c": 2,
+      "\u4e09": 3,
+      "\u56db": 4,
+      "\u4e94": 5,
+      "\u516d": 6,
+      "\u4e03": 7,
+      "\u516b": 8,
+      "\u4e5d": 9,
+    };
+    const units: Record<string, number> = {
+      "\u5341": 10,
+      "\u767e": 100,
+      "\u5343": 1000,
+    };
+
+    if ([...value].every((char) => char in digits)) {
+      return Number([...value].map((char) => digits[char]).join(""));
+    }
+
+    let total = 0;
+    let current = 0;
+    for (const char of value) {
+      if (char in digits) {
+        current = digits[char];
+        continue;
+      }
+      if (char in units) {
+        total += (current || 1) * units[char];
+        current = 0;
+      }
+    }
+
+    const parsed = total + current;
+    return parsed > 0 ? parsed : null;
+  };
+
+  const mlMatch = text.match(new RegExp(`(\\d{1,4}|[${kanjiNumberPattern}]+)\\s*(?:ml|\\u30df\\u30ea|\\u307f\\u308a)`));
+  if (mlMatch) {
+    return /^\d+$/.test(mlMatch[1]) ? Number(mlMatch[1]) : parseKanjiNumber(mlMatch[1]);
+  }
 
   const textWithoutTimeExpressions = text
     .replace(/\d{1,2}\s*(?:\u6642|:|\uff1a)\s*\d{0,2}\s*(?:\u5206)?/g, " ")
     .replace(/\d{1,3}\s*(?:\u5206\u524d)/g, " ")
-    .replace(/\d{1,2}\s*(?:\u6642\u9593\u524d)/g, " ");
+    .replace(/\d{1,2}\s*(?:\u6642\u9593\u524d)/g, " ")
+    .replace(new RegExp(`[${kanjiNumberPattern}]+\\s*\\u6642\\s*[${kanjiNumberPattern}]*\\s*(?:\\u5206)?`, "g"), " ")
+    .replace(new RegExp(`[${kanjiNumberPattern}]+\\s*(?:\\u5206\\u524d|\\u6642\\u9593\\u524d)`, "g"), " ");
 
   const numberMatch = textWithoutTimeExpressions.match(/\d{1,4}/);
-  return numberMatch ? Number(numberMatch[0]) : null;
+  if (numberMatch) return Number(numberMatch[0]);
+
+  const kanjiNumberMatch = textWithoutTimeExpressions.match(new RegExp(`[${kanjiNumberPattern}]+`));
+  return kanjiNumberMatch ? parseKanjiNumber(kanjiNumberMatch[0]) : null;
 };
 
 const detectDiaperKind = (text: string): DiaperKind => {
