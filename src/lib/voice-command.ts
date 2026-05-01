@@ -74,10 +74,15 @@ const detectBabyId = (text: string, babyNames: VoiceCommandBabyNames = {}): Baby
 };
 
 const detectMilkAmount = (text: string) => {
-  const mlMatch = text.match(/(\d{1,4})\s*(?:ml|ミリ|みり)/);
+  const mlMatch = text.match(/(\d{1,4})\s*(?:ml|\u30df\u30ea|\u307f\u308a)/);
   if (mlMatch) return Number(mlMatch[1]);
 
-  const numberMatch = text.match(/\d{1,4}/);
+  const textWithoutTimeExpressions = text
+    .replace(/\d{1,2}\s*(?:\u6642|:|\uff1a)\s*\d{0,2}\s*(?:\u5206)?/g, " ")
+    .replace(/\d{1,3}\s*(?:\u5206\u524d)/g, " ")
+    .replace(/\d{1,2}\s*(?:\u6642\u9593\u524d)/g, " ");
+
+  const numberMatch = textWithoutTimeExpressions.match(/\d{1,4}/);
   return numberMatch ? Number(numberMatch[0]) : null;
 };
 

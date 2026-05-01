@@ -177,6 +177,44 @@ describe("parseVoiceCommand", () => {
     });
   });
 
+  it("does not treat an absolute time as a milk amount", () => {
+    const now = new Date("2026-04-27T16:00:00+09:00");
+    const result = parseVoiceCommand("A milk 20:30", {
+      babyNames: {},
+      defaultMilkMlByBaby: { A: 90 },
+      now,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 90,
+      },
+    });
+    expect(result.ok && result.command.timestamp).toBe(new Date("2026-04-27T20:30:00+09:00").getTime());
+  });
+
+  it("does not treat a Japanese absolute time as a milk amount", () => {
+    const now = new Date("2026-04-27T16:00:00+09:00");
+    const result = parseVoiceCommand("A milk 20\u664230\u5206", {
+      babyNames: {},
+      defaultMilkMlByBaby: { A: 90 },
+      now,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 90,
+      },
+    });
+    expect(result.ok && result.command.timestamp).toBe(new Date("2026-04-27T20:30:00+09:00").getTime());
+  });
+
   it("uses each baby's previous milk amount when no baby name or amount is spoken", () => {
     expect(
       parseVoiceCommand("ミルク", {
