@@ -24,6 +24,7 @@ import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/Voice
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
+import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import {
@@ -730,6 +731,14 @@ export default function App() {
     return result;
   }, [app.profiles, app.events, now]);
 
+  const milkProgressByBaby = useMemo(() => {
+    const result: Record<BabyId, ReturnType<typeof buildMilkProgressComparison>> = {
+      A: buildMilkProgressComparison({ events: app.events, babyId: "A", targetDate: activeDate, now }),
+      B: buildMilkProgressComparison({ events: app.events, babyId: "B", targetDate: activeDate, now }),
+    };
+    return result;
+  }, [activeDate, app.events, now]);
+
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
 
   const defaultVoiceMilkMlByBaby = useMemo(() => {
@@ -889,6 +898,7 @@ export default function App() {
                 now={now}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
+                milkProgress={milkProgressByBaby.A}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
@@ -911,6 +921,7 @@ export default function App() {
                 now={now}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
+                milkProgress={milkProgressByBaby.B}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}

@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
+import { MilkProgressComparison } from "@/lib/milk-progress";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 
@@ -30,6 +31,7 @@ type BabyPanelProps = {
   now: Date;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
+  milkProgress: MilkProgressComparison | null;
   onOpenHistory: (type: "milk" | "diaper", babyId: BabyId) => void;
   onOpenModal: (
     kind: "milk" | "diaper" | "edit",
@@ -72,6 +74,31 @@ const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
   };
 };
 
+const formatMilkProgressSummary = (progress: MilkProgressComparison | null) => {
+  if (!progress) return null;
+
+  if (progress.status === "no-history") {
+    return {
+      title: `${progress.currentAmount}ml / 平均なし`,
+      detail: "過去7日分の記録がまだありません",
+    };
+  }
+
+  const roundedAverage = Math.round(progress.trailingAverage);
+  const roundedDifference = Math.round(Math.abs(progress.difference));
+  const detail =
+    roundedDifference === 0
+      ? "過去7日平均とほぼ同じ"
+      : progress.difference > 0
+        ? `平均より ${roundedDifference}ml 多め`
+        : `平均より ${roundedDifference}ml 少なめ`;
+
+  return {
+    title: `${progress.currentAmount}ml / 平均${roundedAverage}ml`,
+    detail,
+  };
+};
+
 export function BabyPanel({
   profile,
   events,
@@ -81,6 +108,7 @@ export function BabyPanel({
   now,
   lowStock,
   diaperEstimate,
+  milkProgress,
   onOpenHistory,
   onOpenModal,
   onDeleteEvent,
@@ -168,6 +196,7 @@ export function BabyPanel({
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const purchaseUrl = profile.diaperPurchaseUrl?.trim();
   const diaperEstimateSummary = formatDiaperEstimateSummary(diaperEstimate);
+  const milkProgressSummary = formatMilkProgressSummary(milkProgress);
 
   const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
   const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
@@ -435,9 +464,21 @@ export function BabyPanel({
                 <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
-                  <span className="font-semibold text-muted-foreground">ml</span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
+                    <span className="font-semibold text-muted-foreground">ml</span>
+                  </div>
+                  {milkProgressSummary ? (
+                    <div className="max-w-[58%] rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right">
+                      <p className="truncate text-xs font-semibold leading-tight text-sky-100">
+                        {milkProgressSummary.title}
+                      </p>
+                      <p className="truncate text-[11px] leading-tight text-sky-100/80">
+                        {milkProgressSummary.detail}
+                      </p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
