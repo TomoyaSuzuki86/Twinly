@@ -6,6 +6,7 @@ import {
   ChevronsLeft,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ChevronsRight,
   Check,
   Ruler,
@@ -39,6 +40,8 @@ type BabyPanelProps = {
   ) => void;
   onDeleteEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
+  onOpenDailyReport: () => void;
+  onOpenHealthChart: () => void;
   lastWeight: number | null;
   lastHeight: number | null;
   themeDimmedBgColor: string;
@@ -113,6 +116,8 @@ export function BabyPanel({
   onOpenModal,
   onDeleteEvent,
   onAddEvent,
+  onOpenDailyReport,
+  onOpenHealthChart,
   lastWeight,
   lastHeight,
   themeDimmedBgColor,
@@ -122,6 +127,11 @@ export function BabyPanel({
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [dailyNote, setDailyNote] = useState("");
+  const [healthOpen, setHealthOpen] = useState(false);
+
+  useEffect(() => {
+    setHealthOpen(false);
+  }, [babyId]);
 
   useEffect(() => {
     setWeight(lastWeight ? lastWeight.toFixed(2) : "");
@@ -247,11 +257,11 @@ export function BabyPanel({
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">
             <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span>一言メモ</span>
+              <span>{"\u4e00\u8a00\u30e1\u30e2"}</span>
             </div>
             <Input
               type="text"
-              placeholder="ひとことメモ"
+              placeholder={"\u3072\u3068\u3053\u3068\u30e1\u30e2"}
               value={dailyNote}
               onChange={(e) => setDailyNote(e.target.value)}
               onKeyDown={(e) => {
@@ -259,177 +269,120 @@ export function BabyPanel({
               }}
               className="h-7 flex-1 px-2 text-sm"
             />
-            <Button
-              size="icon"
-              className="h-7 w-7 flex-shrink-0"
-              onClick={handleSaveDailyNote}
-              disabled={!dailyNote.trim()}
-            >
+            <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={handleSaveDailyNote} disabled={!dailyNote.trim()}>
               <Check className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onOpenDailyReport} aria-label="show daily reports">
+              <FileText className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+          <div
+            role="button"
+            tabIndex={0}
+            className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 text-left sm:col-span-2"
+            onClick={() => setHealthOpen((open) => !open)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setHealthOpen((open) => !open);
+              }
+            }}
+            aria-expanded={healthOpen}
+          >
             <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
               <Thermometer className="h-4 w-4" />
-              <span>体温</span>
+              <span>{"\u304b\u3089\u3060\u306e\u8a18\u9332"}</span>
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setTemperature((value) => adjustNumber(value, -0.5, 1))}
-            >
-              <ChevronsLeft className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setTemperature((value) => adjustNumber(value, -0.1, 1))}
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </Button>
-            <Input
-              type="number"
-              placeholder="36.0"
-              value={temperature}
-              onChange={(e) => setTemperature(e.target.value)}
-              className="h-7 w-20 px-1 text-center text-base font-bold"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setTemperature((value) => adjustNumber(value, 0.1, 1))}
-            >
-              <ChevronRight className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setTemperature((value) => adjustNumber(value, 0.5, 1))}
-            >
-              <ChevronsRight className="h-3 w-3" />
-            </Button>
-            <Button
-              size="icon"
-              className="h-7 w-7 flex-shrink-0"
-              onClick={() => handleSaveHealthRecord("temperature")}
-              disabled={!temperature}
-            >
-              <Check className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenHealthChart();
+                }}
+                aria-label="show chart"
+              >
+                <Ruler className="h-4 w-4" />
+              </Button>
+              {healthOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
-            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
-              <Weight className="h-4 w-4" />
-              <span>体重</span>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setWeight((value) => adjustNumber(value, -0.5, 2))}
-            >
-              <ChevronsLeft className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setWeight((value) => adjustNumber(value, -0.1, 2))}
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </Button>
-            <Input
-              type="number"
-              placeholder={lastWeight?.toFixed(2) ?? "0.00"}
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              className="h-7 w-20 px-1 text-center text-base font-bold"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setWeight((value) => adjustNumber(value, 0.1, 2))}
-            >
-              <ChevronRight className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setWeight((value) => adjustNumber(value, 0.5, 2))}
-            >
-              <ChevronsRight className="h-3 w-3" />
-            </Button>
-            <Button
-              size="icon"
-              className="h-7 w-7 flex-shrink-0"
-              onClick={() => handleSaveHealthRecord("weight")}
-              disabled={!weight}
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-          </div>
+          {healthOpen ? (
+            <>
+              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+                <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
+                  <Thermometer className="h-4 w-4" />
+                  <span>{"\u4f53\u6e29"}</span>
+                </div>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setTemperature((value) => adjustNumber(value, -0.5, 1))}>
+                  <ChevronsLeft className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setTemperature((value) => adjustNumber(value, -0.1, 1))}>
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+                <Input type="number" placeholder="36.0" value={temperature} onChange={(e) => setTemperature(e.target.value)} className="h-7 w-20 px-1 text-center text-base font-bold" />
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setTemperature((value) => adjustNumber(value, 0.1, 1))}>
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setTemperature((value) => adjustNumber(value, 0.5, 1))}>
+                  <ChevronsRight className="h-3 w-3" />
+                </Button>
+                <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => handleSaveHealthRecord("temperature")} disabled={!temperature}>
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
 
-          <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
-            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
-              <Ruler className="h-4 w-4" />
-              <span>身長</span>
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setHeight((value) => adjustNumber(value, -0.5, 1))}
-            >
-              <ChevronsLeft className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setHeight((value) => adjustNumber(value, -0.1, 1))}
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </Button>
-            <Input
-              type="number"
-              placeholder={lastHeight?.toFixed(1) ?? "0.0"}
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-              className="h-7 w-20 px-1 text-center text-base font-bold"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setHeight((value) => adjustNumber(value, 0.1, 1))}
-            >
-              <ChevronRight className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-10"
-              onClick={() => setHeight((value) => adjustNumber(value, 0.5, 1))}
-            >
-              <ChevronsRight className="h-3 w-3" />
-            </Button>
-            <Button
-              size="icon"
-              className="h-7 w-7 flex-shrink-0"
-              onClick={() => handleSaveHealthRecord("height")}
-              disabled={!height}
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-          </div>
+              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+                <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
+                  <Weight className="h-4 w-4" />
+                  <span>{"\u4f53\u91cd"}</span>
+                </div>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setWeight((value) => adjustNumber(value, -0.5, 2))}>
+                  <ChevronsLeft className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setWeight((value) => adjustNumber(value, -0.1, 2))}>
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+                <Input type="number" placeholder={lastWeight?.toFixed(2) ?? "0.00"} value={weight} onChange={(e) => setWeight(e.target.value)} className="h-7 w-20 px-1 text-center text-base font-bold" />
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setWeight((value) => adjustNumber(value, 0.1, 2))}>
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setWeight((value) => adjustNumber(value, 0.5, 2))}>
+                  <ChevronsRight className="h-3 w-3" />
+                </Button>
+                <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => handleSaveHealthRecord("weight")} disabled={!weight}>
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+                <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
+                  <Ruler className="h-4 w-4" />
+                  <span>{"\u8eab\u9577"}</span>
+                </div>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setHeight((value) => adjustNumber(value, -0.5, 1))}>
+                  <ChevronsLeft className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setHeight((value) => adjustNumber(value, -0.1, 1))}>
+                  <ChevronLeft className="h-3 w-3" />
+                </Button>
+                <Input type="number" placeholder={lastHeight?.toFixed(1) ?? "0.0"} value={height} onChange={(e) => setHeight(e.target.value)} className="h-7 w-20 px-1 text-center text-base font-bold" />
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setHeight((value) => adjustNumber(value, 0.1, 1))}>
+                  <ChevronRight className="h-3 w-3" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-10" onClick={() => setHeight((value) => adjustNumber(value, 0.5, 1))}>
+                  <ChevronsRight className="h-3 w-3" />
+                </Button>
+                <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => handleSaveHealthRecord("height")} disabled={!height}>
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
+            </>
+          ) : null}
         </div>
       </CardContent>
 

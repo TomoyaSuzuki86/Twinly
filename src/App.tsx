@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, FileText, LineChart, Settings, Undo2 } from "lucide-react";
+import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, Settings, Undo2 } from "lucide-react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
 import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
@@ -849,12 +849,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={() => setDailyReportModalOpen(true)} aria-label="show daily reports">
-                <FileText className="h-5 w-5" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setChartModalOpen(true)} aria-label="show chart">
-                <LineChart className="h-5 w-5" />
-              </Button>
               <VoiceCommandButton
                 ref={voiceButtonRef}
                 babyNames={voiceCommandBabyNames}
@@ -903,6 +897,8 @@ export default function App() {
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
+                onOpenDailyReport={() => setDailyReportModalOpen(true)}
+                onOpenHealthChart={() => setChartModalOpen(true)}
                 lastWeight={lastWeights.A}
                 lastHeight={lastHeights.A}
                 themeDimmedBgColor={
@@ -926,6 +922,8 @@ export default function App() {
                 onOpenModal={handleOpenModal}
                 onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
+                onOpenDailyReport={() => setDailyReportModalOpen(true)}
+                onOpenHealthChart={() => setChartModalOpen(true)}
                 lastWeight={lastWeights.B}
                 lastHeight={lastHeights.B}
                 themeDimmedBgColor={
