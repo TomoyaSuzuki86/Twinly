@@ -145,8 +145,8 @@ export function BabyPanel({
     setDailyNote("");
   };
 
-  const milkEvents = events.filter((event) => event.type === "milk");
-  const diaperEvents = events.filter((event) => event.type === "diaper");
+  const milkEvents = logEvents.filter((event) => event.type === "milk");
+  const diaperEvents = logEvents.filter((event) => event.type === "diaper");
   const milkTotal = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
   const bottleMilkTotal = milkEvents.reduce(
     (sum, event) => sum + (event.milkMethod === "bottle" ? event.milkMl ?? 0 : 0),
@@ -419,7 +419,10 @@ export function BabyPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-grow space-y-4">
+      <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
+        <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
+        {logDateControls}
+      <CardContent className="w-full flex-grow space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <button
             type="button"
@@ -493,9 +496,7 @@ export function BabyPanel({
         </div>
       </CardContent>
 
-      <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
-        {logDateControls}
+
         <div className="flex max-h-[42vh] w-full flex-col gap-3 overflow-y-auto pr-1">
           {logEvents.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
