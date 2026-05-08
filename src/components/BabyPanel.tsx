@@ -408,22 +408,22 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <button
             type="button"
-            className="text-left"
+            className="min-w-0 text-left"
             onClick={() => onOpenHistory("milk", babyId)}
             aria-label={`${profile.displayName}のミルク履歴を開く`}
           >
-            <Card className="transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
+            <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-4">
                 <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
                     <span className="font-semibold text-muted-foreground">ml</span>
                   </div>
                   {milkProgressSummary ? (
-                    <div className="max-w-[58%] rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right">
+                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[420px]:block">
                       <p className="truncate text-xs font-semibold leading-tight text-sky-100">
                         {milkProgressSummary.title}
                       </p>
@@ -449,22 +449,22 @@ export function BabyPanel({
 
           <button
             type="button"
-            className="text-left"
+            className="min-w-0 text-left"
             onClick={() => onOpenHistory("diaper", babyId)}
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
-            <Card className="transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
+            <Card className="min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
               <CardHeader className="p-4">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
                     <span className="font-semibold text-muted-foreground">回</span>
                   </div>
                   {diaperEstimateSummary ? (
-                    <div className="max-w-[58%] rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right">
+                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right min-[420px]:block">
                       <p className="truncate text-xs font-semibold leading-tight text-amber-100">
                         {diaperEstimateSummary.title}
                       </p>
