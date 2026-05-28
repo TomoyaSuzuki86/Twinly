@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -23,6 +24,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -40,15 +44,28 @@ private const val LATEST_MILK_DATA_PATH = "/latest_milk_elapsed"
 private const val TWINLY_URL = "https://twinly-prod.web.app"
 private const val NOTIFICATION_CHANNEL_ID = "milk-reminders"
 private const val MILK_REMINDER_MINUTES = 60
+private const val GOOGLE_WEB_CLIENT_ID = "557885702942-6h3fs7om09vddamhd0ohgb51ietnjqnd.apps.googleusercontent.com"
+private const val GOOGLE_SIGN_IN_REQUEST_CODE = 8601
 
 class MainActivity : ComponentActivity() {
+    private lateinit var webView: WebView
+    private val googleSignInClient by lazy {
+        GoogleSignIn.getClient(
+            this,
+            GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(GOOGLE_WEB_CLIENT_ID)
+                .requestEmail()
+                .build(),
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         createNotificationChannel(this)
         requestNotificationPermissionIfNeeded()
 
-        val webView = WebView(this).apply {
+        webView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -58,11 +75,38 @@ class MainActivity : ComponentActivity() {
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            addJavascriptInterface(TwinlyAndroidBridge(this@MainActivity), "TwinlyAndroid")
+            addJavascriptInterface(TwinlyAndroidBridge(this@MainActivity, this@MainActivity), "TwinlyAndroid")
             loadUrl(TWINLY_URL)
         }
 
         setContentView(webView)
+    }
+
+    fun signInWithGoogle() {
+        googleSignInClient.signOut().addOnCompleteListener {
+            startActivityForResult(googleSignInClient.signInIntent, GOOGLE_SIGN_IN_REQUEST_CODE)
+        }
+    }
+
+    @Deprecated("Deprecated by Android, but sufficient for this simple Google sign-in handoff.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != GOOGLE_SIGN_IN_REQUEST_CODE) return
+
+        val idToken = runCatching {
+            GoogleSignIn.getSignedInAccountFromIntent(data)
+                .getResult(ApiException::class.java)
+                .idToken
+        }.getOrNull()
+
+        if (idToken.isNullOrBlank()) return
+        val escapedToken = idToken.replace("\\", "\\\\").replace("'", "\\'")
+        webView.post {
+            webView.evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('twinlyAndroidGoogleIdToken',{detail:{idToken:'$escapedToken'}}));",
+                null,
+            )
+        }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -73,7 +117,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-class TwinlyAndroidBridge(private val context: Context) {
+class TwinlyAndroidBridge(
+    private val context: Context,
+    private val activity: MainActivity,
+) {
     @JavascriptInterface
     fun saveWearToken(token: String) {
         val normalizedToken = token.replace(Regex("[^a-zA-Z0-9]"), "").uppercase()
@@ -83,6 +130,11 @@ class TwinlyAndroidBridge(private val context: Context) {
             .putString(TOKEN_KEY, normalizedToken)
             .apply()
         schedulePeriodicMilkSync(context)
+    }
+
+    @JavascriptInterface
+    fun signInWithGoogle() {
+        activity.runOnUiThread { activity.signInWithGoogle() }
     }
 }
 

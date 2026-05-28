@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, Settings, Undo2 } from "lucide-react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, User } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut, User } from "firebase/auth";
 import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
@@ -42,6 +42,7 @@ declare global {
   interface Window {
     TwinlyAndroid?: {
       saveWearToken?: (token: string) => void;
+      signInWithGoogle?: () => void;
     };
   }
 }
@@ -638,6 +639,10 @@ export default function App() {
 
   const handleSignIn = async () => {
     if (!auth) return;
+    if (window.TwinlyAndroid?.signInWithGoogle) {
+      window.TwinlyAndroid.signInWithGoogle();
+      return;
+    }
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
@@ -686,6 +691,24 @@ export default function App() {
       setPushBusy(false);
     }
   };
+
+  useEffect(() => {
+    const handleAndroidGoogleToken = async (event: Event) => {
+      if (!auth) return;
+      const idToken = (event as CustomEvent<{ idToken?: string }>).detail?.idToken;
+      if (!idToken) return;
+      try {
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+      } catch (error) {
+        console.error(error);
+        alert("Googleログインに失敗しました");
+      }
+    };
+
+    window.addEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
+    return () => window.removeEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
+  }, []);
 
   const handleCreateWearPairingToken = async () => {
     if (!authUser || !db) return;
