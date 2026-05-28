@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
@@ -13,10 +14,14 @@ import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -46,6 +51,7 @@ private const val NOTIFICATION_CHANNEL_ID = "milk-reminders"
 private const val MILK_REMINDER_MINUTES = 60
 private const val GOOGLE_WEB_CLIENT_ID = "557885702942-6h3fs7om09vddamhd0ohgb51ietnjqnd.apps.googleusercontent.com"
 private const val GOOGLE_SIGN_IN_REQUEST_CODE = 8601
+private const val WEBVIEW_TEXT_ZOOM_PERCENT = 92
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -62,6 +68,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
         createNotificationChannel(this)
         requestNotificationPermissionIfNeeded()
 
@@ -75,11 +84,22 @@ class MainActivity : ComponentActivity() {
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
+            settings.textZoom = WEBVIEW_TEXT_ZOOM_PERCENT
             addJavascriptInterface(TwinlyAndroidBridge(this@MainActivity, this@MainActivity), "TwinlyAndroid")
             loadUrl(TWINLY_URL)
         }
 
-        setContentView(webView)
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.rgb(5, 8, 22))
+            addView(webView)
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(0, bars.top, 0, bars.bottom)
+            insets
+        }
+
+        setContentView(root)
     }
 
     fun signInWithGoogle() {
