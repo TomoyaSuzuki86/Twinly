@@ -145,10 +145,10 @@ const detectMilkAmount = (text) => {
   return kanjiNumberMatch ? parseKanjiNumber(kanjiNumberMatch[0]) : null;
 };
 
-const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now = new Date() }) => {
+const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, forcedBabyId, now = new Date() }) => {
   const normalizedText = normalizeVoiceText(text);
   const babies = ["A", "B"];
-  const babyId = babies.find((id) => {
+  const babyId = forcedBabyId || babies.find((id) => {
     const profile = profiles?.[id] || {};
     const names = [
       profile.displayName,
@@ -205,7 +205,7 @@ const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now
   return null;
 };
 
-const parseVoiceTextWithGemini = async ({ text, profiles, defaultMilkMlByBaby = {}, now = new Date() }) => {
+const parseVoiceTextWithGemini = async ({ text, profiles, defaultMilkMlByBaby = {}, forcedBabyId, now = new Date() }) => {
   if (!geminiApiKey) return null;
 
   const babies = ["A", "B"].map((id) => ({
@@ -216,6 +216,9 @@ const parseVoiceTextWithGemini = async ({ text, profiles, defaultMilkMlByBaby = 
   const prompt = [
     "You extract baby care log events from Japanese voice transcripts.",
     "Return JSON only. No markdown.",
+    forcedBabyId
+      ? `The baby is already selected by the watch shortcut. You must set babyId to "${forcedBabyId}" even if the transcript names another baby.`
+      : "No baby is preselected by the watch shortcut.",
     "If the transcript does not identify a baby, set babyId to \"both\".",
     "If milk amount is missing, use the latest amount for that baby. If babyId is both, use milkMlByBaby.",
     "Schema: {\"babyId\":\"A|B|both\",\"type\":\"milk|diaper\",\"timestamp\":number|null,\"milkMl\":number|null,\"milkMlByBaby\":{\"A\":number|null,\"B\":number|null}|null,\"milkMethod\":\"bottle|breast|null\",\"diaperKind\":\"pee|poop|mix|null\"}",
@@ -252,7 +255,7 @@ const parseVoiceTextWithGemini = async ({ text, profiles, defaultMilkMlByBaby = 
     const parsed = JSON.parse(rawText);
     if (!["A", "B", "both"].includes(parsed.babyId)) return null;
     if (!["milk", "diaper"].includes(parsed.type)) return null;
-    const babyId = parsed.babyId;
+    const babyId = forcedBabyId || parsed.babyId;
     const milkMlByBaby =
       parsed.milkMlByBaby ||
       (babyId === "both" && typeof parsed.milkMl !== "number"
@@ -620,6 +623,7 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
 
   const token = req.body?.token;
   const transcript = String(req.body?.text || "").trim();
+  const forcedBabyId = ["A", "B"].includes(req.body?.forcedBabyId) ? req.body.forcedBabyId : undefined;
   if (!token || !transcript) {
     res.status(400).json({ ok: false, error: "missing_token_or_text" });
     return;
@@ -641,8 +645,8 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
     const defaultMilkMlByBaby = getDefaultMilkMlByBaby(appState?.events);
     const now = new Date();
     const parsed =
-      parseVoiceTextWithRules({ text: transcript, profiles, defaultMilkMlByBaby, now }) ||
-      (await parseVoiceTextWithGemini({ text: transcript, profiles, defaultMilkMlByBaby, now }));
+      parseVoiceTextWithRules({ text: transcript, profiles, defaultMilkMlByBaby, forcedBabyId, now }) ||
+      (await parseVoiceTextWithGemini({ text: transcript, profiles, defaultMilkMlByBaby, forcedBabyId, now }));
 
     if (!parsed) {
       res.status(422).json({ ok: false, error: "could_not_parse" });

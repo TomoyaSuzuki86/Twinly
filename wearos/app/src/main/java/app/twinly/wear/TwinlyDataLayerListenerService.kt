@@ -16,10 +16,16 @@ class TwinlyDataLayerListenerService : WearableListenerService() {
         if (!hasLatestMilkUpdate) return
 
         runCatching {
-            ComplicationDataSourceUpdateRequester.create(
-                this,
-                ComponentName(this, TwinlyVoiceComplicationService::class.java),
-            ).requestUpdateAll()
+            listOf(
+                TwinlyVoiceComplicationService::class.java,
+                TwinlyVoiceAComplicationService::class.java,
+                TwinlyVoiceBComplicationService::class.java,
+            ).forEach { serviceClass ->
+                ComplicationDataSourceUpdateRequester.create(
+                    this,
+                    ComponentName(this, serviceClass),
+                ).requestUpdateAll()
+            }
         }
     }
 }

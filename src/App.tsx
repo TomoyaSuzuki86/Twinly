@@ -38,6 +38,14 @@ import {
   unsubscribeFromPushNotifications,
 } from "./lib/web-push";
 
+declare global {
+  interface Window {
+    TwinlyAndroid?: {
+      saveWearToken?: (token: string) => void;
+    };
+  }
+}
+
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
@@ -700,6 +708,7 @@ export default function App() {
           { merge: true }
         ),
       ]);
+      window.TwinlyAndroid?.saveWearToken?.(token);
       setWearPairingToken(token);
     } catch (error) {
       console.error("Failed to create Wear OS pairing token", error);

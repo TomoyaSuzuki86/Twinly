@@ -27,7 +27,9 @@ private const val CACHED_TEXT_KEY = "cached-milk-text"
 private const val LATEST_MILK_URL = "https://asia-northeast1-twinly-prod.cloudfunctions.net/latestMilkElapsedFromWear"
 private const val LATEST_MILK_DATA_PATH = "/latest_milk_elapsed"
 
-class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService() {
+open class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService() {
+    protected open val forcedBabyId: String? = null
+
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.SHORT_TEXT) return null
         val latestMilk = fetchLatestMilkFromDataLayer()
@@ -38,27 +40,28 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? {
         if (type != ComplicationType.SHORT_TEXT) return null
-        return buildVoiceShortcutData(
-            MilkElapsedText(
+        val preview = buildMilkElapsedText(elapsedA = 45, elapsedB = 182, targetBabyId = forcedBabyId)
+            ?: MilkElapsedText(
                 textLine = "A:45m",
                 titleLine = "B:182m",
                 contentDescription = "Twinly A 45 minutes, B 182 minutes since milk",
             )
-        )
+        return buildVoiceShortcutData(preview)
     }
 
     private fun buildVoiceShortcutData(latestMilk: MilkElapsedText?): ShortTextComplicationData {
-        val text = PlainComplicationText.Builder(latestMilk?.textLine ?: "Twinly").build()
+        val text = PlainComplicationText.Builder(latestMilk?.textLine ?: forcedBabyId ?: "Twinly").build()
         val description = PlainComplicationText.Builder(
-            latestMilk?.contentDescription ?: "Twinly voice input"
+            latestMilk?.contentDescription ?: forcedBabyId?.let { "Twinly voice input for baby $it" } ?: "Twinly voice input"
         ).build()
         val tapIntent = Intent(this, MainActivity::class.java).apply {
             action = ACTION_START_VOICE
+            forcedBabyId?.let { putExtra(EXTRA_FORCED_BABY_ID, it) }
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         val tapAction = PendingIntent.getActivity(
             this,
-            0,
+            forcedBabyId?.hashCode() ?: 0,
             tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -96,7 +99,7 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
                             ?: dataMap.getInt("elapsedA", -1).takeIf { it >= 0 }
                         val elapsedB = dataMap.getLong("milkAtB", -1).takeIf { it > 0 }?.let { elapsedMinutesSince(it, nowMs) }
                             ?: dataMap.getInt("elapsedB", -1).takeIf { it >= 0 }
-                        buildOrderedMilkElapsedText(elapsedA, elapsedB)
+                        buildMilkElapsedText(elapsedA, elapsedB, forcedBabyId)
                     }
                     .firstOrNull()
             }
@@ -127,11 +130,29 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
             val elapsedByBaby = JSONObject(body).optJSONObject("elapsedByBaby") ?: return@runCatching null
             val elapsedA = elapsedByBaby.optJSONObject("A")?.optInt("elapsedMinutes", -1)?.takeIf { it >= 0 }
             val elapsedB = elapsedByBaby.optJSONObject("B")?.optInt("elapsedMinutes", -1)?.takeIf { it >= 0 }
-            buildOrderedMilkElapsedText(elapsedA, elapsedB)?.also { cacheLatestMilkElapsedText(it) }
+            buildMilkElapsedText(elapsedA, elapsedB, forcedBabyId)?.also { cacheLatestMilkElapsedText(it) }
         }.getOrNull()
     }
 
-    private fun buildOrderedMilkElapsedText(elapsedA: Int?, elapsedB: Int?): MilkElapsedText? {
+    private fun buildMilkElapsedText(elapsedA: Int?, elapsedB: Int?, targetBabyId: String?): MilkElapsedText? {
+        if (targetBabyId == "A") {
+            return elapsedA?.let {
+                MilkElapsedText(
+                    textLine = "A:${it}m",
+                    titleLine = null,
+                    contentDescription = "Twinly A $it minutes since milk",
+                )
+            }
+        }
+        if (targetBabyId == "B") {
+            return elapsedB?.let {
+                MilkElapsedText(
+                    textLine = "B:${it}m",
+                    titleLine = null,
+                    contentDescription = "Twinly B $it minutes since milk",
+                )
+            }
+        }
         if (elapsedA == null && elapsedB == null) return null
 
         val items = listOfNotNull(
@@ -158,7 +179,7 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(
-                CACHED_TEXT_KEY,
+                cacheTextKey(),
                 JSONObject()
                     .put("textLine", latestMilk.textLine)
                     .put("titleLine", latestMilk.titleLine)
@@ -170,7 +191,7 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
 
     private fun getCachedLatestMilkElapsedText(): MilkElapsedText? =
         runCatching {
-            val raw = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(CACHED_TEXT_KEY, "") ?: ""
+            val raw = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(cacheTextKey(), "") ?: ""
             if (raw.isBlank()) return@runCatching null
             val json = JSONObject(raw)
             MilkElapsedText(
@@ -180,9 +201,19 @@ class TwinlyVoiceComplicationService : SuspendingComplicationDataSourceService()
             )
         }.getOrNull()
 
+    private fun cacheTextKey(): String = forcedBabyId?.let { "$CACHED_TEXT_KEY-$it" } ?: CACHED_TEXT_KEY
+
     companion object {
         const val ACTION_START_VOICE = "app.twinly.wear.action.START_VOICE"
     }
+}
+
+class TwinlyVoiceAComplicationService : TwinlyVoiceComplicationService() {
+    override val forcedBabyId: String = "A"
+}
+
+class TwinlyVoiceBComplicationService : TwinlyVoiceComplicationService() {
+    override val forcedBabyId: String = "B"
 }
 
 data class MilkElapsedText(

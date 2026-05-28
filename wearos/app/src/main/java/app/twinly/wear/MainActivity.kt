@@ -68,6 +68,7 @@ private const val TOKEN_KEY = "pairing-token"
 private const val RECORD_URL = "https://asia-northeast1-twinly-prod.cloudfunctions.net/recordFromWear"
 private const val UNDO_URL = "https://asia-northeast1-twinly-prod.cloudfunctions.net/undoWearRecord"
 private const val FINAL_RESULT_FALLBACK_MS = 1_200L
+const val EXTRA_FORCED_BABY_ID = "app.twinly.wear.extra.FORCED_BABY_ID"
 
 data class WearPostResult(
     val ok: Boolean,
@@ -78,14 +79,15 @@ data class WearPostResult(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val forcedBabyId = intent.getStringExtra(EXTRA_FORCED_BABY_ID)?.takeIf { it == "A" || it == "B" }
         setContent {
-            TwinlyWearApp()
+            TwinlyWearApp(initialForcedBabyId = forcedBabyId)
         }
     }
 }
 
 @Composable
-fun TwinlyWearApp() {
+fun TwinlyWearApp(initialForcedBabyId: String? = null) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
@@ -130,7 +132,7 @@ fun TwinlyWearApp() {
         lastTranscriptSaved = false
         transientMessage = ""
         scope.launch {
-            val result = postRecord(token, cleanTranscript)
+            val result = postRecord(token, cleanTranscript, initialForcedBabyId)
             lastTranscript = cleanTranscript
             if (result.ok) {
                 lastEventIds = result.eventIds
@@ -259,11 +261,19 @@ fun TwinlyWearApp() {
                     ),
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_complication_voice),
-                        contentDescription = "音声入力",
-                        modifier = Modifier.size(34.dp),
-                    )
+                    if (initialForcedBabyId != null) {
+                        Text(
+                            text = initialForcedBabyId,
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineMedium,
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_complication_voice),
+                            contentDescription = "音声入力",
+                            modifier = Modifier.size(34.dp),
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -353,8 +363,13 @@ fun TwinlyWearApp() {
     }
 }
 
-private suspend fun postRecord(token: String, transcript: String): WearPostResult = withContext(Dispatchers.IO) {
-    val response = postJson(RECORD_URL, """{"token":"${escapeJson(token)}","text":"${escapeJson(transcript)}"}""")
+private suspend fun postRecord(token: String, transcript: String, forcedBabyId: String? = null): WearPostResult = withContext(Dispatchers.IO) {
+    val body = JSONObject()
+        .put("token", token)
+        .put("text", transcript)
+        .apply { forcedBabyId?.let { put("forcedBabyId", it) } }
+        .toString()
+    val response = postJson(RECORD_URL, body)
     val eventIds = if (response.code in 200..299) {
         runCatching {
             val events = JSONObject(response.body).optJSONArray("events")
@@ -393,6 +408,14 @@ private fun requestComplicationRefresh(context: Context) {
         ComplicationDataSourceUpdateRequester.create(
             context,
             ComponentName(context, TwinlyVoiceComplicationService::class.java),
+        ).requestUpdateAll()
+        ComplicationDataSourceUpdateRequester.create(
+            context,
+            ComponentName(context, TwinlyVoiceAComplicationService::class.java),
+        ).requestUpdateAll()
+        ComplicationDataSourceUpdateRequester.create(
+            context,
+            ComponentName(context, TwinlyVoiceBComplicationService::class.java),
         ).requestUpdateAll()
     }
 }

@@ -1,36 +1,21 @@
 package app.twinly.companion
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -39,7 +24,6 @@ import androidx.work.WorkerParameters
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -53,95 +37,52 @@ private const val TOKEN_KEY = "pairing-token"
 private const val PERIODIC_SYNC_WORK_NAME = "latest-milk-to-watch"
 private const val LATEST_MILK_URL = "https://asia-northeast1-twinly-prod.cloudfunctions.net/latestMilkElapsedFromWear"
 private const val LATEST_MILK_DATA_PATH = "/latest_milk_elapsed"
+private const val TWINLY_URL = "https://twinly-prod.web.app"
+private const val NOTIFICATION_CHANNEL_ID = "milk-reminders"
+private const val MILK_REMINDER_MINUTES = 60
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            TwinlyCompanionApp()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        createNotificationChannel(this)
+        requestNotificationPermissionIfNeeded()
+
+        val webView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+            webViewClient = WebViewClient()
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.databaseEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            addJavascriptInterface(TwinlyAndroidBridge(this@MainActivity), "TwinlyAndroid")
+            loadUrl(TWINLY_URL)
         }
+
+        setContentView(webView)
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < 33) return
+        val hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!hasPermission) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
     }
 }
 
-@Composable
-fun TwinlyCompanionApp() {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
-    val scope = rememberCoroutineScope()
-    var token by remember { mutableStateOf(prefs.getString(TOKEN_KEY, "") ?: "") }
-    var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Enter the Watch link key, then sync.") }
-    var lastText by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        if (token.isNotBlank()) schedulePeriodicMilkSync(context)
-    }
-
-    MaterialTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFF8FAFC))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = "Twinly Companion",
-                color = Color(0xFF0F172A),
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = status,
-                color = Color(0xFF475569),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            if (lastText.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = lastText,
-                    color = Color(0xFF0369A1),
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-            Spacer(modifier = Modifier.height(22.dp))
-            OutlinedTextField(
-                value = token,
-                onValueChange = {
-                    token = it.uppercase()
-                    prefs.edit().putString(TOKEN_KEY, token).apply()
-                },
-                label = { Text("Watch link key") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    if (token.isBlank()) {
-                        status = "Enter the Watch link key."
-                        return@Button
-                    }
-                    busy = true
-                    status = "Syncing..."
-                    scope.launch {
-                        val result = syncLatestMilkElapsed(context, token)
-                        busy = false
-                        status = result.message
-                        lastText = result.displayText
-                        if (result.ok) schedulePeriodicMilkSync(context)
-                    }
-                },
-                enabled = !busy,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(if (busy) "Syncing" else "Sync to Watch")
-            }
-        }
+class TwinlyAndroidBridge(private val context: Context) {
+    @JavascriptInterface
+    fun saveWearToken(token: String) {
+        val normalizedToken = token.replace(Regex("[^a-zA-Z0-9]"), "").uppercase()
+        if (normalizedToken.isBlank()) return
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(TOKEN_KEY, normalizedToken)
+            .apply()
+        schedulePeriodicMilkSync(context)
     }
 }
 
@@ -179,9 +120,7 @@ data class SyncResult(
 private suspend fun syncLatestMilkElapsed(context: Context, token: String): SyncResult = withContext(Dispatchers.IO) {
     runCatching {
         val latestMilk = fetchLatestMilkElapsed(token)
-        if (latestMilk == null) {
-            return@runCatching SyncResult(false, "Could not fetch latest milk times.")
-        }
+            ?: return@runCatching SyncResult(false, "Could not fetch latest milk times.")
 
         val request = PutDataMapRequest.create(LATEST_MILK_DATA_PATH).apply {
             dataMap.putLong("milkAtA", latestMilk.milkAtA)
@@ -190,6 +129,7 @@ private suspend fun syncLatestMilkElapsed(context: Context, token: String): Sync
         }.asPutDataRequest().setUrgent()
 
         Wearable.getDataClient(context).putDataItem(request).await()
+        maybeNotifyMilkReminder(context, latestMilk)
 
         SyncResult(
             ok = true,
@@ -233,4 +173,47 @@ private fun fetchLatestMilkElapsed(token: String): LatestMilkElapsed? {
     val elapsedB = itemB.optInt("elapsedMinutes", -1).takeIf { it >= 0 } ?: return null
 
     return LatestMilkElapsed(milkAtA, milkAtB, elapsedA, elapsedB)
+}
+
+private fun createNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT < 26) return
+    val manager = context.getSystemService(NotificationManager::class.java)
+    val channel = NotificationChannel(
+        NOTIFICATION_CHANNEL_ID,
+        "Milk reminders",
+        NotificationManager.IMPORTANCE_DEFAULT,
+    )
+    manager.createNotificationChannel(channel)
+}
+
+private fun maybeNotifyMilkReminder(context: Context, latestMilk: LatestMilkElapsed) {
+    val reminders = listOf(
+        "A" to latestMilk.elapsedA,
+        "B" to latestMilk.elapsedB,
+    ).filter { (_, elapsedMinutes) -> elapsedMinutes >= MILK_REMINDER_MINUTES }
+
+    if (reminders.isEmpty()) return
+    if (Build.VERSION.SDK_INT >= 33) {
+        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!hasPermission) return
+    }
+
+    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    reminders.forEach { (babyId, elapsedMinutes) ->
+        val bucket = elapsedMinutes / MILK_REMINDER_MINUTES
+        val key = "notified-$babyId-$bucket"
+        if (prefs.getBoolean(key, false)) return@forEach
+
+        val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Twinly ミルク通知")
+            .setContentText("$babyId は ${elapsedMinutes}分ミルクを飲んでいません")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(babyId.hashCode() + bucket, notification)
+        prefs.edit().putBoolean(key, true).apply()
+    }
 }
