@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    namespace = "app.twinly.wear"
+    namespace = "app.twinly.companion"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.twinly.wear"
-        minSdk = 30
+        applicationId = "app.twinly.companion"
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
@@ -45,7 +45,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
-    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
 }

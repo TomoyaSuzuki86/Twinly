@@ -6,7 +6,20 @@ TwinlyのPixel Watch連携は、次の流れで動かします。
 2. `wearos/` をAndroid Studioで開いてPixel Watchへインストールする
 3. Watchアプリ初回起動時に連携キーを入力する
 4. 以後は「OK Google, Twinlyを開いて」でTwinly Wearを起動する
-5. アプリ起動後に音声入力され、Functionsの`recordFromWear`へ送信される
+5. 時計文字盤のショートカット枠を編集し、「Twinly 音声入力」を選ぶ
+6. アプリ起動後、またはショートカットをタップ後に音声入力され、Functionsの`recordFromWear`へ送信される
+
+## Pixel Watchのショートカット設定
+
+Pixel Watchの文字盤で、3つまたは4つ並ぶショートカット枠はWear OSの「Complication」です。
+Twinly Wearをインストールすると、文字盤のショートカット候補に「Twinly 音声入力」が出ます。
+
+1. Pixel Watchの文字盤を長押し
+2. カスタマイズを開く
+3. ショートカット枠を選ぶ
+4. 一覧から「Twinly 音声入力」を選ぶ
+
+選んだ枠をタップするとTwinly Wearが開き、連携キーが保存済みならすぐ音声入力を開始します。
 
 ## 音声例
 

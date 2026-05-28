@@ -20,6 +20,38 @@ export type VoiceCommand =
       diaperKind: DiaperKind;
       timestamp: number;
       note: string;
+    }
+  | {
+      kind: "event";
+      babyId: BabyId;
+      type: "daily";
+      dailyNote: string;
+      timestamp: number;
+      note: string;
+    }
+  | {
+      kind: "event";
+      babyId: BabyId;
+      type: "temperature";
+      temperature: number;
+      timestamp: number;
+      note: string;
+    }
+  | {
+      kind: "event";
+      babyId: BabyId;
+      type: "weight";
+      weight: number;
+      timestamp: number;
+      note: string;
+    }
+  | {
+      kind: "event";
+      babyId: BabyId;
+      type: "height";
+      height: number;
+      timestamp: number;
+      note: string;
     };
 
 export type VoiceCommandParseResult =
@@ -29,13 +61,22 @@ export type VoiceCommandParseResult =
 export type VoiceCommandParseOptions = {
   babyNames?: VoiceCommandBabyNames;
   defaultMilkMlByBaby?: Partial<Record<BabyId, number>>;
+  forcedBabyId?: BabyId;
   now?: Date;
 };
 
 const toAsciiDigits = (value: string) => value.replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xff10));
 
+const speechTextReplacements: Array<[RegExp, string]> = [
+  [/彼方|奏汰|奏太|奏多|金田|加奈多/g, "かなた"],
+  [/日向|日なた/g, "ひなた"],
+];
+
+const normalizeKnownSpeechText = (text: string) =>
+  speechTextReplacements.reduce((normalized, [pattern, replacement]) => normalized.replace(pattern, replacement), text);
+
 const normalizeText = (text: string) =>
-  toAsciiDigits(text)
+  normalizeKnownSpeechText(toAsciiDigits(text))
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[、。,.]/g, " ")
@@ -145,6 +186,25 @@ const detectDiaperKind = (text: string): DiaperKind => {
   return "pee";
 };
 
+const detectDecimalNumber = (text: string) => {
+  const decimalMatch = text.match(/\d+(?:\.\d+)?/);
+  return decimalMatch ? Number(decimalMatch[0]) : null;
+};
+
+const detectTemperature = (text: string) => {
+  const degreeMatch = text.match(/(\d{2})\s*度\s*(\d)?/);
+  if (degreeMatch) {
+    return Number(`${degreeMatch[1]}.${degreeMatch[2] ?? 0}`);
+  }
+
+  return detectDecimalNumber(text);
+};
+
+const detectDailyNote = (originalText: string) => {
+  const match = originalText.match(/(?:ひとこと|一言|めも|メモ)(?:は|を|:|：)?\s*(.+)$/i);
+  return match?.[1]?.trim() || originalText.trim();
+};
+
 const detectTimestamp = (text: string, now: Date) => {
   const minuteAgoMatch = text.match(/(\d{1,3})\s*分前/);
   if (minuteAgoMatch) {
@@ -185,16 +245,23 @@ export const parseVoiceCommand = (
   legacyNow?: Date
 ): VoiceCommandParseResult => {
   const options: VoiceCommandParseOptions =
-    "babyNames" in babyNamesOrOptions || "defaultMilkMlByBaby" in babyNamesOrOptions || "now" in babyNamesOrOptions
+    "babyNames" in babyNamesOrOptions ||
+    "defaultMilkMlByBaby" in babyNamesOrOptions ||
+    "forcedBabyId" in babyNamesOrOptions ||
+    "now" in babyNamesOrOptions
       ? babyNamesOrOptions
       : { babyNames: babyNamesOrOptions, now: legacyNow };
   const babyNames = options.babyNames ?? {};
   const now = options.now ?? new Date();
   const normalizedText = normalizeText(text);
-  const babyId = detectBabyId(normalizedText, babyNames);
+  const babyId = options.forcedBabyId ?? detectBabyId(normalizedText, babyNames);
   const timestamp = detectTimestamp(normalizedText, now) ?? now.getTime();
   const targetBabyId: VoiceCommandTarget = babyId ?? "both";
 
+  const isDailyNote = includesAny(normalizedText, ["ひとこと", "一言", "めも", "メモ"]);
+  const isTemperature = includesAny(normalizedText, ["体温", "熱"]);
+  const isWeight = includesAny(normalizedText, ["体重"]);
+  const isHeight = includesAny(normalizedText, ["身長", "慎重"]);
   const isMilk = includesAny(normalizedText, ["ミルク", "授乳", "母乳", "哺乳", "milk"]);
   const isDiaper = includesAny(normalizedText, [
     "おむつ",
@@ -211,6 +278,76 @@ export const parseVoiceCommand = (
     "pee",
     "poop",
   ]);
+
+  if (isDailyNote) {
+    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId,
+        type: "daily",
+        dailyNote: detectDailyNote(text),
+        timestamp,
+        note: `voice: ${text}`,
+      },
+    };
+  }
+
+  if (isTemperature) {
+    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    const temperature = detectTemperature(text);
+    if (!temperature) return { ok: false, reason: "missingType", normalizedText };
+
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId,
+        type: "temperature",
+        temperature,
+        timestamp,
+        note: `voice: ${text}`,
+      },
+    };
+  }
+
+  if (isWeight) {
+    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    const weight = detectDecimalNumber(text);
+    if (!weight) return { ok: false, reason: "missingType", normalizedText };
+
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId,
+        type: "weight",
+        weight,
+        timestamp,
+        note: `voice: ${text}`,
+      },
+    };
+  }
+
+  if (isHeight) {
+    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    const height = detectDecimalNumber(text);
+    if (!height) return { ok: false, reason: "missingType", normalizedText };
+
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId,
+        type: "height",
+        height,
+        timestamp,
+        note: `voice: ${text}`,
+      },
+    };
+  }
 
   if (isMilk) {
     const milkMl = detectMilkAmount(normalizedText);
@@ -262,6 +399,24 @@ export const parseVoiceCommand = (
   return { ok: false, reason: "missingType", normalizedText };
 };
 
+export const selectVoiceCommandFromAlternatives = (
+  transcripts: string[],
+  options: VoiceCommandParseOptions = {}
+): VoiceCommandParseResult => {
+  const uniqueTranscripts = transcripts.map((transcript) => transcript.trim()).filter(Boolean);
+  const parsedResults = [...new Set(uniqueTranscripts)].map((transcript) => parseVoiceCommand(transcript, options));
+
+  const namedMatch = parsedResults.find(
+    (result) => result.ok && result.command.babyId !== "both"
+  );
+  if (namedMatch) return namedMatch;
+
+  const anyMatch = parsedResults.find((result) => result.ok);
+  if (anyMatch) return anyMatch;
+
+  return parsedResults[0] ?? { ok: false, reason: "missingType", normalizedText: "" };
+};
+
 export const expandVoiceCommandTargets = (command: VoiceCommand): Array<VoiceCommand & { babyId: BabyId }> => {
   if (command.babyId !== "both") return [command as VoiceCommand & { babyId: BabyId }];
   return [
@@ -279,6 +434,45 @@ export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): O
       timestamp: command.timestamp,
       milkMl,
       milkMethod: command.milkMethod,
+      note: command.note,
+    };
+  }
+
+  if (command.type === "daily") {
+    return {
+      babyId: command.babyId,
+      type: "daily",
+      timestamp: command.timestamp,
+      note: command.dailyNote,
+    };
+  }
+
+  if (command.type === "temperature") {
+    return {
+      babyId: command.babyId,
+      type: "temperature",
+      timestamp: command.timestamp,
+      temperature: command.temperature,
+      note: command.note,
+    };
+  }
+
+  if (command.type === "weight") {
+    return {
+      babyId: command.babyId,
+      type: "weight",
+      timestamp: command.timestamp,
+      weight: command.weight,
+      note: command.note,
+    };
+  }
+
+  if (command.type === "height") {
+    return {
+      babyId: command.babyId,
+      type: "height",
+      timestamp: command.timestamp,
+      height: command.height,
       note: command.note,
     };
   }

@@ -1,0 +1,7 @@
+<resources>
+    <style name="TwinlyCompanionTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowBackground">#F8FAFC</item>
+    </style>
+</resources>

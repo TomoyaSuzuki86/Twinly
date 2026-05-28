@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Twinly</string>
+    <string name="voice_complication_label">Twinly 音声入力</string>
+</resources>

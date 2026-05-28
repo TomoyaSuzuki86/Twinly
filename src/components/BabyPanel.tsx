@@ -15,7 +15,6 @@ import {
 import { ReactNode, useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
@@ -204,7 +203,6 @@ export function BabyPanel({
   );
   const diaperCount = peeCount + poopCount;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
-  const purchaseUrl = profile.diaperPurchaseUrl?.trim();
   const diaperEstimateSummary = formatDiaperEstimateSummary(diaperEstimate);
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
 
@@ -277,28 +275,23 @@ export function BabyPanel({
             </Button>
           </div>
 
-          <div
-            role="button"
-            tabIndex={0}
-            className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 text-left sm:col-span-2"
-            onClick={() => setHealthOpen((open) => !open)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setHealthOpen((open) => !open);
-              }
-            }}
-            aria-expanded={healthOpen}
-          >
-            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
-              <Thermometer className="h-4 w-4" />
-              <span>{"\u304b\u3089\u3060\u306e\u8a18\u9332"}</span>
-            </div>
-            <div className="flex items-center gap-1">
+          <div className="overflow-hidden rounded-lg border bg-card/70 sm:col-span-2">
+            <div className="flex items-center gap-2 p-2">
+              <Button
+                variant="ghost"
+                className="h-7 min-w-0 flex-1 justify-start px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                onClick={() => setHealthOpen((open) => !open)}
+                aria-expanded={healthOpen}
+                aria-label="からだの記録を開閉"
+              >
+                <Thermometer className="h-4 w-4" />
+                <span className="text-sm font-semibold">{"\u304b\u3089\u3060\u306e\u8a18\u9332"}</span>
+                {healthOpen ? <ChevronDown className="ml-auto h-4 w-4" /> : <ChevronRight className="ml-auto h-4 w-4" />}
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-7 w-7 flex-shrink-0"
                 onClick={(event) => {
                   event.stopPropagation();
                   onOpenHealthChart();
@@ -307,13 +300,11 @@ export function BabyPanel({
               >
                 <Ruler className="h-4 w-4" />
               </Button>
-              {healthOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </div>
-          </div>
 
-          {healthOpen ? (
-            <>
-              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+            {healthOpen ? (
+              <div className="grid gap-2 border-t bg-background/20 p-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))]">
+                <div className="flex items-center justify-between gap-1 rounded-md border border-border/60 bg-background/50 p-2">
                 <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
                   <Thermometer className="h-4 w-4" />
                   <span>{"\u4f53\u6e29"}</span>
@@ -336,7 +327,7 @@ export function BabyPanel({
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+              <div className="flex items-center justify-between gap-1 rounded-md border border-border/60 bg-background/50 p-2">
                 <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
                   <Weight className="h-4 w-4" />
                   <span>{"\u4f53\u91cd"}</span>
@@ -359,7 +350,7 @@ export function BabyPanel({
                 </Button>
               </div>
 
-              <div className="flex items-center justify-between gap-1 rounded-lg border bg-card p-2">
+              <div className="flex items-center justify-between gap-1 rounded-md border border-border/60 bg-background/50 p-2">
                 <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
                   <Ruler className="h-4 w-4" />
                   <span>{"\u8eab\u9577"}</span>
@@ -381,25 +372,11 @@ export function BabyPanel({
                   <Check className="h-4 w-4" />
                 </Button>
               </div>
-            </>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </CardContent>
-
-      <CardHeader className="pt-0">
-        <div className="flex flex-wrap items-center gap-2">
-          {lowStock ? <Badge variant="destructive">残りわずか</Badge> : null}
-          {diaperEstimate?.level === "warning" ? <Badge variant="secondary">3日以内</Badge> : null}
-          {diaperEstimate?.level === "caution" ? <Badge variant="secondary">7日以内</Badge> : null}
-          {lowStock && purchaseUrl ? (
-            <a href={purchaseUrl} target="_blank" rel="noreferrer">
-              <Button variant="outline" size="sm">
-                購入サイトへ
-              </Button>
-            </a>
-          ) : null}
-        </div>
-      </CardHeader>
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
         <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>

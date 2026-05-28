@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "TwinlyWear"
 include(":app")
+include(":mobile")

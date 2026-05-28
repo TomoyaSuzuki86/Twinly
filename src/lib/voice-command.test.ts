@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVoiceCommand } from "./voice-command";
+import { parseVoiceCommand, selectVoiceCommandFromAlternatives } from "./voice-command";
 
 describe("parseVoiceCommand", () => {
   it("parses a milk command with ascii baby id and amount", () => {
@@ -177,6 +177,38 @@ describe("parseVoiceCommand", () => {
     });
   });
 
+  it("uses the forced baby target when no baby name is spoken", () => {
+    expect(
+      parseVoiceCommand("milk 80", {
+        forcedBabyId: "B",
+        now: new Date("2026-04-27T16:00:00+09:00"),
+      })
+    ).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "milk",
+        milkMl: 80,
+      },
+    });
+  });
+
+  it("lets a forced baby target override a spoken baby name", () => {
+    expect(
+      parseVoiceCommand("A milk 80", {
+        forcedBabyId: "B",
+        now: new Date("2026-04-27T16:00:00+09:00"),
+      })
+    ).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "milk",
+        milkMl: 80,
+      },
+    });
+  });
+
   it("does not treat an absolute time as a milk amount", () => {
     const now = new Date("2026-04-27T16:00:00+09:00");
     const result = parseVoiceCommand("A milk 20:30", {
@@ -266,6 +298,128 @@ describe("parseVoiceCommand", () => {
         babyId: "both",
         type: "milk",
         milkMlByBaby: { A: 90, B: 110 },
+      },
+    });
+  });
+  it("parses a named daily note command", () => {
+    expect(parseVoiceCommand("ひなた ひとこと よく寝た", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "daily",
+        dailyNote: "よく寝た",
+      },
+    });
+  });
+
+  it("requires a baby name for daily note commands", () => {
+    expect(parseVoiceCommand("メモ よく寝た", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: false,
+      reason: "missingBaby",
+    });
+  });
+
+  it("parses named temperature, weight, and height commands", () => {
+    expect(parseVoiceCommand("ひなた 体温 36.5", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "temperature",
+        temperature: 36.5,
+      },
+    });
+
+    expect(parseVoiceCommand("かなた 体重 5.8", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "weight",
+        weight: 5.8,
+      },
+    });
+
+    expect(parseVoiceCommand("ひなた 慎重 62.3", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "height",
+        height: 62.3,
+      },
+    });
+  });
+
+  it("requires a baby name for health measurement commands", () => {
+    expect(parseVoiceCommand("体温 36.5", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: false,
+      reason: "missingBaby",
+    });
+    expect(parseVoiceCommand("体重 5.8", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: false,
+      reason: "missingBaby",
+    });
+    expect(parseVoiceCommand("身長 62.3", { A: ["かなた"], B: ["ひなた"] })).toMatchObject({
+      ok: false,
+      reason: "missingBaby",
+    });
+  });
+
+  it("normalizes common kanji speech-recognition variants for baby names", () => {
+    const babyNames = { A: ["かなた"], B: ["ひなた"] };
+
+    expect(parseVoiceCommand("彼方 ミルク 80", babyNames)).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 80,
+      },
+    });
+
+    expect(parseVoiceCommand("彼方 うんち", babyNames)).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "diaper",
+        diaperKind: "poop",
+      },
+    });
+
+    expect(parseVoiceCommand("日向 ミルク 90", babyNames)).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "B",
+        type: "milk",
+        milkMl: 90,
+      },
+    });
+  });
+
+  it("prefers a named alternative over an earlier unnamed alternative", () => {
+    expect(
+      selectVoiceCommandFromAlternatives(["ミルク 80", "かなた ミルク 80"], {
+        babyNames: { A: ["かなた"], B: ["ひなた"] },
+      })
+    ).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "milk",
+        milkMl: 80,
+      },
+    });
+  });
+
+  it("falls back to an unnamed alternative when no candidate has a clear baby name", () => {
+    expect(
+      selectVoiceCommandFromAlternatives(["ミルク 80"], {
+        babyNames: { A: ["かなた"], B: ["ひなた"] },
+      })
+    ).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "both",
+        type: "milk",
+        milkMl: 80,
       },
     });
   });

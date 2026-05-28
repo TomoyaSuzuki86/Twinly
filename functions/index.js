@@ -35,8 +35,12 @@ const hashWearToken = (token) => crypto.createHash("sha256").update(normalizeWea
 const createEventId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 
 const toAsciiDigits = (value) => String(value).replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xff10));
+const normalizeKnownSpeechText = (text) =>
+  String(text || "")
+    .replace(/彼方|奏汰|奏太|奏多|金田|加奈多/g, "かなた")
+    .replace(/日向|日なた/g, "ひなた");
 const normalizeVoiceText = (text) =>
-  toAsciiDigits(text)
+  normalizeKnownSpeechText(toAsciiDigits(text))
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[、。,.]/g, " ")
@@ -44,6 +48,11 @@ const normalizeVoiceText = (text) =>
     .trim();
 
 const includesAny = (text, words) => words.some((word) => text.includes(normalizeVoiceText(word)));
+
+const knownNameAliases = {
+  "奏汰": ["かなた", "カナタ"],
+  "日向": ["ひなた", "ヒナタ"],
+};
 
 const detectTimestamp = (text, now = new Date()) => {
   const minuteAgoMatch = text.match(/(\d{1,3})\s*分前/);
@@ -74,12 +83,79 @@ const detectTimestamp = (text, now = new Date()) => {
   return undefined;
 };
 
+const parseKanjiNumber = (value) => {
+  const digits = {
+    "〇": 0,
+    "零": 0,
+    "一": 1,
+    "二": 2,
+    "三": 3,
+    "四": 4,
+    "五": 5,
+    "六": 6,
+    "七": 7,
+    "八": 8,
+    "九": 9,
+  };
+  const units = {
+    "十": 10,
+    "百": 100,
+    "千": 1000,
+  };
+
+  if ([...value].every((char) => char in digits)) {
+    return Number([...value].map((char) => digits[char]).join(""));
+  }
+
+  let total = 0;
+  let current = 0;
+  for (const char of value) {
+    if (char in digits) {
+      current = digits[char];
+      continue;
+    }
+    if (char in units) {
+      total += (current || 1) * units[char];
+      current = 0;
+    }
+  }
+
+  const parsed = total + current;
+  return parsed > 0 ? parsed : null;
+};
+
+const detectMilkAmount = (text) => {
+  const kanjiNumberPattern = "〇零一二三四五六七八九十百千";
+  const mlMatch = text.match(new RegExp(`(\\d{1,4}|[${kanjiNumberPattern}]+)\\s*(?:ml|ミリ|みり)`));
+  if (mlMatch) {
+    return /^\d+$/.test(mlMatch[1]) ? Number(mlMatch[1]) : parseKanjiNumber(mlMatch[1]);
+  }
+
+  const textWithoutTimeExpressions = text
+    .replace(/\d{1,2}\s*(?:時|:|：)\s*\d{0,2}\s*(?:分)?/g, " ")
+    .replace(/\d{1,3}\s*(?:分前)/g, " ")
+    .replace(/\d{1,2}\s*(?:時間前)/g, " ")
+    .replace(new RegExp(`[${kanjiNumberPattern}]+\\s*時\\s*[${kanjiNumberPattern}]*\\s*(?:分)?`, "g"), " ")
+    .replace(new RegExp(`[${kanjiNumberPattern}]+\\s*(?:分前|時間前)`, "g"), " ");
+
+  const numberMatch = textWithoutTimeExpressions.match(/\d{1,4}/);
+  if (numberMatch) return Number(numberMatch[0]);
+
+  const kanjiNumberMatch = textWithoutTimeExpressions.match(new RegExp(`[${kanjiNumberPattern}]+`));
+  return kanjiNumberMatch ? parseKanjiNumber(kanjiNumberMatch[0]) : null;
+};
+
 const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now = new Date() }) => {
   const normalizedText = normalizeVoiceText(text);
   const babies = ["A", "B"];
   const babyId = babies.find((id) => {
     const profile = profiles?.[id] || {};
-    const names = [profile.displayName, ...(profile.voiceAliases || []), id].filter(Boolean);
+    const names = [
+      profile.displayName,
+      ...(profile.voiceAliases || []),
+      ...(knownNameAliases[profile.displayName] || []),
+      id,
+    ].filter(Boolean);
     return names.some((name) => normalizedText.includes(normalizeVoiceText(name)));
   });
   const targetBabyId = babyId || "both";
@@ -89,8 +165,7 @@ const parseVoiceTextWithRules = ({ text, profiles, defaultMilkMlByBaby = {}, now
   const timestamp = detectTimestamp(normalizedText, now);
 
   if (isMilk) {
-    const amountMatch = normalizedText.match(/(\d{1,4})\s*(?:ml|ミリ|みり)?/);
-    const detectedMilkMl = amountMatch ? Number(amountMatch[1]) : null;
+    const detectedMilkMl = detectMilkAmount(normalizedText);
     const milkMl =
       detectedMilkMl ||
       (targetBabyId === "both" ? undefined : defaultMilkMlByBaby[targetBabyId]);
@@ -277,6 +352,62 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
   return events;
 };
 
+const deleteWearEvents = async ({ uid, eventIds }) => {
+  const appRef = db.collection("users").doc(uid).collection("app").doc("state");
+  const targetIds = new Set(eventIds);
+
+  let deletedCount = 0;
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(appRef);
+    if (!snap.exists || !snap.data()?.app) return;
+
+    const appState = snap.data().app;
+    const events = Array.isArray(appState.events) ? appState.events : [];
+    const deletingEvents = events.filter((event) => targetIds.has(event.id));
+    if (!deletingEvents.length) return;
+
+    const nextAppState = {
+      ...appState,
+      events: events.filter((event) => !targetIds.has(event.id)),
+    };
+    const nextProfiles = { ...(nextAppState.profiles || {}) };
+
+    for (const event of deletingEvents.filter((item) => item.type === "diaper")) {
+      const profile = nextProfiles[event.babyId];
+      const selectedSize = profile?.diaperSize;
+      if (!selectedSize) continue;
+      const currentStock = profile?.diaperStockBySize?.[selectedSize] ?? 0;
+
+      for (const id of ["A", "B"]) {
+        const currentProfile = nextProfiles[id];
+        if (!currentProfile) continue;
+        nextProfiles[id] = {
+          ...currentProfile,
+          diaperStockBySize: {
+            ...(currentProfile.diaperStockBySize || {}),
+            [selectedSize]: currentStock + 1,
+          },
+        };
+      }
+    }
+
+    nextAppState.profiles = nextProfiles;
+    deletedCount = deletingEvents.length;
+
+    transaction.set(
+      appRef,
+      {
+        app: nextAppState,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: "wear",
+      },
+      { merge: true }
+    );
+  });
+
+  return deletedCount;
+};
+
 const getDefaultMilkMlByBaby = (events) => {
   const result = {};
   for (const babyId of ["A", "B"]) {
@@ -311,6 +442,38 @@ const buildLatestMilkCandidate = ({ appState, babyId, lastSentByBaby, nowMs }) =
     milkAt: latestMilkEvent.timestamp,
     dueAt,
     dueNow: dueAt <= nowMs,
+  };
+};
+
+const buildLatestMilkElapsedByBaby = (appState, nowMs = Date.now()) => {
+  const events = Array.isArray(appState?.events) ? appState.events : [];
+
+  return ["A", "B"].reduce((result, babyId) => {
+    const latestMilkEvent = events
+      .filter((event) => event.babyId === babyId && event.type === "milk" && typeof event.timestamp === "number")
+      .sort((left, right) => right.timestamp - left.timestamp)[0];
+
+    result[babyId] = latestMilkEvent
+      ? {
+          eventId: latestMilkEvent.id || null,
+          milkAt: latestMilkEvent.timestamp,
+          elapsedMinutes: Math.max(0, Math.floor((nowMs - latestMilkEvent.timestamp) / 60000)),
+        }
+      : null;
+
+    return result;
+  }, {});
+};
+
+const formatWearMilkElapsedText = (elapsedByBaby) => {
+  const formatBaby = (babyId) => {
+    const elapsedMinutes = elapsedByBaby?.[babyId]?.elapsedMinutes;
+    return `${babyId}:${typeof elapsedMinutes === "number" ? `${elapsedMinutes}m` : "--"}`;
+  };
+
+  return {
+    A: formatBaby("A"),
+    B: formatBaby("B"),
   };
 };
 
@@ -478,8 +641,8 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
     const defaultMilkMlByBaby = getDefaultMilkMlByBaby(appState?.events);
     const now = new Date();
     const parsed =
-      (await parseVoiceTextWithGemini({ text: transcript, profiles, defaultMilkMlByBaby, now })) ||
-      parseVoiceTextWithRules({ text: transcript, profiles, defaultMilkMlByBaby, now });
+      parseVoiceTextWithRules({ text: transcript, profiles, defaultMilkMlByBaby, now }) ||
+      (await parseVoiceTextWithGemini({ text: transcript, profiles, defaultMilkMlByBaby, now }));
 
     if (!parsed) {
       res.status(422).json({ ok: false, error: "could_not_parse" });
@@ -502,6 +665,76 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
     res.json({ ok: true, events });
   } catch (error) {
     logger.error("recordFromWear failed", { message: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+exports.undoWearRecord = onRequest({ cors: true }, async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return;
+  }
+
+  const token = req.body?.token;
+  const eventIds = Array.isArray(req.body?.eventIds)
+    ? req.body.eventIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+
+  if (!token || !eventIds.length) {
+    res.status(400).json({ ok: false, error: "missing_token_or_event_ids" });
+    return;
+  }
+
+  try {
+    const tokenHash = hashWearToken(token);
+    const tokenSnap = await db.collection("wearPairingTokens").doc(tokenHash).get();
+    if (!tokenSnap.exists || tokenSnap.data()?.active === false) {
+      res.status(401).json({ ok: false, error: "invalid_pairing_token" });
+      return;
+    }
+
+    const deletedCount = await deleteWearEvents({ uid: tokenSnap.data().uid, eventIds });
+    res.json({ ok: true, deletedCount });
+  } catch (error) {
+    logger.error("undoWearRecord failed", { message: error.message, stack: error.stack });
+    res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+exports.latestMilkElapsedFromWear = onRequest({ cors: true }, async (req, res) => {
+  if (!["GET", "POST"].includes(req.method)) {
+    res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return;
+  }
+
+  const token = req.method === "GET" ? req.query?.token : req.body?.token;
+  if (!token) {
+    res.status(400).json({ ok: false, error: "missing_token" });
+    return;
+  }
+
+  try {
+    const tokenHash = hashWearToken(token);
+    const tokenSnap = await db.collection("wearPairingTokens").doc(tokenHash).get();
+    if (!tokenSnap.exists || tokenSnap.data()?.active === false) {
+      res.status(401).json({ ok: false, error: "invalid_pairing_token" });
+      return;
+    }
+
+    const uid = tokenSnap.data().uid;
+    const appSnap = await db.collection("users").doc(uid).collection("app").doc("state").get();
+    const appState = appSnap.exists ? appSnap.data()?.app : null;
+    const elapsedByBaby = buildLatestMilkElapsedByBaby(appState);
+    const text = formatWearMilkElapsedText(elapsedByBaby);
+
+    res.json({
+      ok: true,
+      text,
+      displayText: `${text.A}\n${text.B}`,
+      elapsedByBaby,
+    });
+  } catch (error) {
+    logger.error("latestMilkElapsedFromWear failed", { message: error.message, stack: error.stack });
     res.status(500).json({ ok: false, error: "internal" });
   }
 });

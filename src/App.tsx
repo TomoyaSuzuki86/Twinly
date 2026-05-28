@@ -54,12 +54,16 @@ const shiftDate = (isoDate: string, days: number) => {
 function SnackbarUndo({
   open,
   message,
+  detail,
   onUndo,
+  onRetry,
   onClose,
 }: {
   open: boolean;
   message: string;
+  detail?: string;
   onUndo: () => void;
+  onRetry?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -72,15 +76,29 @@ function SnackbarUndo({
           exit={{ y: 18, opacity: 0 }}
         >
           <div className="overflow-hidden rounded-lg border bg-primary text-primary-foreground shadow-2xl">
-            <div className="grid grid-cols-2">
-              <div className="flex items-center gap-3 px-5 py-4">
-                <Check className="h-5 w-5" />
-                <div className="text-sm font-semibold">{message}</div>
+            <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+              <div className="flex min-w-0 items-start gap-3 px-4 py-3 sm:px-5 sm:py-4">
+                <Check className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{message}</div>
+                  {detail ? (
+                    <div className="mt-1 whitespace-normal break-words text-xs leading-relaxed opacity-85">
+                      聞き取り: 「{detail}」
+                    </div>
+                  ) : null}
+                </div>
               </div>
-              <Button variant="ghost" className="h-full rounded-none border-l" onClick={onUndo}>
-                <Undo2 className="mr-2 h-5 w-5" />
-                取り消す
-              </Button>
+              <div className="grid grid-cols-2 border-t sm:contents">
+                <Button variant="ghost" className="h-12 rounded-none sm:h-full sm:border-l" onClick={onUndo}>
+                  <Undo2 className="mr-2 h-5 w-5" />
+                  取り消す
+                </Button>
+                {onRetry ? (
+                  <Button variant="ghost" className="h-12 rounded-none border-l sm:h-full" onClick={onRetry}>
+                    やり直す
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <button className="sr-only" onClick={onClose} aria-label="close-snackbar" />
           </div>
@@ -117,7 +135,13 @@ export default function App() {
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
-  const [undo, setUndo] = useState<{ open: boolean; event?: LogEvent }>({ open: false });
+  const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
+  const [undo, setUndo] = useState<{
+    open: boolean;
+    events?: LogEvent[];
+    transcript?: string;
+    retryVoice?: boolean;
+  }>({ open: false });
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
   const undoTimerRef = useRef<number | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
@@ -343,12 +367,12 @@ export default function App() {
     }
   };
 
-  const scheduleUndo = (event: LogEvent) => {
+  const scheduleUndo = (events: LogEvent | LogEvent[], options?: { transcript?: string; retryVoice?: boolean }) => {
     if (undoTimerRef.current) {
       window.clearTimeout(undoTimerRef.current);
       undoTimerRef.current = null;
     }
-    setUndo({ open: true, event });
+    setUndo({ open: true, events: Array.isArray(events) ? events : [events], ...options });
     undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
   };
 
@@ -361,19 +385,23 @@ export default function App() {
     voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
   };
 
-  const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
-    if (!authUser || !db) return;
+  const createEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>): LogEvent => {
     const payloadTimestamp = payload?.timestamp;
     const timestamp =
       typeof payloadTimestamp === "number" && Number.isFinite(payloadTimestamp) ? payloadTimestamp : Date.now();
 
-    const event: LogEvent = {
+    return {
       id: uid(),
       babyId,
       type,
       ...payload,
       timestamp,
     };
+  };
+
+  const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
+    if (!authUser || !db) return;
+    const event = createEvent(babyId, type, payload);
 
     updateApp((prevApp) => ({ ...prevApp, events: [event, ...prevApp.events] }));
 
@@ -417,42 +445,103 @@ export default function App() {
   };
 
   const handleVoiceCommand = (command: VoiceCommand) => {
-    for (const targetedCommand of expandVoiceCommandTargets(command)) {
-      if (targetedCommand.type === "milk") {
-        const milkMl = targetedCommand.milkMlByBaby?.[targetedCommand.babyId] ?? targetedCommand.milkMl;
-        addEvent(targetedCommand.babyId, "milk", {
-          timestamp: targetedCommand.timestamp,
-          milkMl,
-          milkMethod: targetedCommand.milkMethod,
-          note: targetedCommand.note,
-        });
-        continue;
-      }
+    if (!authUser || !db) return;
 
-      addEvent(targetedCommand.babyId, "diaper", {
-        timestamp: targetedCommand.timestamp,
-        diaperKind: targetedCommand.diaperKind,
-        note: targetedCommand.note,
-      });
+    const createdEvents: LogEvent[] = [];
 
-      updateApp((prevApp) => {
-        const selectedDiaperSize = prevApp.profiles[targetedCommand.babyId].diaperSize;
-        const currentStock = prevApp.profiles[targetedCommand.babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
-        const nextProfiles = { ...prevApp.profiles };
+    if (command.type === "milk" || command.type === "diaper") {
+      const targetedCommands = expandVoiceCommandTargets(command);
 
-        (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
-          nextProfiles[id] = {
-            ...nextProfiles[id],
-            diaperStockBySize: {
-              ...nextProfiles[id].diaperStockBySize,
-              [selectedDiaperSize]: currentStock - 1,
-            },
-          };
-        });
+      targetedCommands.forEach((targetedCommand) => {
+        if (targetedCommand.type === "milk") {
+          const milkMl = targetedCommand.milkMlByBaby?.[targetedCommand.babyId] ?? targetedCommand.milkMl;
+          createdEvents.push(
+            createEvent(targetedCommand.babyId, "milk", {
+              timestamp: targetedCommand.timestamp,
+              milkMl,
+              milkMethod: targetedCommand.milkMethod,
+              note: targetedCommand.note,
+            })
+          );
+          return;
+        }
 
-        return { ...prevApp, profiles: nextProfiles };
+        createdEvents.push(
+          createEvent(targetedCommand.babyId, "diaper", {
+            timestamp: targetedCommand.timestamp,
+            diaperKind: targetedCommand.diaperKind,
+            note: targetedCommand.note,
+          })
+        );
       });
     }
+
+    if (command.type === "daily") {
+      createdEvents.push(
+        createEvent(command.babyId, "daily", {
+          timestamp: command.timestamp,
+          note: command.dailyNote,
+        })
+      );
+    }
+
+    if (command.type === "temperature") {
+      createdEvents.push(
+        createEvent(command.babyId, "temperature", {
+          timestamp: command.timestamp,
+          temperature: command.temperature,
+          note: command.note,
+        })
+      );
+    }
+
+    if (command.type === "weight") {
+      createdEvents.push(
+        createEvent(command.babyId, "weight", {
+          timestamp: command.timestamp,
+          weight: command.weight,
+          note: command.note,
+        })
+      );
+    }
+
+    if (command.type === "height") {
+      createdEvents.push(
+        createEvent(command.babyId, "height", {
+          timestamp: command.timestamp,
+          height: command.height,
+          note: command.note,
+        })
+      );
+    }
+
+    if (!createdEvents.length) return;
+
+    updateApp((prevApp) => {
+      const nextProfiles = { ...prevApp.profiles };
+
+      createdEvents
+        .filter((event) => event.type === "diaper")
+        .forEach((event) => {
+          const selectedDiaperSize = nextProfiles[event.babyId].diaperSize;
+          const currentStock = nextProfiles[event.babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
+
+          (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
+            nextProfiles[id] = {
+              ...nextProfiles[id],
+              diaperStockBySize: {
+                ...nextProfiles[id].diaperStockBySize,
+                [selectedDiaperSize]: currentStock - 1,
+              },
+            };
+          });
+        });
+
+      return { ...prevApp, profiles: nextProfiles, events: [...createdEvents, ...prevApp.events] };
+    });
+
+    const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
+    scheduleUndo(createdEvents, { transcript, retryVoice: true });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -476,15 +565,26 @@ export default function App() {
   };
 
   const undoLast = () => {
-    if (!authUser || !db || !undo.event) return;
+    if (!authUser || !db || !undo.events?.length) return;
 
-    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => event.id !== undo.event?.id) }));
+    const undoIds = new Set(undo.events.map((event) => event.id));
+    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => !undoIds.has(event.id)) }));
 
     setUndo({ open: false });
     if (undoTimerRef.current) {
       window.clearTimeout(undoTimerRef.current);
       undoTimerRef.current = null;
     }
+  };
+
+  const retryVoiceInput = () => {
+    undoLast();
+    window.setTimeout(() => voiceButtonRef.current?.startListening(), 0);
+  };
+
+  const startVoiceInputForBabyTab = (babyId: BabyId) => {
+    setSelectedBabyTab(babyId);
+    window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);
   };
 
   const editTarget = useMemo(() => {
@@ -853,7 +953,6 @@ export default function App() {
                 ref={voiceButtonRef}
                 babyNames={voiceCommandBabyNames}
                 defaultMilkMlByBaby={defaultVoiceMilkMlByBaby}
-                now={now}
                 onCommand={handleVoiceCommand}
                 onMessage={showVoiceMessage}
               />
@@ -873,12 +972,12 @@ export default function App() {
         </header>
 
         <main>
-          <Tabs defaultValue="A" className="w-full">
+          <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="w-full">
             <TabsList className="grid h-auto w-full grid-cols-2">
-              <TabsTrigger value="A" className="h-auto">
+              <TabsTrigger value="A" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
                 <BabyTabTrigger profile={app.profiles.A} />
               </TabsTrigger>
-              <TabsTrigger value="B" className="h-auto">
+              <TabsTrigger value="B" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger profile={app.profiles.B} />
               </TabsTrigger>
             </TabsList>
@@ -939,7 +1038,9 @@ export default function App() {
       <SnackbarUndo
         open={undo.open}
         message="記録を保存しました"
+        detail={undo.transcript}
         onUndo={undoLast}
+        onRetry={undo.retryVoice ? retryVoiceInput : undefined}
         onClose={() => setUndo({ open: false })}
       />
       <AnimatePresence>
