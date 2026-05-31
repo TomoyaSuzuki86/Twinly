@@ -39,6 +39,7 @@ type SpeechRecognitionInstance = {
   lang: string;
   interimResults: boolean;
   maxAlternatives: number;
+  continuous?: boolean;
   start: () => void;
   stop: () => void;
   abort: () => void;
@@ -115,14 +116,22 @@ const parseErrorMessage = (reason: VoiceCommandParseErrorReason) => {
   return "ミルク/おむつが聞き取れませんでした";
 };
 
+const SILENCE_SUBMIT_MS = 1400;
+const RESTART_DELAY_MS = 180;
+const MAX_LISTENING_MS = 20000;
+
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
   { babyNames, defaultMilkMlByBaby, onCommand, onMessage },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
+  const restartTimerRef = useRef<number | null>(null);
+  const maxListeningTimerRef = useRef<number | null>(null);
+  const sessionIdRef = useRef(0);
   const latestTranscriptsRef = useRef<string[]>([]);
   const forcedBabyIdRef = useRef<BabyId | undefined>(undefined);
+  const keepListeningRef = useRef(false);
   const submittedRef = useRef(false);
   const [listening, setListening] = useState(false);
   const supported = typeof window !== "undefined" && Boolean(getSpeechRecognition());
@@ -134,14 +143,48 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     }
   };
 
-  const submitLatestTranscript = () => {
+  const clearRestartTimer = () => {
+    if (restartTimerRef.current) {
+      window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  };
+
+  const clearMaxListeningTimer = () => {
+    if (maxListeningTimerRef.current) {
+      window.clearTimeout(maxListeningTimerRef.current);
+      maxListeningTimerRef.current = null;
+    }
+  };
+
+  const clearTimers = () => {
+    clearSilenceTimer();
+    clearRestartTimer();
+    clearMaxListeningTimer();
+  };
+
+  const resetSession = (sessionId?: number) => {
+    if (sessionId !== undefined && sessionId !== sessionIdRef.current) return;
+    recognitionRef.current = null;
+    latestTranscriptsRef.current = [];
+    forcedBabyIdRef.current = undefined;
+    keepListeningRef.current = false;
+    submittedRef.current = false;
+    setListening(false);
+  };
+
+  const submitLatestTranscript = (sessionId: number, stopRecognition = true) => {
+    if (sessionId !== sessionIdRef.current) return;
     if (submittedRef.current) return;
     const transcripts = latestTranscriptsRef.current.map((transcript) => transcript.trim()).filter(Boolean);
     if (!transcripts.length) return;
 
     submittedRef.current = true;
-    clearSilenceTimer();
-    recognitionRef.current?.stop();
+    keepListeningRef.current = false;
+    clearTimers();
+    if (stopRecognition) {
+      recognitionRef.current?.stop();
+    }
 
     const parsed = selectVoiceCommandFromAlternatives(transcripts, {
       babyNames,
@@ -155,71 +198,118 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       return;
     }
     onCommand(parsed.command);
+    setListening(false);
   };
 
   const scheduleSilenceSubmit = () => {
     clearSilenceTimer();
-    silenceTimerRef.current = window.setTimeout(submitLatestTranscript, 1000);
+    const sessionId = sessionIdRef.current;
+    silenceTimerRef.current = window.setTimeout(() => submitLatestTranscript(sessionId), SILENCE_SUBMIT_MS);
   };
 
   const stopListening = () => {
-    clearSilenceTimer();
+    sessionIdRef.current += 1;
+    keepListeningRef.current = false;
+    clearTimers();
     recognitionRef.current?.abort();
-    recognitionRef.current = null;
-    latestTranscriptsRef.current = [];
-    forcedBabyIdRef.current = undefined;
-    submittedRef.current = false;
-    setListening(false);
+    resetSession();
   };
 
   const startListening = (forcedBabyId?: BabyId) => {
-    clearSilenceTimer();
+    const sessionId = sessionIdRef.current + 1;
+    sessionIdRef.current = sessionId;
+    clearTimers();
+    recognitionRef.current?.abort();
     latestTranscriptsRef.current = [];
     forcedBabyIdRef.current = forcedBabyId;
+    keepListeningRef.current = true;
     submittedRef.current = false;
+    setListening(true);
 
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
+      resetSession(sessionId);
       onMessage("このブラウザは音声入力に未対応です");
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "ja-JP";
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 5;
+    const beginRecognition = () => {
+      if (sessionId !== sessionIdRef.current) return;
+      if (!keepListeningRef.current || submittedRef.current) return;
 
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => {
-      submitLatestTranscript();
-      recognitionRef.current = null;
-      setListening(false);
-    };
-    recognition.onerror = (event) => {
-      clearSilenceTimer();
-      recognitionRef.current = null;
-      setListening(false);
-      latestTranscriptsRef.current = [];
-      forcedBabyIdRef.current = undefined;
-      submittedRef.current = false;
-      if (event.error !== "aborted") onMessage("音声入力に失敗しました");
-    };
-    recognition.onresult = (event) => {
-      const transcripts = collectBestTranscripts(event.results, event.resultIndex);
-      if (!transcripts.length) return;
-      latestTranscriptsRef.current = transcripts;
-      scheduleSilenceSubmit();
+      const recognition = new SpeechRecognition();
+      recognition.lang = "ja-JP";
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 5;
+      recognition.continuous = true;
+
+      recognition.onstart = () => setListening(true);
+      recognition.onend = () => {
+        if (sessionId !== sessionIdRef.current) return;
+        recognitionRef.current = null;
+        if (latestTranscriptsRef.current.length) {
+          submitLatestTranscript(sessionId, false);
+          return;
+        }
+
+        if (!keepListeningRef.current || submittedRef.current) {
+          setListening(false);
+          return;
+        }
+
+        clearRestartTimer();
+        restartTimerRef.current = window.setTimeout(beginRecognition, RESTART_DELAY_MS);
+      };
+      recognition.onerror = (event) => {
+        if (sessionId !== sessionIdRef.current) return;
+        clearSilenceTimer();
+        if (event.error === "aborted") {
+          keepListeningRef.current = false;
+          resetSession(sessionId);
+          return;
+        }
+
+        if (event.error === "no-speech" || event.error === "audio-capture") {
+          return;
+        }
+
+        keepListeningRef.current = false;
+        resetSession(sessionId);
+        onMessage(event.error === "not-allowed" ? "マイクの使用を許可してください" : "音声入力に失敗しました");
+      };
+      recognition.onresult = (event) => {
+        if (sessionId !== sessionIdRef.current) return;
+        const transcripts = collectBestTranscripts(event.results, event.resultIndex);
+        if (!transcripts.length) return;
+        latestTranscriptsRef.current = transcripts;
+        scheduleSilenceSubmit();
+      };
+
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+      } catch (error) {
+        keepListeningRef.current = false;
+        resetSession(sessionId);
+        onMessage("音声入力を開始できませんでした");
+      }
     };
 
-    recognitionRef.current = recognition;
-    recognition.start();
+    maxListeningTimerRef.current = window.setTimeout(() => {
+      if (!latestTranscriptsRef.current.length) {
+        onMessage("音声が聞き取れませんでした");
+      }
+      stopListening();
+    }, MAX_LISTENING_MS);
+    beginRecognition();
   };
 
   useImperativeHandle(ref, () => ({ startListening }));
 
   useEffect(() => {
     return () => {
-      clearSilenceTimer();
+      sessionIdRef.current += 1;
+      clearTimers();
       recognitionRef.current?.abort();
     };
   }, []);
@@ -228,7 +318,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     <Button
       variant={listening ? "default" : "ghost"}
       size="icon"
-      onClick={listening ? stopListening : startListening}
+      onClick={() => (listening ? stopListening() : startListening())}
       aria-label={listening ? "stop voice input" : "start voice input"}
       title={supported ? "音声入力" : "音声入力はこのブラウザで使えません"}
     >

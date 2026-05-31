@@ -27,6 +27,7 @@ import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
+import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -872,6 +873,7 @@ export default function App() {
   }, [activeDate, app.events, now]);
 
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
+  useScreenWakeLock(Boolean(authUser));
 
   const defaultVoiceMilkMlByBaby = useMemo(() => {
     const result: Partial<Record<BabyId, number>> = {};
