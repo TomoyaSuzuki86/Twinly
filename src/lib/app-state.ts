@@ -1,7 +1,9 @@
 import { AppState, BabyId, LogEvent } from "@/types";
 import { fmtDate } from "./utils";
 
-export type SharedAppState = Pick<AppState, "profiles" | "events">;
+export type SharedAppState = Pick<AppState, "profiles" | "events"> & {
+  diaperStockManagementEnabled?: boolean;
+};
 
 type LegacyLogEvent = LogEvent & {
   calendarStatus?: "pending" | "synced" | "error";
@@ -13,9 +15,10 @@ type LegacyProfile = AppState["profiles"][BabyId] & {
   calendarId?: string;
 };
 
-type LegacyAppState = Omit<AppState, "profiles" | "events"> & {
+type LegacyAppState = Omit<AppState, "profiles" | "events" | "diaperStockManagementEnabled"> & {
   profiles: Record<BabyId, LegacyProfile>;
   events: LegacyLogEvent[];
+  diaperStockManagementEnabled?: boolean;
 };
 
 const demoBirthDate = (now: Date, daysAgo: number) => {
@@ -54,6 +57,7 @@ export const createInitialAppState = (now: Date = new Date()): AppState =>
   ({
     profiles: createBaseProfiles(now),
     events: [],
+    diaperStockManagementEnabled: true,
     ui: {
       lastViewedDate: fmtDate(now),
     },
@@ -62,10 +66,12 @@ export const createInitialAppState = (now: Date = new Date()): AppState =>
 export const toSharedAppState = (app: AppState): SharedAppState => ({
   profiles: app.profiles,
   events: app.events,
+  diaperStockManagementEnabled: app.diaperStockManagementEnabled,
 });
 
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
+  diaperStockManagementEnabled: shared.diaperStockManagementEnabled ?? true,
   ui,
 });
 
@@ -88,6 +94,7 @@ export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
 
   return {
     ...app,
+    diaperStockManagementEnabled: app.diaperStockManagementEnabled ?? true,
     profiles,
     events,
   };

@@ -28,6 +28,7 @@ const renderPanel = ({
       events={events}
       latestEvents={latestEvents}
       now={baseNow}
+      diaperStockManagementEnabled={app.diaperStockManagementEnabled}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
       onOpenHistory={onOpenHistory}

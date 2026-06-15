@@ -24,6 +24,7 @@ describe("DiaperModal", () => {
           timestamp: new Date("2026-04-18T09:45:00+09:00").getTime(),
         }}
         onSave={onSave}
+        diaperStockManagementEnabled={baseApp.diaperStockManagementEnabled}
         diaperStockBySize={baseApp.profiles.A.diaperStockBySize}
         onUpdateDiaperStock={vi.fn()}
         babyProfile={baseApp.profiles.A}
@@ -55,6 +56,7 @@ describe("DiaperModal", () => {
           timestamp: new Date("2026-04-18T09:45:00+09:00").getTime(),
         }}
         onSave={vi.fn()}
+        diaperStockManagementEnabled={baseApp.diaperStockManagementEnabled}
         diaperStockBySize={baseApp.profiles.A.diaperStockBySize}
         onUpdateDiaperStock={vi.fn()}
         babyProfile={baseApp.profiles.A}

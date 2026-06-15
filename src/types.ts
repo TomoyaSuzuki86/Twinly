@@ -32,6 +32,7 @@ export type BabyProfile = {
 export type AppState = {
   profiles: Record<BabyId, BabyProfile>;
   events: LogEvent[];
+  diaperStockManagementEnabled: boolean;
   ui: {
     lastViewedDate: string;
   };

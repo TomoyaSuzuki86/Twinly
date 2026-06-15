@@ -50,6 +50,7 @@ declare global {
 
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const clampDiaperStock = (stock: number) => Math.max(0, stock);
 
 function AppContainer({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-background text-foreground">{children}</div>;
@@ -435,16 +436,19 @@ export default function App() {
     const { diaperKind, note, selectedDiaperSize, timestamp } = payload;
     addEvent(babyId, "diaper", { diaperKind, note, timestamp });
 
+    if (!app.diaperStockManagementEnabled) return;
+
     updateApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
       const currentStock = nextProfiles[babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
+      const nextStock = clampDiaperStock(currentStock - 1);
 
       (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
         nextProfiles[id] = {
           ...nextProfiles[id],
           diaperStockBySize: {
             ...nextProfiles[id].diaperStockBySize,
-            [selectedDiaperSize]: currentStock - 1,
+            [selectedDiaperSize]: nextStock,
           },
           diaperSize: id === babyId ? selectedDiaperSize : nextProfiles[id].diaperSize,
         };
@@ -533,15 +537,17 @@ export default function App() {
       createdEvents
         .filter((event) => event.type === "diaper")
         .forEach((event) => {
+          if (!prevApp.diaperStockManagementEnabled) return;
           const selectedDiaperSize = nextProfiles[event.babyId].diaperSize;
           const currentStock = nextProfiles[event.babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
+          const nextStock = clampDiaperStock(currentStock - 1);
 
           (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
             nextProfiles[id] = {
               ...nextProfiles[id],
               diaperStockBySize: {
                 ...nextProfiles[id].diaperStockBySize,
-                [selectedDiaperSize]: currentStock - 1,
+                [selectedDiaperSize]: nextStock,
               },
             };
           });
@@ -614,12 +620,13 @@ export default function App() {
 
   const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
     updateApp((prevApp) => {
+      const nextStock = clampDiaperStock(stock);
       const nextProfiles = { ...prevApp.profiles };
       nextProfiles[babyId] = {
         ...nextProfiles[babyId],
         diaperStockBySize: {
           ...nextProfiles[babyId].diaperStockBySize,
-          [size]: stock,
+          [size]: nextStock,
         },
       };
 
@@ -629,7 +636,7 @@ export default function App() {
           ...nextProfiles[otherBabyId],
           diaperStockBySize: {
             ...nextProfiles[otherBabyId].diaperStockBySize,
-            [size]: stock,
+            [size]: nextStock,
           },
         };
       });
@@ -840,6 +847,7 @@ export default function App() {
 
   const lowStock = useMemo(() => {
     const result: Record<BabyId, { size: string; remaining: number } | null> = { A: null, B: null };
+    if (!app.diaperStockManagementEnabled) return result;
     (Object.keys(app.profiles) as BabyId[]).forEach((babyId) => {
       const profile = app.profiles[babyId];
       const remaining = profile.diaperStockBySize[profile.diaperSize] ?? 0;
@@ -848,10 +856,11 @@ export default function App() {
       }
     });
     return result;
-  }, [app.profiles]);
+  }, [app.diaperStockManagementEnabled, app.profiles]);
 
   const diaperEstimates = useMemo(() => {
     const result: Record<BabyId, ReturnType<typeof estimateDiaperStockBySize> | null> = { A: null, B: null };
+    if (!app.diaperStockManagementEnabled) return result;
     (Object.keys(app.profiles) as BabyId[]).forEach((babyId) => {
       const size = app.profiles[babyId].diaperSize;
       result[babyId] = estimateDiaperStockBySize({
@@ -862,7 +871,7 @@ export default function App() {
       });
     });
     return result;
-  }, [app.profiles, app.events, now]);
+  }, [app.diaperStockManagementEnabled, app.profiles, app.events, now]);
 
   const milkProgressByBaby = useMemo(() => {
     const result: Record<BabyId, ReturnType<typeof buildMilkProgressComparison>> = {
@@ -1023,6 +1032,7 @@ export default function App() {
                 logEvents={logEventsByBaby.A}
                 logDateControls={renderLogDateControls()}
                 now={now}
+                diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
                 milkProgress={milkProgressByBaby.A}
@@ -1048,6 +1058,7 @@ export default function App() {
                 logEvents={logEventsByBaby.B}
                 logDateControls={renderLogDateControls()}
                 now={now}
+                diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
                 milkProgress={milkProgressByBaby.B}
@@ -1103,6 +1114,7 @@ export default function App() {
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
         initialDraft={diaperDraft}
         onSave={onSaveDiaper}
+        diaperStockManagementEnabled={app.diaperStockManagementEnabled}
         diaperStockBySize={modal?.kind === "diaper" ? app.profiles[modal.babyId].diaperStockBySize : {}}
         onUpdateDiaperStock={(size, stock) =>
           modal?.kind === "diaper" && onUpdateDiaperStock(modal.babyId, size, stock)

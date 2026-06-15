@@ -29,6 +29,7 @@ type BabyPanelProps = {
   logEvents?: LogEvent[];
   logDateControls?: ReactNode;
   now: Date;
+  diaperStockManagementEnabled: boolean;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
   milkProgress: MilkProgressComparison | null;
@@ -108,6 +109,7 @@ export function BabyPanel({
   logEvents = events,
   logDateControls,
   now,
+  diaperStockManagementEnabled,
   lowStock,
   diaperEstimate,
   milkProgress,
@@ -203,7 +205,7 @@ export function BabyPanel({
   );
   const diaperCount = peeCount + poopCount;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
-  const diaperEstimateSummary = formatDiaperEstimateSummary(diaperEstimate);
+  const diaperEstimateSummary = diaperStockManagementEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
 
   const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
@@ -242,9 +244,11 @@ export function BabyPanel({
               <Droplets className="mr-3 h-7 w-7" />
               おむつ
             </div>
+            {diaperStockManagementEnabled ? (
             <span className="mt-1 text-base font-normal opacity-80">
               {profile.diaperSize}・残り {remainingDiapers}
             </span>
+            ) : null}
             <span className="text-sm font-normal opacity-80">
               前回 {lastDiaperTime} / {lastDiaperElapsed}
             </span>
@@ -448,6 +452,11 @@ export function BabyPanel({
                       <p className="truncate text-[11px] leading-tight text-amber-100/80">
                         {diaperEstimateSummary.detail}
                       </p>
+                    </div>
+                  ) : null}
+                  {diaperStockManagementEnabled && lowStock ? (
+                    <div className="rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-100">
+                      3日以内
                     </div>
                   ) : null}
                 </div>

@@ -66,12 +66,16 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const importRef = React.useRef<HTMLInputElement>(null);
   const [localProfiles, setLocalProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
+  const [localDiaperStockManagementEnabled, setLocalDiaperStockManagementEnabled] = useState(
+    () => app.diaperStockManagementEnabled
+  );
 
   useEffect(() => {
     if (open) {
       setLocalProfiles(app.profiles);
+      setLocalDiaperStockManagementEnabled(app.diaperStockManagementEnabled);
     }
-  }, [open, app.profiles]);
+  }, [open, app.profiles, app.diaperStockManagementEnabled]);
 
   const handleProfileChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
     setLocalProfiles((prev) => ({
@@ -87,7 +91,7 @@ export function SettingsModal({
     setLocalProfiles((prev) => {
       const nextProfiles = { ...prev };
       const currentStock = nextProfiles.A.diaperStockBySize[size] ?? 0;
-      const nextStock = currentStock + amount;
+      const nextStock = Math.max(0, currentStock + amount);
 
       (Object.keys(nextProfiles) as BabyId[]).forEach((babyId) => {
         nextProfiles[babyId] = {
@@ -104,8 +108,16 @@ export function SettingsModal({
   };
 
   const handleClose = (isOpen: boolean) => {
-    if (!isOpen && JSON.stringify(localProfiles) !== JSON.stringify(app.profiles)) {
-      setApp((prev) => ({ ...prev, profiles: localProfiles }));
+    if (
+      !isOpen &&
+      (JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
+        localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled)
+    ) {
+      setApp((prev) => ({
+        ...prev,
+        profiles: localProfiles,
+        diaperStockManagementEnabled: localDiaperStockManagementEnabled,
+      }));
     }
     onOpenChange(isOpen);
   };
@@ -185,6 +197,7 @@ export function SettingsModal({
                         onChange={(e) => handleProfileChange(babyId, "birthDate", e.target.value)}
                       />
                     </div>
+                    {localDiaperStockManagementEnabled ? (
                     <div className="space-y-2">
                       <Label>おむつ購入リンク</Label>
                       <Input
@@ -193,6 +206,7 @@ export function SettingsModal({
                         placeholder="https://..."
                       />
                     </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -305,6 +319,19 @@ export function SettingsModal({
               <p className="text-sm text-muted-foreground">
                 サイズごとの在庫を調整します。この設定は両方の赤ちゃんで共有されます。
               </p>
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
+                <div>
+                  <div className="text-sm font-semibold">おむつ在庫管理</div>
+                  <div className="text-xs text-muted-foreground">オフにすると在庫数・サイズ・購入リンクの入力を隠します。</div>
+                </div>
+                <Button
+                  variant={localDiaperStockManagementEnabled ? "default" : "outline"}
+                  onClick={() => setLocalDiaperStockManagementEnabled((enabled) => !enabled)}
+                >
+                  {localDiaperStockManagementEnabled ? "オン" : "オフ"}
+                </Button>
+              </div>
+              {localDiaperStockManagementEnabled ? (
               <div className="space-y-4">
                 {Object.keys(localProfiles.A.diaperStockBySize).map((size) => (
                   <div key={size} className="flex items-center gap-4">
@@ -355,6 +382,7 @@ export function SettingsModal({
                   </div>
                 ))}
               </div>
+              ) : null}
             </div>
           </TabsContent>
         </Tabs>

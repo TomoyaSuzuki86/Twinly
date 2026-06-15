@@ -21,6 +21,7 @@ type DiaperModalProps = {
   displayName: string;
   initialDraft: DiaperDraft;
   onSave: (payload: { diaperKind: DiaperKind; note: string; selectedDiaperSize: string; timestamp: number }) => void;
+  diaperStockManagementEnabled: boolean;
   diaperStockBySize: Record<string, number>;
   onUpdateDiaperStock: (size: string, stock: number) => void;
   babyProfile: BabyProfile;
@@ -37,6 +38,7 @@ export function DiaperModal({
   displayName,
   initialDraft,
   onSave,
+  diaperStockManagementEnabled,
   diaperStockBySize,
   onUpdateDiaperStock,
 }: DiaperModalProps) {
@@ -100,6 +102,7 @@ export function DiaperModal({
             </div>
           </div>
 
+          {diaperStockManagementEnabled ? (
           <div className="space-y-2">
             <Label className="text-sm font-semibold text-muted-foreground">おむつ在庫</Label>
             <div className="mt-2 flex flex-col gap-4">
@@ -136,7 +139,7 @@ export function DiaperModal({
                   type="number"
                   value={currentDiaperStock}
                   onChange={(e) => {
-                    const nextStock = Number(e.target.value);
+                    const nextStock = Math.max(0, Number(e.target.value));
                     setCurrentDiaperStock(nextStock);
                     onUpdateDiaperStock(selectedDiaperSize, nextStock);
                   }}
@@ -151,6 +154,7 @@ export function DiaperModal({
               </div>
             </div>
           </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="diaper-datetime" className="text-xs text-muted-foreground">
