@@ -125,7 +125,7 @@ export default function App() {
   const [now, setNow] = useState(() => new Date());
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [appLoading, setAppLoading] = useState(false);
+  const [appLoading, setAppLoading] = useState(() => isFirebaseConfigured && Boolean(auth));
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
   const todayDate = fmtDate(now);
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
@@ -285,6 +285,9 @@ export default function App() {
       unsub = onAuthStateChanged(auth, (user) => {
         setAuthUser(user);
         if (user) {
+          // Keep the skeleton visible until this user's first Firestore
+          // snapshot has replaced the placeholder profiles.
+          setAppLoading(true);
           void ensureUserDocument(user);
         } else {
           const nextState = createEmptyState();
