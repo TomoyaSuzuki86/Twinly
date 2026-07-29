@@ -11,6 +11,7 @@ import {
   Check,
   Ruler,
   FileText,
+  CalendarRange,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ type BabyPanelProps = {
   onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
   onOpenDailyReport: () => void;
   onOpenHealthChart: () => void;
+  onOpenTimeline: () => void;
   lastWeight: number | null;
   lastHeight: number | null;
   themeDimmedBgColor: string;
@@ -119,6 +121,7 @@ export function BabyPanel({
   onAddEvent,
   onOpenDailyReport,
   onOpenHealthChart,
+  onOpenTimeline,
   lastWeight,
   lastHeight,
   themeDimmedBgColor,
@@ -383,7 +386,19 @@ export function BabyPanel({
       </CardContent>
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
-        <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
+        <div className="flex w-full items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={onOpenTimeline}
+            aria-label="週間タイムラインを開く"
+          >
+            <CalendarRange className="h-4 w-4" />
+            <span className="hidden min-[380px]:inline">タイムライン</span>
+          </Button>
+        </div>
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4">
         <div className="grid grid-cols-2 gap-4">
