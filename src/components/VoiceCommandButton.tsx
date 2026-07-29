@@ -8,6 +8,7 @@ import {
   VoiceCommandBabyNames,
   VoiceCommandParseResult,
 } from "@/lib/voice-command";
+import { mergeTranscriptSegments } from "@/lib/speech-transcript";
 
 type SpeechRecognitionResultItem = {
   isFinal?: boolean;
@@ -81,25 +82,23 @@ const collectBestTranscripts = (results: SpeechRecognitionResultList, resultInde
 
   const changedIndex = Math.min(Math.max(0, resultIndex), results.length - 1);
   const prefix = Array.from({ length: changedIndex }, (_, index) => results.item(index).item(0)?.transcript?.trim())
-    .filter(Boolean)
-    .join(" ");
+    .filter((transcript): transcript is string => Boolean(transcript));
   const suffix = Array.from({ length: Math.max(0, results.length - changedIndex - 1) }, (_, offset) =>
     results.item(changedIndex + offset + 1).item(0)?.transcript?.trim()
-  )
-    .filter(Boolean)
-    .join(" ");
+  ).filter((transcript): transcript is string => Boolean(transcript));
 
   const changedAlternatives = collectTranscripts(results.item(changedIndex));
   const transcripts = changedAlternatives
-    .map((transcript) => [prefix, transcript, suffix].filter(Boolean).join(" ").trim())
+    .map((transcript) => mergeTranscriptSegments([...prefix, transcript, ...suffix]))
     .filter(Boolean);
 
   if (transcripts.length) return transcripts;
 
-  const fallbackTranscript = Array.from({ length: results.length }, (_, index) => results.item(index).item(0)?.transcript?.trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  const fallbackTranscript = mergeTranscriptSegments(
+    Array.from({ length: results.length }, (_, index) => results.item(index).item(0)?.transcript?.trim()).filter(
+      (transcript): transcript is string => Boolean(transcript)
+    )
+  );
   return fallbackTranscript ? [fallbackTranscript] : [];
 };
 
