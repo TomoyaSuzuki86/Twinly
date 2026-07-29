@@ -20,6 +20,7 @@ import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
+import { WeeklyTimelineModal } from "./components/WeeklyTimelineModal";
 import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
@@ -145,6 +146,7 @@ export default function App() {
   >(null);
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
+  const [timelineModalOpen, setTimelineModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
   const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
   const [undo, setUndo] = useState<{
@@ -1045,6 +1047,7 @@ export default function App() {
                 onAddEvent={handleAddEvent}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
+                onOpenTimeline={() => setTimelineModalOpen(true)}
                 lastWeight={lastWeights.A}
                 lastHeight={lastHeights.A}
                 themeDimmedBgColor={
@@ -1071,6 +1074,7 @@ export default function App() {
                 onAddEvent={handleAddEvent}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
+                onOpenTimeline={() => setTimelineModalOpen(true)}
                 lastWeight={lastWeights.B}
                 lastHeight={lastHeights.B}
                 themeDimmedBgColor={
@@ -1153,6 +1157,15 @@ export default function App() {
       <EditModal open={modal?.kind === "edit"} onOpenChange={(open) => !open && setModal(null)} event={editTarget} onSave={onSaveEdit} />
       <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />
       <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />
+      <WeeklyTimelineModal
+        open={timelineModalOpen}
+        onOpenChange={setTimelineModalOpen}
+        events={app.events}
+        profiles={app.profiles}
+        initialDate={activeDate}
+        initialBabyId={selectedBabyTab}
+        now={now}
+      />
       {historyModal ? (
         <EventHistoryModal
           open={Boolean(historyModal)}
