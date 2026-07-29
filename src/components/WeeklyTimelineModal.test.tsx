@@ -38,10 +38,17 @@ const events: LogEvent[] = [
     diaperKind: "pee",
     timestamp: new Date("2026-07-29T09:30:00+09:00").getTime(),
   },
+  {
+    id: "poop-a",
+    babyId: "A",
+    type: "diaper",
+    diaperKind: "poop",
+    timestamp: new Date("2026-07-29T15:00:00+09:00").getTime(),
+  },
 ];
 
 describe("WeeklyTimelineModal", () => {
-  it("emphasizes the selected baby and keeps the other baby's records faint", () => {
+  it("fits seven days and 24 hours into one grid with compact category markers", () => {
     render(
       <WeeklyTimelineModal
         open
@@ -54,8 +61,15 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
+    const grid = screen.getByRole("group", { name: "7日間24時間タイムライングリッド" });
     const kanataEvent = screen.getByLabelText("奏汰のミルク 09:00");
     const hinataEvent = screen.getByLabelText("日向のおしっこ 09:30");
+    const poopEvent = screen.getByLabelText("奏汰のうんち 15:00");
+
+    expect(grid.dataset.dayCount).toBe("7");
+    expect(grid.dataset.hourCount).toBe("24");
+    expect(kanataEvent.className).toContain("bg-blue-500");
+    expect(poopEvent.className).toContain("bg-amber-400");
     expect(kanataEvent.dataset.selected).toBe("true");
     expect(hinataEvent.dataset.selected).toBe("false");
     expect(hinataEvent.className).toContain("opacity-25");
@@ -65,5 +79,6 @@ describe("WeeklyTimelineModal", () => {
     expect(kanataEvent.dataset.selected).toBe("false");
     expect(hinataEvent.dataset.selected).toBe("true");
     expect(kanataEvent.className).toContain("opacity-25");
+    expect(hinataEvent.className).toContain("bg-cyan-300");
   });
 });
