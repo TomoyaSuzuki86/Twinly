@@ -72,8 +72,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText("前回 09:45")).toBeTruthy();
-    expect(screen.getByText("35分前")).toBeTruthy();
+    expect(screen.getByText("前回 09:45 / 35分前")).toBeTruthy();
     expect(screen.getByText("前回 10:05 / 15分前")).toBeTruthy();
   });
 
@@ -101,7 +100,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events: [], latestEvents });
 
-    expect(screen.getByText("前回 23:00")).toBeTruthy();
+    expect(screen.getByText("前回 23:00 / 680分前")).toBeTruthy();
     expect(screen.getByText("前回 23:30 / 650分前")).toBeTruthy();
     expect(screen.getAllByText("0")).toBeTruthy();
   });
@@ -143,6 +142,8 @@ describe("BabyPanel", () => {
     renderPanel({ latestEvents });
 
     expect(Number.parseInt(screen.getByTestId("milk-gauge-fill").style.width)).toBeGreaterThan(50);
+    expect(screen.getByText(/あと \d+ml/)).toBeTruthy();
+    expect(screen.getByText(/目安 \d+ml/)).toBeTruthy();
     expect(screen.getByTestId("diaper-gauge-fill").style.width).toBe("100%");
     expect(screen.getByRole("button", { name: /推定空腹度/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /交換必要度/ })).toBeTruthy();
