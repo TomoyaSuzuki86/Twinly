@@ -12,6 +12,7 @@ export type MilkGauge = {
   level: number;
   typicalThreeHourMl: number;
   digestingMl: number;
+  neededMl: number;
 };
 
 export type DiaperGauge = {
@@ -96,6 +97,7 @@ export const buildMilkGauge = ({
     level: clampLevel(digestingMl / typicalThreeHourMl),
     typicalThreeHourMl,
     digestingMl,
+    neededMl: Math.max(0, typicalThreeHourMl - digestingMl),
   };
 };
 
