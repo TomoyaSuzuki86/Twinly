@@ -2,15 +2,17 @@ import { BabyId, LogEvent } from "@/types";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-const LOOKBACK_MS = 7 * DAY_MS;
+const MILK_LOOKBACK_MS = 3 * DAY_MS;
+const DIAPER_LOOKBACK_MS = 7 * DAY_MS;
 const MILK_WINDOW_MS = 3 * HOUR_MS;
-const MIN_OBSERVATION_HOURS = 24;
+const MILK_SESSION_GAP_MS = 30 * 60 * 1000;
+const MILK_TARGET_SAMPLE_COUNT = 3;
 const MIN_DIAPER_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_DIAPER_INTERVAL_MS = 12 * HOUR_MS;
 
 export type MilkGauge = {
   level: number;
-  typicalThreeHourMl: number;
+  targetMilkMl: number;
   digestingMl: number;
   neededMl: number;
 };
@@ -27,12 +29,6 @@ export type CareGauges = {
 };
 
 const clampLevel = (value: number) => Math.min(1, Math.max(0, value));
-
-const percentile = (values: number[], ratio: number) => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.ceil((sorted.length - 1) * ratio);
-  return sorted[index];
-};
 
 const trimmedAverage = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -51,7 +47,7 @@ export const buildMilkGauge = ({
   now: Date;
 }): MilkGauge | null => {
   const nowMs = now.getTime();
-  const cutoffMs = nowMs - LOOKBACK_MS;
+  const cutoffMs = nowMs - MILK_LOOKBACK_MS;
   const milkEvents = events
     .filter(
       (event) =>
@@ -66,22 +62,27 @@ export const buildMilkGauge = ({
 
   if (milkEvents.length === 0) return null;
 
-  const currentWindowStartMs = nowMs - MILK_WINDOW_MS;
-  const baselineEvents = milkEvents.filter((event) => event.timestamp < currentWindowStartMs);
-  const hasEstablishedHistory =
-    baselineEvents.length >= 3 &&
-    currentWindowStartMs - baselineEvents[0].timestamp >= MIN_OBSERVATION_HOURS * HOUR_MS;
-  const observationHours = Math.min(
-    (LOOKBACK_MS - MILK_WINDOW_MS) / HOUR_MS,
-    Math.max(MIN_OBSERVATION_HOURS, (currentWindowStartMs - (baselineEvents[0]?.timestamp ?? nowMs)) / HOUR_MS)
+  // Records no more than 30 minutes apart are treated as one feeding session.
+  // The average of the three largest sessions adapts to growth while avoiding
+  // the day/night dilution caused by averaging every three-hour clock block.
+  const sessions = milkEvents.reduce<Array<{ lastTimestamp: number; totalMl: number }>>(
+    (result, event) => {
+      const latest = result[result.length - 1];
+      if (!latest || event.timestamp - latest.lastTimestamp > MILK_SESSION_GAP_MS) {
+        result.push({ lastTimestamp: event.timestamp, totalMl: event.milkMl ?? 0 });
+      } else {
+        latest.lastTimestamp = event.timestamp;
+        latest.totalMl += event.milkMl ?? 0;
+      }
+      return result;
+    },
+    []
   );
-  const baselineTotalMl = baselineEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
-  const typicalThreeHourMl = hasEstablishedHistory
-    ? baselineTotalMl / (observationHours / 3)
-    : percentile(
-        milkEvents.map((event) => event.milkMl as number),
-        0.75
-      );
+  const largestSessions = sessions
+    .map((session) => session.totalMl)
+    .sort((a, b) => b - a)
+    .slice(0, MILK_TARGET_SAMPLE_COUNT);
+  const targetMilkMl = largestSessions.reduce((sum, amount) => sum + amount, 0) / largestSessions.length;
 
   // Only the latest three hours contribute to fullness. Each feed is treated
   // as fully undigested at first and linearly reaches zero after three hours.
@@ -94,10 +95,10 @@ export const buildMilkGauge = ({
   }, 0);
 
   return {
-    level: clampLevel(digestingMl / typicalThreeHourMl),
-    typicalThreeHourMl,
+    level: clampLevel(digestingMl / targetMilkMl),
+    targetMilkMl,
     digestingMl,
-    neededMl: Math.max(0, typicalThreeHourMl - digestingMl),
+    neededMl: Math.max(0, targetMilkMl - digestingMl),
   };
 };
 
@@ -111,7 +112,7 @@ export const buildDiaperGauge = ({
   now: Date;
 }): DiaperGauge | null => {
   const nowMs = now.getTime();
-  const cutoffMs = nowMs - LOOKBACK_MS;
+  const cutoffMs = nowMs - DIAPER_LOOKBACK_MS;
   const diaperEvents = events
     .filter(
       (event) =>
