@@ -142,10 +142,10 @@ describe("BabyPanel", () => {
 
     renderPanel({ latestEvents });
 
-    expect(Number.parseInt(screen.getByTestId("milk-gauge-fill").style.width)).toBeLessThan(10);
-    expect(screen.getByTestId("diaper-gauge-fill").style.width).toBe("0%");
-    expect(screen.getByRole("button", { name: /推定残量/ })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /交換目安残り/ })).toBeTruthy();
+    expect(Number.parseInt(screen.getByTestId("milk-gauge-fill").style.width)).toBeGreaterThan(50);
+    expect(screen.getByTestId("diaper-gauge-fill").style.width).toBe("100%");
+    expect(screen.getByRole("button", { name: /推定空腹度/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /交換必要度/ })).toBeTruthy();
   });
 
   it("renders every event instead of limiting the list to four items", () => {
