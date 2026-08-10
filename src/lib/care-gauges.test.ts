@@ -65,8 +65,13 @@ describe("care gauges", () => {
     });
 
     expect(justFed?.level).toBe(1);
+    expect(justFed?.neededMl).toBe(0);
     expect(halfDigested?.level).toBeCloseTo(0.5, 1);
+    expect(halfDigested?.neededMl).toBeCloseTo(
+      (halfDigested?.typicalThreeHourMl ?? 0) - (halfDigested?.digestingMl ?? 0)
+    );
     expect(threeHoursLater?.level).toBe(0);
+    expect(threeHoursLater?.neededMl).toBeCloseTo(threeHoursLater?.typicalThreeHourMl ?? 0);
   });
 
   it("updates immediately even when the first milk record is the only history", () => {
@@ -78,6 +83,7 @@ describe("care gauges", () => {
 
     expect(gauge?.typicalThreeHourMl).toBe(140);
     expect(gauge?.level).toBe(1);
+    expect(gauge?.neededMl).toBe(0);
   });
 
   it("combines all diaper entries and reaches empty at the usual interval", () => {

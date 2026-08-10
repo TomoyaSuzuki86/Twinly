@@ -105,6 +105,8 @@ const formatMilkProgressSummary = (progress: MilkProgressComparison | null) => {
   };
 };
 
+const roundMilkAmountUp = (amount: number) => Math.ceil(Math.max(0, amount) / 5) * 5;
+
 export function BabyPanel({
   profile,
   events,
@@ -224,6 +226,8 @@ export function BabyPanel({
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
   const careGauges = buildCareGauges({ events: latestEvents, babyId, now });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
+  const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
+  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.typicalThreeHourMl) : null;
   const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
 
   return (
@@ -232,9 +236,9 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-24 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
+            className="relative h-28 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
-            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%`}
+            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・3時間の目安${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
@@ -247,13 +251,22 @@ export function BabyPanel({
                 <Milk className="mr-3 h-7 w-7" />
                 ミルク
               </div>
-              <span className="mt-1 text-base font-normal opacity-80">前回 {lastMilkTime}</span>
-              <span className="text-sm font-normal opacity-80">{lastMilkElapsed}</span>
+              {milkNeededMl !== null && milkTargetMl !== null ? (
+                <span className="mt-1 text-base font-semibold">
+                  あと {milkNeededMl}ml
+                  <span className="ml-1 text-sm font-normal opacity-80">/ 目安 {milkTargetMl}ml</span>
+                </span>
+              ) : (
+                <span className="mt-1 text-sm font-normal opacity-80">必要量を計算中</span>
+              )}
+              <span className="text-sm font-normal opacity-80">
+                前回 {lastMilkTime} / {lastMilkElapsed}
+              </span>
             </div>
           </Button>
           <Button
             size="lg"
-            className="relative h-24 overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30"
+            className="relative h-28 overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30"
             onClick={() => onOpenModal("diaper", { babyId })}
             aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
