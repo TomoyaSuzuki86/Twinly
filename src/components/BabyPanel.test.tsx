@@ -106,6 +106,48 @@ describe("BabyPanel", () => {
     expect(screen.getAllByText("0")).toBeTruthy();
   });
 
+  it("uses the button backgrounds as milk and diaper timing gauges", () => {
+    const latestEvents: LogEvent[] = [
+      ...Array.from({ length: 7 }, (_, index) => ({
+        id: `milk-${index}`,
+        babyId: "A" as const,
+        type: "milk" as const,
+        timestamp: new Date(`2026-04-${String(11 + index).padStart(2, "0")}T09:00:00+09:00`).getTime(),
+        milkMl: 140,
+        milkMethod: "bottle" as const,
+      })),
+      {
+        id: "milk-top-up",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T10:10:00+09:00").getTime(),
+        milkMl: 5,
+        milkMethod: "bottle",
+      },
+      {
+        id: "diaper-1",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T04:20:00+09:00").getTime(),
+        diaperKind: "pee",
+      },
+      {
+        id: "diaper-2",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T07:20:00+09:00").getTime(),
+        diaperKind: "poop",
+      },
+    ];
+
+    renderPanel({ latestEvents });
+
+    expect(Number.parseInt(screen.getByTestId("milk-gauge-fill").style.width)).toBeLessThan(10);
+    expect(screen.getByTestId("diaper-gauge-fill").style.width).toBe("0%");
+    expect(screen.getByRole("button", { name: /推定残量/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /交換目安残り/ })).toBeTruthy();
+  });
+
   it("renders every event instead of limiting the list to four items", () => {
     const events: LogEvent[] = Array.from({ length: 6 }, (_, index) => ({
       id: `milk-${index + 1}`,

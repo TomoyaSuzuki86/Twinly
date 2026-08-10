@@ -20,6 +20,7 @@ import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
+import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 
@@ -221,6 +222,9 @@ export function BabyPanel({
   const lastDiaperEvent = latestDiaperEvents[0] ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
+  const careGauges = buildCareGauges({ events: latestEvents, babyId, now });
+  const milkGaugePercent = Math.round((careGauges.milk?.level ?? 1) * 100);
+  const diaperGaugePercent = Math.round((careGauges.diaper?.level ?? 1) * 100);
 
   return (
     <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
@@ -228,33 +232,51 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="h-24 flex-col bg-sky-600 text-2xl font-bold hover:bg-sky-500"
+            className="relative h-24 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
+            aria-label={`ミルクを記録・推定残量${milkGaugePercent}%`}
           >
-            <div className="flex items-center">
-              <Milk className="mr-3 h-7 w-7" />
-              ミルク
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 bg-sky-600 transition-[width] duration-500"
+              data-testid="milk-gauge-fill"
+              style={{ width: `${milkGaugePercent}%` }}
+            />
+            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center">
+              <div className="flex items-center">
+                <Milk className="mr-3 h-7 w-7" />
+                ミルク
+              </div>
+              <span className="mt-1 text-base font-normal opacity-80">前回 {lastMilkTime}</span>
+              <span className="text-sm font-normal opacity-80">{lastMilkElapsed}</span>
             </div>
-            <span className="mt-1 text-base font-normal opacity-80">前回 {lastMilkTime}</span>
-            <span className="text-sm font-normal opacity-80">{lastMilkElapsed}</span>
           </Button>
           <Button
             size="lg"
-            className="h-24 flex-col bg-amber-600 text-2xl font-bold hover:bg-amber-500"
+            className="relative h-24 overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30"
             onClick={() => onOpenModal("diaper", { babyId })}
+            aria-label={`おむつを記録・交換目安残り${diaperGaugePercent}%`}
           >
-            <div className="flex items-center">
-              <Droplets className="mr-3 h-7 w-7" />
-              おむつ
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 bg-amber-600 transition-[width] duration-500"
+              data-testid="diaper-gauge-fill"
+              style={{ width: `${diaperGaugePercent}%` }}
+            />
+            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center">
+              <div className="flex items-center">
+                <Droplets className="mr-3 h-7 w-7" />
+                おむつ
+              </div>
+              {diaperStockManagementEnabled ? (
+              <span className="mt-1 text-base font-normal opacity-80">
+                {profile.diaperSize}・残り {remainingDiapers}
+              </span>
+              ) : null}
+              <span className="text-sm font-normal opacity-80">
+                前回 {lastDiaperTime} / {lastDiaperElapsed}
+              </span>
             </div>
-            {diaperStockManagementEnabled ? (
-            <span className="mt-1 text-base font-normal opacity-80">
-              {profile.diaperSize}・残り {remainingDiapers}
-            </span>
-            ) : null}
-            <span className="text-sm font-normal opacity-80">
-              前回 {lastDiaperTime} / {lastDiaperElapsed}
-            </span>
           </Button>
         </div>
 
