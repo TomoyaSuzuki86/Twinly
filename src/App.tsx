@@ -50,7 +50,7 @@ declare global {
 }
 
 const createEmptyState = () => createInitialAppState(new Date());
-const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const AUTO_REFRESH_MS = 60 * 1000;
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
 
 function AppContainer({ children }: { children: React.ReactNode }) {
@@ -190,6 +190,7 @@ export default function App() {
 
   const updateApp = (updater: (prevApp: AppState) => AppState, syncRemote = true) => {
     setApp((prevApp) => updater(prevApp));
+    setNow(new Date());
     if (syncRemote) {
       void syncAppToFirestore(updater);
     }
@@ -260,8 +261,21 @@ export default function App() {
   };
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(new Date()), AUTO_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
+    const refreshNow = () => setNow(new Date());
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshNow();
+    };
+    const intervalId = window.setInterval(refreshNow, AUTO_REFRESH_MS);
+    window.addEventListener("focus", refreshNow);
+    window.addEventListener("pageshow", refreshNow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshNow);
+      window.removeEventListener("pageshow", refreshNow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -336,6 +350,7 @@ export default function App() {
     setAppLoading(true);
     const appRef = doc(db, "users", authUser.uid, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
+      setNow(new Date());
       if (!snap.exists()) {
         const nextState = createEmptyState();
         setApp(nextState);
