@@ -3,15 +3,15 @@ import { BabyId, LogEvent } from "@/types";
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const LOOKBACK_MS = 7 * DAY_MS;
+const MILK_WINDOW_MS = 3 * HOUR_MS;
 const MIN_OBSERVATION_HOURS = 24;
 const MIN_DIAPER_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_DIAPER_INTERVAL_MS = 12 * HOUR_MS;
 
 export type MilkGauge = {
   level: number;
-  capacityMl: number;
-  remainingMl: number;
-  hourlyConsumptionMl: number;
+  typicalThreeHourMl: number;
+  digestingMl: number;
 };
 
 export type DiaperGauge = {
@@ -63,36 +63,39 @@ export const buildMilkGauge = ({
     )
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  if (milkEvents.length < 2) return null;
+  if (milkEvents.length === 0) return null;
 
-  // A high-percentile feed represents the usual full feed without letting a
-  // small top-up (for example 5 ml) reset the gauge to full.
-  const capacityMl = percentile(
-    milkEvents.map((event) => event.milkMl as number),
-    0.75
-  );
+  const currentWindowStartMs = nowMs - MILK_WINDOW_MS;
+  const baselineEvents = milkEvents.filter((event) => event.timestamp < currentWindowStartMs);
+  const hasEstablishedHistory =
+    baselineEvents.length >= 3 &&
+    currentWindowStartMs - baselineEvents[0].timestamp >= MIN_OBSERVATION_HOURS * HOUR_MS;
   const observationHours = Math.min(
-    LOOKBACK_MS / HOUR_MS,
-    Math.max(MIN_OBSERVATION_HOURS, (nowMs - milkEvents[0].timestamp) / HOUR_MS)
+    (LOOKBACK_MS - MILK_WINDOW_MS) / HOUR_MS,
+    Math.max(MIN_OBSERVATION_HOURS, (currentWindowStartMs - (baselineEvents[0]?.timestamp ?? nowMs)) / HOUR_MS)
   );
-  const totalMl = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
-  const hourlyConsumptionMl = totalMl / observationHours;
+  const baselineTotalMl = baselineEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
+  const typicalThreeHourMl = hasEstablishedHistory
+    ? baselineTotalMl / (observationHours / 3)
+    : percentile(
+        milkEvents.map((event) => event.milkMl as number),
+        0.75
+      );
 
-  let remainingMl = 0;
-  let previousTimestamp = milkEvents[0].timestamp;
-  for (const event of milkEvents) {
-    const elapsedHours = Math.max(0, event.timestamp - previousTimestamp) / HOUR_MS;
-    remainingMl = Math.max(0, remainingMl - hourlyConsumptionMl * elapsedHours);
-    remainingMl = Math.min(capacityMl, remainingMl + (event.milkMl ?? 0));
-    previousTimestamp = event.timestamp;
-  }
-  remainingMl = Math.max(0, remainingMl - hourlyConsumptionMl * ((nowMs - previousTimestamp) / HOUR_MS));
+  // Only the latest three hours contribute to fullness. Each feed is treated
+  // as fully undigested at first and linearly reaches zero after three hours.
+  // This lets the UI increase hunger smoothly instead of dropping all at once.
+  const digestingMl = milkEvents.reduce((sum, event) => {
+    const ageMs = nowMs - event.timestamp;
+    if (ageMs < 0 || ageMs >= MILK_WINDOW_MS) return sum;
+    const undigestedRatio = 1 - ageMs / MILK_WINDOW_MS;
+    return sum + (event.milkMl ?? 0) * undigestedRatio;
+  }, 0);
 
   return {
-    level: clampLevel(remainingMl / capacityMl),
-    capacityMl,
-    remainingMl,
-    hourlyConsumptionMl,
+    level: clampLevel(digestingMl / typicalThreeHourMl),
+    typicalThreeHourMl,
+    digestingMl,
   };
 };
 

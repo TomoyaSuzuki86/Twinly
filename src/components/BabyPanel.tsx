@@ -223,8 +223,8 @@ export function BabyPanel({
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
   const careGauges = buildCareGauges({ events: latestEvents, babyId, now });
-  const milkGaugePercent = Math.round((careGauges.milk?.level ?? 1) * 100);
-  const diaperGaugePercent = Math.round((careGauges.diaper?.level ?? 1) * 100);
+  const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
+  const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
 
   return (
     <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
@@ -234,7 +234,7 @@ export function BabyPanel({
             size="lg"
             className="relative h-24 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
-            aria-label={`ミルクを記録・推定残量${milkGaugePercent}%`}
+            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%`}
           >
             <span
               aria-hidden="true"
@@ -255,7 +255,7 @@ export function BabyPanel({
             size="lg"
             className="relative h-24 overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30"
             onClick={() => onOpenModal("diaper", { babyId })}
-            aria-label={`おむつを記録・交換目安残り${diaperGaugePercent}%`}
+            aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
             <span
               aria-hidden="true"

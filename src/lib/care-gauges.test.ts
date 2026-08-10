@@ -20,36 +20,64 @@ const diaper = (id: string, timestamp: string): LogEvent => ({
 });
 
 describe("care gauges", () => {
-  it("does not treat a small recent milk top-up as a full feed", () => {
-    const now = new Date("2026-04-08T12:10:00+09:00");
-    const events = Array.from({ length: 7 }, (_, index) =>
-      milk(`normal-${index}`, `2026-04-0${index + 1}T09:00:00+09:00`, 140)
-    );
-    events.push(milk("top-up", "2026-04-08T12:00:00+09:00", 5));
-
-    const gauge = buildMilkGauge({ events, babyId: "A", now });
-
-    expect(gauge?.capacityMl).toBe(140);
-    expect(gauge?.level).toBeLessThan(0.1);
+  const weeklyHistory = Array.from({ length: 56 }, (_, index) => {
+    const timestamp = new Date("2026-04-01T12:00:00+09:00");
+    timestamp.setHours(timestamp.getHours() + index * 3);
+    return milk(`history-${index}`, timestamp.toISOString(), 140);
   });
 
-  it("fills the milk gauge after a normal feed and drains it over time", () => {
-    const history = Array.from({ length: 7 }, (_, index) =>
-      milk(`history-${index}`, `2026-04-0${index + 1}T09:00:00+09:00`, 140)
-    );
-    const justFed = buildMilkGauge({
-      events: [...history, milk("current", "2026-04-08T12:00:00+09:00", 140)],
+  it("uses the past week average amount per three hours as the fullness baseline", () => {
+    const gauge = buildMilkGauge({
+      events: weeklyHistory,
       babyId: "A",
       now: new Date("2026-04-08T12:00:00+09:00"),
     });
-    const later = buildMilkGauge({
-      events: [...history, milk("current", "2026-04-08T12:00:00+09:00", 140)],
+
+    expect(gauge?.typicalThreeHourMl).toBeCloseTo(140);
+  });
+
+  it("does not treat a small recent milk top-up as a full feed", () => {
+    const gauge = buildMilkGauge({
+      events: [...weeklyHistory, milk("top-up", "2026-04-08T11:50:00+09:00", 5)],
       babyId: "A",
-      now: new Date("2026-04-08T14:00:00+09:00"),
+      now: new Date("2026-04-08T12:00:00+09:00"),
+    });
+
+    expect(gauge?.level).toBeLessThan(0.1);
+  });
+
+  it("fills after a normal feed and becomes empty exactly three hours later", () => {
+    const current = milk("current", "2026-04-08T12:00:00+09:00", 140);
+    const justFed = buildMilkGauge({
+      events: [...weeklyHistory, current],
+      babyId: "A",
+      now: new Date("2026-04-08T12:00:00+09:00"),
+    });
+    const halfDigested = buildMilkGauge({
+      events: [...weeklyHistory, current],
+      babyId: "A",
+      now: new Date("2026-04-08T13:30:00+09:00"),
+    });
+    const threeHoursLater = buildMilkGauge({
+      events: [...weeklyHistory, current],
+      babyId: "A",
+      now: new Date("2026-04-08T15:00:00+09:00"),
     });
 
     expect(justFed?.level).toBe(1);
-    expect(later?.level).toBeLessThan(justFed?.level ?? 0);
+    expect(halfDigested?.level).toBeCloseTo(0.5, 1);
+    expect(threeHoursLater?.level).toBe(0);
+  });
+
+  it("updates immediately even when the first milk record is the only history", () => {
+    const gauge = buildMilkGauge({
+      events: [milk("only", "2026-04-08T12:00:00+09:00", 140)],
+      babyId: "A",
+      now: new Date("2026-04-08T12:00:00+09:00"),
+    });
+
+    expect(gauge?.typicalThreeHourMl).toBe(140);
+    expect(gauge?.level).toBe(1);
   });
 
   it("combines all diaper entries and reaches empty at the usual interval", () => {
@@ -75,10 +103,10 @@ describe("care gauges", () => {
     expect(due?.level).toBe(0);
   });
 
-  it("returns no estimate until enough history exists", () => {
+  it("returns no estimate only when there are no records", () => {
     expect(
       buildMilkGauge({
-        events: [milk("only", "2026-04-08T12:00:00+09:00", 140)],
+        events: [],
         babyId: "A",
         now: new Date("2026-04-08T12:10:00+09:00"),
       })
