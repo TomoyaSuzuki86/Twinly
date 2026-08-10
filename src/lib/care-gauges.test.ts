@@ -26,14 +26,22 @@ describe("care gauges", () => {
     return milk(`history-${index}`, timestamp.toISOString(), 140);
   });
 
-  it("uses the past week average amount per three hours as the fullness baseline", () => {
+  it("uses the average of the three largest feeding sessions from the past three days", () => {
+    const events = [
+      milk("too-old", "2026-04-05T11:59:00+09:00", 300),
+      milk("session-160", "2026-04-06T09:00:00+09:00", 160),
+      milk("session-170-a", "2026-04-06T12:00:00+09:00", 120),
+      milk("session-170-b", "2026-04-06T12:20:00+09:00", 50),
+      milk("session-180", "2026-04-07T09:00:00+09:00", 180),
+      milk("session-100", "2026-04-07T12:00:00+09:00", 100),
+    ];
     const gauge = buildMilkGauge({
-      events: weeklyHistory,
+      events,
       babyId: "A",
       now: new Date("2026-04-08T12:00:00+09:00"),
     });
 
-    expect(gauge?.typicalThreeHourMl).toBeCloseTo(140);
+    expect(gauge?.targetMilkMl).toBe(170);
   });
 
   it("does not treat a small recent milk top-up as a full feed", () => {
@@ -68,10 +76,10 @@ describe("care gauges", () => {
     expect(justFed?.neededMl).toBe(0);
     expect(halfDigested?.level).toBeCloseTo(0.5, 1);
     expect(halfDigested?.neededMl).toBeCloseTo(
-      (halfDigested?.typicalThreeHourMl ?? 0) - (halfDigested?.digestingMl ?? 0)
+      (halfDigested?.targetMilkMl ?? 0) - (halfDigested?.digestingMl ?? 0)
     );
     expect(threeHoursLater?.level).toBe(0);
-    expect(threeHoursLater?.neededMl).toBeCloseTo(threeHoursLater?.typicalThreeHourMl ?? 0);
+    expect(threeHoursLater?.neededMl).toBeCloseTo(threeHoursLater?.targetMilkMl ?? 0);
   });
 
   it("updates immediately even when the first milk record is the only history", () => {
@@ -81,7 +89,7 @@ describe("care gauges", () => {
       now: new Date("2026-04-08T12:00:00+09:00"),
     });
 
-    expect(gauge?.typicalThreeHourMl).toBe(140);
+    expect(gauge?.targetMilkMl).toBe(140);
     expect(gauge?.level).toBe(1);
     expect(gauge?.neededMl).toBe(0);
   });

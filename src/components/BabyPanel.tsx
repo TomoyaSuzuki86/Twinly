@@ -227,7 +227,7 @@ export function BabyPanel({
   const careGauges = buildCareGauges({ events: latestEvents, babyId, now });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
   const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
-  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.typicalThreeHourMl) : null;
+  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
   const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
 
   return (
@@ -238,7 +238,7 @@ export function BabyPanel({
             size="lg"
             className="relative h-28 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
-            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・3時間の目安${milkTargetMl}ml` : ""}`}
+            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・1回の目安${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
