@@ -94,7 +94,7 @@ describe("care gauges", () => {
     expect(gauge?.neededMl).toBe(0);
   });
 
-  it("combines all diaper entries and reaches empty at the usual interval", () => {
+  it("reaches the fixed diaper replacement timing after two hours", () => {
     const events = [
       diaper("d1", "2026-04-08T06:00:00+09:00"),
       { ...diaper("d2", "2026-04-08T09:00:00+09:00"), diaperKind: "poop" as const },
@@ -109,12 +109,23 @@ describe("care gauges", () => {
     const due = buildDiaperGauge({
       events,
       babyId: "A",
-      now: new Date("2026-04-08T15:00:00+09:00"),
+      now: new Date("2026-04-08T14:00:00+09:00"),
     });
 
-    expect(justChanged?.expectedIntervalMinutes).toBe(180);
+    expect(justChanged?.expectedIntervalMinutes).toBe(120);
     expect(justChanged?.level).toBe(1);
     expect(due?.level).toBe(0);
+  });
+
+  it("starts the two-hour diaper gauge from the first record", () => {
+    const gauge = buildDiaperGauge({
+      events: [diaper("only", "2026-04-08T12:00:00+09:00")],
+      babyId: "A",
+      now: new Date("2026-04-08T13:00:00+09:00"),
+    });
+
+    expect(gauge?.expectedIntervalMinutes).toBe(120);
+    expect(gauge?.level).toBe(0.5);
   });
 
   it("returns no estimate only when there are no records", () => {
@@ -126,11 +137,7 @@ describe("care gauges", () => {
       })
     ).toBeNull();
     expect(
-      buildDiaperGauge({
-        events: [diaper("only", "2026-04-08T12:00:00+09:00")],
-        babyId: "A",
-        now: new Date("2026-04-08T12:10:00+09:00"),
-      })
+      buildDiaperGauge({ events: [], babyId: "A", now: new Date("2026-04-08T12:10:00+09:00") })
     ).toBeNull();
   });
 });
