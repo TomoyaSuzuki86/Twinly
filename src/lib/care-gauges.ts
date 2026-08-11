@@ -7,8 +7,7 @@ const DIAPER_LOOKBACK_MS = 7 * DAY_MS;
 const MILK_WINDOW_MS = 3 * HOUR_MS;
 const MILK_SESSION_GAP_MS = 30 * 60 * 1000;
 const MILK_TARGET_SAMPLE_COUNT = 3;
-const MIN_DIAPER_INTERVAL_MS = 5 * 60 * 1000;
-const MAX_DIAPER_INTERVAL_MS = 12 * HOUR_MS;
+const DIAPER_INTERVAL_MS = 2 * HOUR_MS;
 
 export type MilkGauge = {
   level: number;
@@ -29,13 +28,6 @@ export type CareGauges = {
 };
 
 const clampLevel = (value: number) => Math.min(1, Math.max(0, value));
-
-const trimmedAverage = (values: number[]) => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const trimCount = sorted.length >= 10 ? Math.floor(sorted.length * 0.1) : 0;
-  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
-  return trimmed.reduce((sum, value) => sum + value, 0) / trimmed.length;
-};
 
 export const buildMilkGauge = ({
   events,
@@ -123,23 +115,13 @@ export const buildDiaperGauge = ({
     )
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  if (diaperEvents.length < 2) return null;
+  if (diaperEvents.length === 0) return null;
 
-  // Pee and poop are deliberately combined. Very close duplicate entries and
-  // overnight gaps are excluded so they do not distort the normal interval.
-  const intervals = diaperEvents
-    .slice(1)
-    .map((event, index) => event.timestamp - diaperEvents[index].timestamp)
-    .filter((interval) => interval >= MIN_DIAPER_INTERVAL_MS && interval <= MAX_DIAPER_INTERVAL_MS);
-
-  if (intervals.length === 0) return null;
-
-  const expectedIntervalMs = trimmedAverage(intervals);
   const elapsedMs = Math.max(0, nowMs - diaperEvents[diaperEvents.length - 1].timestamp);
 
   return {
-    level: clampLevel(1 - elapsedMs / expectedIntervalMs),
-    expectedIntervalMinutes: expectedIntervalMs / (60 * 1000),
+    level: clampLevel(1 - elapsedMs / DIAPER_INTERVAL_MS),
+    expectedIntervalMinutes: DIAPER_INTERVAL_MS / (60 * 1000),
     elapsedMinutes: elapsedMs / (60 * 1000),
   };
 };
