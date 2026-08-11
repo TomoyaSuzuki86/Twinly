@@ -26,6 +26,7 @@ import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, 
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import { buildMilkProgressComparison } from "./lib/milk-progress";
+import { buildCareGauges } from "./lib/care-gauges";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
@@ -901,6 +902,25 @@ export default function App() {
     return result;
   }, [activeDate, app.events, now]);
 
+  const tabCareGaugePercents = useMemo(() => {
+    const result: Record<BabyId, { milk: number; diaper: number }> = {
+      A: { milk: 0, diaper: 0 },
+      B: { milk: 0, diaper: 0 },
+    };
+
+    (["A", "B"] as BabyId[]).forEach((babyId) => {
+      const latestEvents = latestEventsByBaby[babyId];
+      const gauges = buildCareGauges({ events: latestEvents, babyId, now });
+      const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
+      result[babyId] = {
+        milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
+        diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
+      };
+    });
+
+    return result;
+  }, [latestEventsByBaby, now]);
+
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
   useScreenWakeLock(Boolean(authUser));
 
@@ -1038,10 +1058,16 @@ export default function App() {
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="w-full">
             <TabsList className="grid h-auto w-full grid-cols-2">
               <TabsTrigger value="A" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
-                <BabyTabTrigger profile={app.profiles.A} />
+                <BabyTabTrigger
+                  profile={app.profiles.A}
+                  careGaugePercents={selectedBabyTab === "A" ? undefined : tabCareGaugePercents.A}
+                />
               </TabsTrigger>
               <TabsTrigger value="B" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
-                <BabyTabTrigger profile={app.profiles.B} />
+                <BabyTabTrigger
+                  profile={app.profiles.B}
+                  careGaugePercents={selectedBabyTab === "B" ? undefined : tabCareGaugePercents.B}
+                />
               </TabsTrigger>
             </TabsList>
             <TabsContent value="A" className="mt-4">
