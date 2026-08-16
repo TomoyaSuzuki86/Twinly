@@ -31,6 +31,7 @@ class FakeSpeechRecognition {
     const alternative = { transcript };
     const alternatives = {
       length: 1,
+      isFinal: true,
       0: alternative,
       item: () => alternative,
     };
@@ -61,18 +62,28 @@ describe("WakeWordButton", () => {
     });
   });
 
-  it("hands control to command input after hearing OK Twinly", async () => {
+  it("hands control to command input after hearing the Japanese wake phrase", async () => {
     const onWakeWord = vi.fn();
     const onMessage = vi.fn();
     render(<WakeWordButton onWakeWord={onWakeWord} onMessage={onMessage} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "start OK Twinly hands-free input" }));
-    expect(onMessage).toHaveBeenCalledWith("「OK Twinly」と話してください");
+    fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
+    expect(onMessage).toHaveBeenCalledWith("「ツインリーお願い」と話してください");
 
-    act(() => FakeSpeechRecognition.latest?.emit("オーケー ツインリー"));
+    act(() => FakeSpeechRecognition.latest?.emit("ツインリー お願い"));
     expect(onMessage).toHaveBeenCalledWith("はい、どうぞ");
 
     await act(async () => vi.advanceTimersByTimeAsync(300));
     expect(onWakeWord).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the final transcript when the wake phrase does not match", () => {
+    const onMessage = vi.fn();
+    render(<WakeWordButton onWakeWord={vi.fn()} onMessage={onMessage} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
+    act(() => FakeSpeechRecognition.latest?.emit("ツインリーを開いて"));
+
+    expect(onMessage).toHaveBeenLastCalledWith("聞き取り：「ツインリーを開いて」");
   });
 });
