@@ -4,17 +4,12 @@ const normalizeWakeWordText = (text: string) =>
     .toLowerCase()
     .replace(/[\s、。,.!?！？・_\-]/g, "");
 
-const TWINLY_WAKE_WORDS = [
-  "ツインリーお願い",
-  "ツインリーお願いします",
-  "ツインリーをお願い",
-  "ツインお願い",
-  "ツインお願いします",
-  "ツインをお願い",
-  "ついんりーお願い",
-  "ついんお願い",
-  "Twinlyお願い",
-].map(normalizeWakeWordText);
+const HEY_VARIANTS = ["ヘイ", "へい", "ヘーイ", "へーい", "hey"];
+const TWIN_VARIANTS = ["ツイン", "ついん", "twin"];
+
+const TWINLY_WAKE_WORDS = HEY_VARIANTS.flatMap((hey) =>
+  TWIN_VARIANTS.map((twin) => normalizeWakeWordText(`${hey}${twin}`))
+);
 
 export const containsTwinlyWakeWord = (text: string) => {
   const normalizedText = normalizeWakeWordText(text);
