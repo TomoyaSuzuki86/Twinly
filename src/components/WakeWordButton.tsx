@@ -225,7 +225,7 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
     enabledRef.current = true;
     handingOffRef.current = false;
     setEnabled(true);
-    onMessage("「ツインリーお願い」と話してください");
+    onMessage("「ヘイツイン」と話してください");
     // Start directly from the click so the browser can request microphone
     // permission within a user gesture.
     beginListening();
@@ -282,9 +282,9 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
         supported
           ? enabled
             ? listening
-              ? "「ツインリーお願い」を待っています"
+              ? "「ヘイツイン」を待っています"
               : "ハンズフリー入力を再開しています"
-            : "「ツインリーお願い」でハンズフリー入力"
+            : "「ヘイツイン」でハンズフリー入力"
           : "ハンズフリー入力はこのブラウザで使えません"
       }
     >
