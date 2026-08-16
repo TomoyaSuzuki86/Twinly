@@ -5,6 +5,7 @@ export type SpeechRecognitionResultItem = {
 
 export type SpeechRecognitionAlternativeList = {
   readonly length: number;
+  readonly isFinal?: boolean;
   item(index: number): SpeechRecognitionResultItem;
   [index: number]: SpeechRecognitionResultItem;
 };

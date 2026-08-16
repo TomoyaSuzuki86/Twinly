@@ -32,6 +32,20 @@ const collectAlternatives = (results: SpeechRecognitionResultList, resultIndex =
   return transcripts;
 };
 
+const collectFinalTranscripts = (results: SpeechRecognitionResultList, resultIndex = 0) => {
+  const transcripts: string[] = [];
+  const firstResultIndex = Math.min(Math.max(0, resultIndex), Math.max(0, results.length - 1));
+
+  for (let index = firstResultIndex; index < results.length; index += 1) {
+    const result = results.item(index);
+    if (!result.isFinal) continue;
+    const transcript = result.item(0)?.transcript?.trim();
+    if (transcript) transcripts.push(transcript);
+  }
+
+  return transcripts;
+};
+
 export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: WakeWordButtonProps) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const restartTimerRef = useRef<number | null>(null);
@@ -119,7 +133,11 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
     };
     recognition.onresult = (event) => {
       const transcripts = collectAlternatives(event.results, event.resultIndex);
-      if (!findTwinlyWakeWord(transcripts)) return;
+      if (!findTwinlyWakeWord(transcripts)) {
+        const finalTranscript = collectFinalTranscripts(event.results, event.resultIndex).at(-1);
+        if (finalTranscript) onMessage(`聞き取り：「${finalTranscript}」`);
+        return;
+      }
 
       handingOffRef.current = true;
       clearRestartTimer();
@@ -163,7 +181,7 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
     enabledRef.current = true;
     handingOffRef.current = false;
     setEnabled(true);
-    onMessage("「OK Twinly」と話してください");
+    onMessage("「ツインリーお願い」と話してください");
     // Start directly from the click so the browser can request microphone
     // permission within a user gesture.
     beginListening();
@@ -213,15 +231,15 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
       variant={enabled ? "default" : "ghost"}
       size="icon"
       onClick={enabled ? disableHandsFree : enableHandsFree}
-      aria-label={enabled ? "stop OK Twinly hands-free input" : "start OK Twinly hands-free input"}
+      aria-label={enabled ? "stop Twinly wake phrase input" : "start Twinly wake phrase input"}
       aria-pressed={enabled}
       title={
         supported
           ? enabled
             ? listening
-              ? "OK Twinlyを待っています"
+              ? "「ツインリーお願い」を待っています"
               : "ハンズフリー入力を再開しています"
-            : "OK Twinlyでハンズフリー入力"
+            : "「ツインリーお願い」でハンズフリー入力"
           : "ハンズフリー入力はこのブラウザで使えません"
       }
     >

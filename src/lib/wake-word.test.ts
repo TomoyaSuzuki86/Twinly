@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 import { containsTwinlyWakeWord, findTwinlyWakeWord } from "./wake-word";
 
 describe("Twinly wake word", () => {
-  it.each(["OK Twinly", "okay twinly", "OK、ツインリー", "オーケー ツインリー", "おっけーついんりー"])(
+  it.each([
+    "ツインリーお願い",
+    "ツインリー お願い",
+    "ツインリーお願いします",
+    "ツインリーをお願い",
+    "ついんりー お願い",
+    "Twinlyお願い",
+    "OK Twinly",
+    "okay twinly",
+    "OK、ツインリー",
+    "オーケー ツインリー",
+    "おっけーついんりー",
+  ])(
     "recognizes %s",
     (transcript) => {
       expect(containsTwinlyWakeWord(transcript)).toBe(true);
@@ -10,7 +22,7 @@ describe("Twinly wake word", () => {
   );
 
   it("recognizes the wake word inside a longer transcript", () => {
-    expect(containsTwinlyWakeWord("ねえ OK Twinly お願い")).toBe(true);
+    expect(containsTwinlyWakeWord("ねえ、ツインリーお願い")).toBe(true);
   });
 
   it("does not react to an ordinary Twinly mention", () => {
@@ -18,6 +30,6 @@ describe("Twinly wake word", () => {
   });
 
   it("selects a matching speech-recognition alternative", () => {
-    expect(findTwinlyWakeWord(["大きいツインリー", "OK Twinly"])).toBe("OK Twinly");
+    expect(findTwinlyWakeWord(["大きいツインリー", "ツインリーお願い"])).toBe("ツインリーお願い");
   });
 });

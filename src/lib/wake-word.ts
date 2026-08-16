@@ -5,6 +5,11 @@ const normalizeWakeWordText = (text: string) =>
     .replace(/[\s、。,.!?！？・_\-]/g, "");
 
 const TWINLY_WAKE_WORDS = [
+  "ツインリーお願い",
+  "ツインリーお願いします",
+  "ツインリーをお願い",
+  "ついんりーお願い",
+  "Twinlyお願い",
   "ok twinly",
   "okay twinly",
   "ok ツインリー",
