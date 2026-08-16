@@ -9,59 +9,19 @@ import {
   VoiceCommandParseResult,
 } from "@/lib/voice-command";
 import { mergeTranscriptSegments } from "@/lib/speech-transcript";
-
-type SpeechRecognitionResultItem = {
-  isFinal?: boolean;
-  transcript: string;
-};
-
-type SpeechRecognitionAlternativeList = {
-  readonly length: number;
-  item(index: number): SpeechRecognitionResultItem;
-  [index: number]: SpeechRecognitionResultItem;
-};
-
-type SpeechRecognitionResultList = {
-  readonly length: number;
-  item(index: number): SpeechRecognitionAlternativeList;
-  [index: number]: SpeechRecognitionAlternativeList;
-};
-
-type SpeechRecognitionEvent = {
-  resultIndex?: number;
-  results: SpeechRecognitionResultList;
-};
-
-type SpeechRecognitionErrorEvent = {
-  error: string;
-};
-
-type SpeechRecognitionInstance = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  continuous?: boolean;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
-
-type SpeechRecognitionWindow = Window & {
-  SpeechRecognition?: SpeechRecognitionConstructor;
-  webkitSpeechRecognition?: SpeechRecognitionConstructor;
-};
+import {
+  getSpeechRecognition,
+  SpeechRecognitionAlternativeList,
+  SpeechRecognitionInstance,
+  SpeechRecognitionResultList,
+} from "@/lib/speech-recognition";
 
 type VoiceCommandButtonProps = {
   babyNames?: VoiceCommandBabyNames;
   defaultMilkMlByBaby?: Partial<Record<BabyId, number>>;
   onCommand: (command: VoiceCommand) => void;
   onMessage: (message: string) => void;
+  onListeningChange?: (listening: boolean) => void;
 };
 
 export type VoiceCommandButtonHandle = {
@@ -102,11 +62,6 @@ const collectBestTranscripts = (results: SpeechRecognitionResultList, resultInde
   return fallbackTranscript ? [fallbackTranscript] : [];
 };
 
-const getSpeechRecognition = () => {
-  const speechWindow = window as SpeechRecognitionWindow;
-  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
-};
-
 type VoiceCommandParseErrorReason = Extract<VoiceCommandParseResult, { ok: false }>["reason"];
 
 const parseErrorMessage = (reason: VoiceCommandParseErrorReason) => {
@@ -120,7 +75,7 @@ const RESTART_DELAY_MS = 180;
 const MAX_LISTENING_MS = 20000;
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
-  { babyNames, defaultMilkMlByBaby, onCommand, onMessage },
+  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onListeningChange },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -134,6 +89,11 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
   const submittedRef = useRef(false);
   const [listening, setListening] = useState(false);
   const supported = typeof window !== "undefined" && Boolean(getSpeechRecognition());
+
+  const updateListening = (nextListening: boolean) => {
+    setListening(nextListening);
+    onListeningChange?.(nextListening);
+  };
 
   const clearSilenceTimer = () => {
     if (silenceTimerRef.current) {
@@ -169,7 +129,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     forcedBabyIdRef.current = undefined;
     keepListeningRef.current = false;
     submittedRef.current = false;
-    setListening(false);
+    updateListening(false);
   };
 
   const submitLatestTranscript = (sessionId: number, stopRecognition = true) => {
@@ -197,7 +157,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       return;
     }
     onCommand(parsed.command);
-    setListening(false);
+    updateListening(false);
   };
 
   const scheduleSilenceSubmit = () => {
@@ -223,7 +183,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     forcedBabyIdRef.current = forcedBabyId;
     keepListeningRef.current = true;
     submittedRef.current = false;
-    setListening(true);
+    updateListening(true);
 
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
@@ -242,7 +202,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       recognition.maxAlternatives = 5;
       recognition.continuous = true;
 
-      recognition.onstart = () => setListening(true);
+      recognition.onstart = () => updateListening(true);
       recognition.onend = () => {
         if (sessionId !== sessionIdRef.current) return;
         recognitionRef.current = null;
@@ -252,7 +212,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
         }
 
         if (!keepListeningRef.current || submittedRef.current) {
-          setListening(false);
+          updateListening(false);
           return;
         }
 
