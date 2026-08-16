@@ -3,14 +3,18 @@ import { containsTwinlyWakeWord, findTwinlyWakeWord } from "./wake-word";
 
 describe("Twinly wake word", () => {
   it.each([
-    "ツインリーお願い",
-    "ツインリー お願い",
-    "ツインリーお願いします",
-    "ツインリーをお願い",
-    "ツイン、お願い",
-    "ツインをお願いします",
-    "ついんりー お願い",
-    "Twinlyお願い",
+    "ヘイツイン",
+    "ヘイ ツイン",
+    "ヘイ、ツイン",
+    "ヘイ！ツイン",
+    "へいついん",
+    "ヘーイ ツイン",
+    "へーい twin",
+    "Hey Twin",
+    "hey twin",
+    "ヘイ twin",
+    "hey ついん",
+    "Hey、ツイン",
   ])(
     "recognizes %s",
     (transcript) => {
@@ -19,18 +23,18 @@ describe("Twinly wake word", () => {
   );
 
   it("recognizes the wake word inside a longer transcript", () => {
-    expect(containsTwinlyWakeWord("ねえ、ツインリーお願い")).toBe(true);
+    expect(containsTwinlyWakeWord("ねえ、ヘイツイン")).toBe(true);
   });
 
-  it("does not react to an ordinary Twinly mention", () => {
-    expect(containsTwinlyWakeWord("Twinlyを開いて")).toBe(false);
+  it.each(["ヘイ", "ツイン", "Twin"])("does not react to %s by itself", (transcript) => {
+    expect(containsTwinlyWakeWord(transcript)).toBe(false);
   });
 
-  it("does not react to onegai by itself", () => {
-    expect(containsTwinlyWakeWord("お願い")).toBe(false);
+  it("does not react to an ordinary Twin mention", () => {
+    expect(containsTwinlyWakeWord("ツインを開いて")).toBe(false);
   });
 
   it("selects a matching speech-recognition alternative", () => {
-    expect(findTwinlyWakeWord(["大きいツインリー", "ツインリーお願い"])).toBe("ツインリーお願い");
+    expect(findTwinlyWakeWord(["ツインを開いて", "Hey Twin"])).toBe("Hey Twin");
   });
 });
