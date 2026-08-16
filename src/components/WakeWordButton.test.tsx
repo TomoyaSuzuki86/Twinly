@@ -69,11 +69,12 @@ describe("WakeWordButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
     expect(onMessage).toHaveBeenCalledWith("「ヘイツイン」と話してください");
+    expect(FakeSpeechRecognition.latest?.continuous).toBe(false);
 
     act(() => FakeSpeechRecognition.latest?.emit("ヘイ、ツイン"));
     expect(onMessage).toHaveBeenCalledWith("はい、どうぞ");
 
-    await act(async () => vi.advanceTimersByTimeAsync(300));
+    await act(async () => vi.advanceTimersByTimeAsync(650));
     expect(onWakeWord).toHaveBeenCalledTimes(1);
   });
 
@@ -85,7 +86,7 @@ describe("WakeWordButton", () => {
     act(() => FakeSpeechRecognition.latest?.emit("ヘイ"));
     act(() => FakeSpeechRecognition.latest?.emit("ツイン"));
 
-    await act(async () => vi.advanceTimersByTimeAsync(300));
+    await act(async () => vi.advanceTimersByTimeAsync(650));
     expect(onWakeWord).toHaveBeenCalledTimes(1);
   });
 
@@ -109,7 +110,7 @@ describe("WakeWordButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
     act(() => FakeSpeechRecognition.latest?.emit("ヘイ"));
-    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    await act(async () => vi.advanceTimersByTimeAsync(3_200));
     act(() => FakeSpeechRecognition.latest?.emit("ツイン"));
     await act(async () => vi.advanceTimersByTimeAsync(300));
 
