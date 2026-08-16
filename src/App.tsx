@@ -22,6 +22,7 @@ import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
 import { WeeklyTimelineModal } from "./components/WeeklyTimelineModal";
 import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
+import { WakeWordButton } from "./components/WakeWordButton";
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
@@ -157,6 +158,7 @@ export default function App() {
     retryVoice?: boolean;
   }>({ open: false });
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+  const [voiceListening, setVoiceListening] = useState(false);
   const undoTimerRef = useRef<number | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
   const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
@@ -1032,12 +1034,18 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
+              <WakeWordButton
+                disabled={voiceListening}
+                onWakeWord={() => voiceButtonRef.current?.startListening()}
+                onMessage={showVoiceMessage}
+              />
               <VoiceCommandButton
                 ref={voiceButtonRef}
                 babyNames={voiceCommandBabyNames}
                 defaultMilkMlByBaby={defaultVoiceMilkMlByBaby}
                 onCommand={handleVoiceCommand}
                 onMessage={showVoiceMessage}
+                onListeningChange={setVoiceListening}
               />
               <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                 <Settings className="h-5 w-5" />
