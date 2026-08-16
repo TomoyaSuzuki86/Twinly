@@ -15,6 +15,14 @@ describe("Twinly wake word", () => {
     "ヘイ twin",
     "hey ついん",
     "Hey、ツイン",
+    "へーツイン",
+    "へーツイ",
+    "へいつい",
+    "へーついー",
+    "へついん",
+    "へつい",
+    "ペッチー",
+    "ぺっちー",
   ])(
     "recognizes %s",
     (transcript) => {
