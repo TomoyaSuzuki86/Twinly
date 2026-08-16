@@ -27,6 +27,7 @@ import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-dr
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { buildCareGauges } from "./lib/care-gauges";
+import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
@@ -160,6 +161,7 @@ export default function App() {
   const undoTimerRef = useRef<number | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
   const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
+  const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
 
   const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
@@ -187,6 +189,23 @@ export default function App() {
     } catch (error) {
       console.error("syncAppToFirestore failed", error);
     }
+  };
+
+  const handleBabyTabTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches.item(0);
+    if (!touch) return;
+    babyTabSwipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleBabyTabTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = babyTabSwipeStartRef.current;
+    babyTabSwipeStartRef.current = null;
+    const touch = event.changedTouches.item(0);
+    if (!start || !touch) return;
+
+    const direction = detectHorizontalSwipe(start, { x: touch.clientX, y: touch.clientY });
+    if (direction === "left" && selectedBabyTab === "A") setSelectedBabyTab("B");
+    if (direction === "right" && selectedBabyTab === "B") setSelectedBabyTab("A");
   };
 
   const updateApp = (updater: (prevApp: AppState) => AppState, syncRemote = true) => {
@@ -1070,6 +1089,14 @@ export default function App() {
                 />
               </TabsTrigger>
             </TabsList>
+            <div
+              className="touch-pan-y"
+              onTouchStart={handleBabyTabTouchStart}
+              onTouchEnd={handleBabyTabTouchEnd}
+              onTouchCancel={() => {
+                babyTabSwipeStartRef.current = null;
+              }}
+            >
             <TabsContent value="A" className="mt-4">
               <BabyPanel
                 profile={app.profiles.A}
@@ -1124,6 +1151,7 @@ export default function App() {
                 }
               />
             </TabsContent>
+            </div>
           </Tabs>
         </main>
       </div>
