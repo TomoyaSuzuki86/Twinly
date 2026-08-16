@@ -14,9 +14,9 @@ type WakeWordButtonProps = {
   onMessage: (message: string) => void;
 };
 
-const RESTART_DELAY_MS = 250;
-const COMMAND_HANDOFF_DELAY_MS = 300;
-const WAKE_FRAGMENT_WINDOW_MS = 1_800;
+const RESTART_DELAY_MS = 600;
+const COMMAND_HANDOFF_DELAY_MS = 650;
+const WAKE_FRAGMENT_WINDOW_MS = 3_000;
 
 type WakeFragment = {
   at: number;
@@ -132,7 +132,9 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
     recognition.lang = "ja-JP";
     recognition.interimResults = true;
     recognition.maxAlternatives = 5;
-    recognition.continuous = true;
+    // Android Chrome is far more reliable when each utterance is finalized
+    // independently. onend restarts the foreground wake listener.
+    recognition.continuous = false;
 
     recognition.onstart = () => {
       if (mountedRef.current) setListening(true);
