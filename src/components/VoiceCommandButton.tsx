@@ -21,7 +21,6 @@ type VoiceCommandButtonProps = {
   defaultMilkMlByBaby?: Partial<Record<BabyId, number>>;
   onCommand: (command: VoiceCommand) => void;
   onMessage: (message: string) => void;
-  onListeningChange?: (listening: boolean) => void;
 };
 
 export type VoiceCommandButtonHandle = {
@@ -75,7 +74,7 @@ const RESTART_DELAY_MS = 180;
 const MAX_LISTENING_MS = 20000;
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
-  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onListeningChange },
+  { babyNames, defaultMilkMlByBaby, onCommand, onMessage },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -89,11 +88,6 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
   const submittedRef = useRef(false);
   const [listening, setListening] = useState(false);
   const supported = typeof window !== "undefined" && Boolean(getSpeechRecognition());
-
-  const updateListening = (nextListening: boolean) => {
-    setListening(nextListening);
-    onListeningChange?.(nextListening);
-  };
 
   const clearSilenceTimer = () => {
     if (silenceTimerRef.current) {
@@ -129,7 +123,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     forcedBabyIdRef.current = undefined;
     keepListeningRef.current = false;
     submittedRef.current = false;
-    updateListening(false);
+    setListening(false);
   };
 
   const submitLatestTranscript = (sessionId: number, stopRecognition = true) => {
@@ -157,7 +151,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       return;
     }
     onCommand(parsed.command);
-    updateListening(false);
+    setListening(false);
   };
 
   const scheduleSilenceSubmit = () => {
@@ -183,7 +177,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     forcedBabyIdRef.current = forcedBabyId;
     keepListeningRef.current = true;
     submittedRef.current = false;
-    updateListening(true);
+    setListening(true);
 
     const SpeechRecognition = getSpeechRecognition();
     if (!SpeechRecognition) {
@@ -202,7 +196,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       recognition.maxAlternatives = 5;
       recognition.continuous = true;
 
-      recognition.onstart = () => updateListening(true);
+      recognition.onstart = () => setListening(true);
       recognition.onend = () => {
         if (sessionId !== sessionIdRef.current) return;
         recognitionRef.current = null;
@@ -212,7 +206,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
         }
 
         if (!keepListeningRef.current || submittedRef.current) {
-          updateListening(false);
+          setListening(false);
           return;
         }
 
