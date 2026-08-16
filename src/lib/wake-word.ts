@@ -8,15 +8,12 @@ const TWINLY_WAKE_WORDS = [
   "ツインリーお願い",
   "ツインリーお願いします",
   "ツインリーをお願い",
+  "ツインお願い",
+  "ツインお願いします",
+  "ツインをお願い",
   "ついんりーお願い",
+  "ついんお願い",
   "Twinlyお願い",
-  "ok twinly",
-  "okay twinly",
-  "ok ツインリー",
-  "オーケー ツインリー",
-  "オッケー ツインリー",
-  "おーけー ついんりー",
-  "おっけー ついんりー",
 ].map(normalizeWakeWordText);
 
 export const containsTwinlyWakeWord = (text: string) => {

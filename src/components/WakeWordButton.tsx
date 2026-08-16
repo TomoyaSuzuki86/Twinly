@@ -16,6 +16,12 @@ type WakeWordButtonProps = {
 
 const RESTART_DELAY_MS = 250;
 const COMMAND_HANDOFF_DELAY_MS = 300;
+const WAKE_FRAGMENT_WINDOW_MS = 1_800;
+
+type WakeFragment = {
+  at: number;
+  transcript: string;
+};
 
 const collectAlternatives = (results: SpeechRecognitionResultList, resultIndex = 0) => {
   const transcripts: string[] = [];
@@ -46,6 +52,27 @@ const collectFinalTranscripts = (results: SpeechRecognitionResultList, resultInd
   return transcripts;
 };
 
+const collectCombinedAlternatives = (results: SpeechRecognitionResultList) => {
+  const transcripts: string[] = [];
+  let maxAlternatives = 0;
+
+  for (let index = 0; index < results.length; index += 1) {
+    maxAlternatives = Math.max(maxAlternatives, results.item(index).length);
+  }
+
+  for (let alternativeIndex = 0; alternativeIndex < maxAlternatives; alternativeIndex += 1) {
+    const fragments: string[] = [];
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+      const result = results.item(resultIndex);
+      const transcript = result.item(Math.min(alternativeIndex, result.length - 1))?.transcript?.trim();
+      if (transcript) fragments.push(transcript);
+    }
+    if (fragments.length) transcripts.push(fragments.join(" "));
+  }
+
+  return transcripts;
+};
+
 export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: WakeWordButtonProps) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const restartTimerRef = useRef<number | null>(null);
@@ -53,6 +80,7 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
   const enabledRef = useRef(false);
   const disabledRef = useRef(disabled);
   const handingOffRef = useRef(false);
+  const wakeFragmentsRef = useRef<WakeFragment[]>([]);
   const mountedRef = useRef(true);
   const [enabled, setEnabled] = useState(false);
   const [listening, setListening] = useState(false);
@@ -132,14 +160,29 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
       scheduleRestart();
     };
     recognition.onresult = (event) => {
+      const now = Date.now();
       const transcripts = collectAlternatives(event.results, event.resultIndex);
-      if (!findTwinlyWakeWord(transcripts)) {
-        const finalTranscript = collectFinalTranscripts(event.results, event.resultIndex).at(-1);
-        if (finalTranscript) onMessage(`聞き取り：「${finalTranscript}」`);
+      const combinedTranscripts = collectCombinedAlternatives(event.results);
+      const recentFragments = wakeFragmentsRef.current.filter(
+        (fragment) => now - fragment.at <= WAKE_FRAGMENT_WINDOW_MS
+      );
+      wakeFragmentsRef.current = recentFragments;
+      const recentTranscript = recentFragments.map((fragment) => fragment.transcript).join(" ");
+      const candidates = [
+        ...transcripts,
+        ...combinedTranscripts,
+        ...combinedTranscripts.map((transcript) => `${recentTranscript} ${transcript}`.trim()),
+      ];
+
+      if (!findTwinlyWakeWord(candidates)) {
+        const finalTranscripts = collectFinalTranscripts(event.results, event.resultIndex);
+        finalTranscripts.forEach((transcript) => wakeFragmentsRef.current.push({ at: now, transcript }));
+        wakeFragmentsRef.current = wakeFragmentsRef.current.slice(-2);
         return;
       }
 
       handingOffRef.current = true;
+      wakeFragmentsRef.current = [];
       clearRestartTimer();
       recognitionRef.current = null;
       recognition.abort();
@@ -166,6 +209,7 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
   const disableHandsFree = () => {
     enabledRef.current = false;
     handingOffRef.current = false;
+    wakeFragmentsRef.current = [];
     setEnabled(false);
     clearRestartTimer();
     clearHandoffTimer();
@@ -204,6 +248,7 @@ export function WakeWordButton({ disabled = false, onWakeWord, onMessage }: Wake
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
+        wakeFragmentsRef.current = [];
         clearRestartTimer();
         stopRecognition();
         return;

@@ -77,13 +77,42 @@ describe("WakeWordButton", () => {
     expect(onWakeWord).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the final transcript when the wake phrase does not match", () => {
-    const onMessage = vi.fn();
-    render(<WakeWordButton onWakeWord={vi.fn()} onMessage={onMessage} />);
+  it("joins wake phrase fragments recognized as separate results", async () => {
+    const onWakeWord = vi.fn();
+    render(<WakeWordButton onWakeWord={onWakeWord} onMessage={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
-    act(() => FakeSpeechRecognition.latest?.emit("ツインリーを開いて"));
+    act(() => FakeSpeechRecognition.latest?.emit("ツイン"));
+    act(() => FakeSpeechRecognition.latest?.emit("お願い"));
 
-    expect(onMessage).toHaveBeenLastCalledWith("聞き取り：「ツインリーを開いて」");
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+    expect(onWakeWord).toHaveBeenCalledTimes(1);
+  });
+
+  it("never wakes for onegai by itself", async () => {
+    const onWakeWord = vi.fn();
+    const onMessage = vi.fn();
+    render(<WakeWordButton onWakeWord={onWakeWord} onMessage={onMessage} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
+    onMessage.mockClear();
+    act(() => FakeSpeechRecognition.latest?.emit("お願い"));
+
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+    expect(onWakeWord).not.toHaveBeenCalled();
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it("expires an old Twinly fragment before hearing onegai", async () => {
+    const onWakeWord = vi.fn();
+    render(<WakeWordButton onWakeWord={onWakeWord} onMessage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "start Twinly wake phrase input" }));
+    act(() => FakeSpeechRecognition.latest?.emit("ツイン"));
+    await act(async () => vi.advanceTimersByTimeAsync(2_000));
+    act(() => FakeSpeechRecognition.latest?.emit("お願い"));
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+
+    expect(onWakeWord).not.toHaveBeenCalled();
   });
 });
