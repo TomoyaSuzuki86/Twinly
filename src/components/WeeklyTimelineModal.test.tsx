@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { WeeklyTimelineModal } from "./WeeklyTimelineModal";
 import { BabyProfile, LogEvent } from "@/types";
 
@@ -47,6 +47,8 @@ const events: LogEvent[] = [
   },
 ];
 
+afterEach(cleanup);
+
 describe("WeeklyTimelineModal", () => {
   it("fits seven days and 24 hours into one grid with compact category markers", () => {
     render(
@@ -80,5 +82,73 @@ describe("WeeklyTimelineModal", () => {
     expect(hinataEvent.dataset.selected).toBe("true");
     expect(kanataEvent.className).toContain("opacity-25");
     expect(hinataEvent.className).toContain("bg-cyan-300");
+  });
+
+  it("keeps marker lanes fixed as milk, pee, and poop regardless of event order", () => {
+    const timestamp = new Date("2026-07-29T09:00:00+09:00").getTime();
+    const overlappingEvents: LogEvent[] = [
+      {
+        id: "poop",
+        babyId: "A",
+        type: "diaper",
+        diaperKind: "poop",
+        timestamp,
+      },
+      {
+        id: "milk",
+        babyId: "A",
+        type: "milk",
+        milkMl: 100,
+        milkMethod: "bottle",
+        timestamp,
+      },
+      {
+        id: "pee",
+        babyId: "A",
+        type: "diaper",
+        diaperKind: "pee",
+        timestamp,
+      },
+    ];
+
+    render(
+      <WeeklyTimelineModal
+        open
+        onOpenChange={() => undefined}
+        events={overlappingEvents}
+        profiles={profiles}
+        initialDate="2026-07-29"
+        initialBabyId="A"
+        now={new Date("2026-07-29T12:00:00+09:00")}
+      />
+    );
+
+    expect(screen.getByLabelText("奏汰のミルク 09:00").style.left).toBe("25%");
+    expect(screen.getByLabelText("奏汰のおしっこ 09:00").style.left).toBe("50%");
+    expect(screen.getByLabelText("奏汰のうんち 09:00").style.left).toBe("75%");
+  });
+
+  it("keeps a lone poop marker in the poop lane", () => {
+    render(
+      <WeeklyTimelineModal
+        open
+        onOpenChange={() => undefined}
+        events={[
+          {
+            id: "poop-only",
+            babyId: "A",
+            type: "diaper",
+            diaperKind: "poop",
+            timestamp: new Date("2026-07-29T15:00:00+09:00").getTime(),
+          },
+        ]}
+        profiles={profiles}
+        initialDate="2026-07-29"
+        initialBabyId="A"
+        now={new Date("2026-07-29T12:00:00+09:00")}
+      />
+    );
+
+    expect(screen.getByLabelText("奏汰のうんち 15:00").style.left).toBe("75%");
   });
 });
