@@ -1,6 +1,7 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const webpush = require("web-push");
+const { defineSecret } = require("firebase-functions/params");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
 const { logger, setGlobalOptions } = require("firebase-functions/v2");
@@ -15,19 +16,15 @@ const intervalMinutes = 150;
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
 
-const publicKey = process.env.WEB_PUSH_PUBLIC_KEY;
-const privateKey = process.env.WEB_PUSH_PRIVATE_KEY;
-const subject = process.env.WEB_PUSH_SUBJECT || "mailto:no-reply@twinly.local";
+const webPushPrivateKey = defineSecret("WEB_PUSH_PRIVATE_KEY");
+const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
+const subject = "mailto:no-reply@twinly.local";
 const tokyoTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
 });
-
-if (publicKey && privateKey) {
-  webpush.setVapidDetails(subject, publicKey, privateKey);
-}
 
 const formatReminderTime = (timestamp) => tokyoTimeFormatter.format(new Date(timestamp));
 const normalizeWearToken = (token) => String(token || "").replace(/[^a-z0-9]/gi, "").toUpperCase();
@@ -542,11 +539,10 @@ const sendPushToDevices = async (uid, devices, payload) => {
   return results.some((result) => result.ok);
 };
 
-exports.sendMilkReminderNotifications = onSchedule("every 5 minutes", async () => {
-  if (!publicKey || !privateKey) {
-    logger.error("WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY are not configured.");
-    return;
-  }
+exports.sendMilkReminderNotifications = onSchedule(
+  { schedule: "every 5 minutes", secrets: [webPushPrivateKey] },
+  async () => {
+  webpush.setVapidDetails(subject, publicKey, webPushPrivateKey.value());
 
   const nowMs = Date.now();
   const usersSnapshot = await db.collection("users").get();
@@ -613,7 +609,8 @@ exports.sendMilkReminderNotifications = onSchedule("every 5 minutes", async () =
         { merge: true }
       );
   }
-});
+  }
+);
 
 exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
   if (req.method !== "POST") {

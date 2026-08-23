@@ -40,7 +40,9 @@ const app: FirebaseApp | null = isFirebaseConfigured
 
 export const auth = app ? getAuth(app) : null;
 export const db = app ? getFirestore(app) : null;
-export const webPushPublicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined;
+export const webPushPublicKey =
+  (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
+  "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
 
 export async function ensureAuthPersistence() {
   if (!auth) return;
