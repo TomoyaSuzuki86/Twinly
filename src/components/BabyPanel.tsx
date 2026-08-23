@@ -232,7 +232,7 @@ export function BabyPanel({
             size="lg"
             className="relative h-28 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
-            aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・ミルクあと${milkNeededMl}ml・1回の目安${milkTargetMl}ml` : ""}`}
+            aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
@@ -240,15 +240,15 @@ export function BabyPanel({
               data-testid="milk-gauge-fill"
               style={{ width: `${milkGaugePercent}%` }}
             />
-            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center">
+            <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
               <div className="flex items-center">
                 <Utensils className="mr-3 h-7 w-7" />
                 食事
               </div>
               {milkNeededMl !== null && milkTargetMl !== null ? (
-                <span className="mt-1 text-base font-semibold">
-                  ミルク あと {milkNeededMl}ml
-                  <span className="ml-1 text-sm font-normal opacity-80">/ 目安 {milkTargetMl}ml</span>
+                <span className="mt-1 whitespace-nowrap text-sm font-semibold">
+                  あと {milkNeededMl} ml
+                  <span className="ml-1 font-normal opacity-80">/ {milkTargetMl} ml</span>
                 </span>
               ) : (
                 <span className="mt-1 text-sm font-normal opacity-80">必要量を計算中</span>
@@ -270,7 +270,7 @@ export function BabyPanel({
               data-testid="diaper-gauge-fill"
               style={{ width: `${diaperGaugePercent}%` }}
             />
-            <div className="relative z-10 flex h-full w-full flex-col items-center justify-center">
+            <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
               <div className="flex items-center">
                 <Droplets className="mr-3 h-7 w-7" />
                 おむつ
@@ -439,7 +439,7 @@ export function BabyPanel({
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-4">
-                <CardTitle className="text-base font-medium text-muted-foreground">ミルク合計</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">食事合計</CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -463,7 +463,7 @@ export function BabyPanel({
                     <span>ミルク</span>
                     <span>{milkEvents.length}回</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 text-emerald-300">
+                  <div className="flex items-center justify-between gap-3">
                     <span>離乳食</span>
                     <span>{solidFoodEvents.length}回</span>
                   </div>

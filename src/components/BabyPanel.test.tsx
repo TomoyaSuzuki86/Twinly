@@ -148,8 +148,8 @@ describe("BabyPanel", () => {
     renderPanel({ latestEvents });
 
     expect(Number.parseInt(screen.getByTestId("milk-gauge-fill").style.width)).toBeGreaterThan(50);
-    expect(screen.getByText(/あと \d+ml/)).toBeTruthy();
-    expect(screen.getByText(/目安 \d+ml/)).toBeTruthy();
+    expect(screen.getByText(/あと \d+ ml/)).toBeTruthy();
+    expect(screen.getByText(/\/ \d+ ml/)).toBeTruthy();
     expect(screen.getByTestId("diaper-gauge-fill").style.width).toBe("100%");
     expect(screen.getByRole("button", { name: /推定空腹度/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /交換必要度/ })).toBeTruthy();
