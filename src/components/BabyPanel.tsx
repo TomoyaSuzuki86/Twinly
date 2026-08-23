@@ -26,7 +26,7 @@ import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
-import { analyzeSleepEvents } from "@/lib/sleep";
+import { analyzeSleepEvents, buildSleepDaySummary, formatSleepDuration } from "@/lib/sleep";
 
 type BabyPanelProps = {
   profile: BabyProfile;
@@ -212,6 +212,19 @@ export function BabyPanel({
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
+  const latestSleepStart = latestEvents
+    .filter(
+      (event) =>
+        event.babyId === babyId && event.type === "sleepStart" && event.timestamp <= now.getTime()
+    )
+    .reduce<LogEvent | null>(
+      (latest, event) => (!latest || event.timestamp > latest.timestamp ? event : latest),
+      null
+    );
+  const lastSleepElapsed = formatElapsed(latestSleepStart?.timestamp ?? null);
+  const todaySleepTotal = formatSleepDuration(
+    buildSleepDaySummary(sleepAnalysis, now, now).totalMinutes
+  );
 
   const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
   const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
@@ -303,12 +316,7 @@ export function BabyPanel({
         </div>
 
         <Button
-          variant={sleeping ? "secondary" : "outline"}
-          className={`mt-3 h-11 w-full gap-2 border-violet-400/40 text-sm font-semibold ${
-            sleeping
-              ? "bg-violet-600/35 text-violet-100 hover:bg-violet-600/45"
-              : "bg-violet-500/10 text-violet-200 hover:bg-violet-500/20"
-          }`}
+          className="mt-3 h-16 w-full border-violet-500 bg-violet-600 px-4 text-white shadow-sm hover:bg-violet-500"
           onClick={() =>
             onAddEvent({
               babyId,
@@ -318,9 +326,16 @@ export function BabyPanel({
           }
           aria-label={sleeping ? "起床を記録" : "入眠を記録"}
         >
-          {sleeping ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          <span>{sleeping ? "起床を記録" : "睡眠を開始"}</span>
-          {!sleeping ? <span className="text-xs font-bold tracking-wide opacity-75">Zzz</span> : null}
+          <span className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+            <span className="flex min-w-0 items-center justify-start gap-2 text-left text-base font-bold">
+              {sleeping ? <Sun className="h-5 w-5 shrink-0" /> : <Moon className="h-5 w-5 shrink-0" />}
+              <span>{sleeping ? "起床を記録" : "睡眠を開始"}</span>
+            </span>
+            <span className="border-l border-white/35 pl-3 text-right text-xs font-medium leading-snug text-violet-50">
+              <span className="block">前回入眠 {lastSleepElapsed}</span>
+              <span className="block">今日 {todaySleepTotal}</span>
+            </span>
+          </span>
         </Button>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">

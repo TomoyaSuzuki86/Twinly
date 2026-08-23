@@ -175,12 +175,28 @@ describe("BabyPanel", () => {
 
     const sleepButton = screen.getByRole("button", { name: "入眠を記録" });
     expect(sleepButton.className).toContain("w-full");
+    expect(sleepButton.className).toContain("bg-violet-600");
+    expect(sleepButton.className).not.toContain("bg-violet-600/");
     expect(screen.getByText("睡眠を開始")).toBeTruthy();
+    expect(screen.getByText("前回入眠 未記録")).toBeTruthy();
+    expect(screen.getByText("今日 0分")).toBeTruthy();
     fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
 
     const app = createInitialAppState(baseNow);
     const sleepingEvents: LogEvent[] = [
+      {
+        id: "completed-sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+      },
+      {
+        id: "completed-wake",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+      },
       {
         id: "sleep",
         babyId: "A",
@@ -210,6 +226,8 @@ describe("BabyPanel", () => {
         themeDimmedBgColor="bg-background"
       />
     );
+    expect(screen.getByText("前回入眠 10分前")).toBeTruthy();
+    expect(screen.getByText("今日 1時間30分")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "起床を記録" }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
