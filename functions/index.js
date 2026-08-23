@@ -545,7 +545,10 @@ const buildNotificationPayload = (group) => {
 const sendPushToDevices = async (uid, devices, payload) => {
   const tasks = devices.map(async (device) => {
     try {
-      await webpush.sendNotification(device.subscription, JSON.stringify(payload));
+      await webpush.sendNotification(device.subscription, JSON.stringify(payload), {
+        TTL: 60 * 60,
+        urgency: "high",
+      });
       return { ok: true, deviceId: device.id };
     } catch (error) {
       const statusCode = error.statusCode || error.status;
