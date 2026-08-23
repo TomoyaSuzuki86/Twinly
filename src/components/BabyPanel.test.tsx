@@ -175,8 +175,8 @@ describe("BabyPanel", () => {
 
     const sleepButton = screen.getByRole("button", { name: "入眠を記録" });
     expect(sleepButton.className).toContain("w-full");
-    expect(sleepButton.className).toContain("bg-violet-600");
-    expect(sleepButton.className).not.toContain("bg-violet-600/");
+    expect(sleepButton.className).toContain("bg-[#a493b2]");
+    expect(sleepButton.className).toContain("text-black");
     expect(screen.getByText("睡眠を開始")).toBeTruthy();
     expect(screen.getByText("前回入眠 未記録")).toBeTruthy();
     expect(screen.getByText("今日 0分")).toBeTruthy();

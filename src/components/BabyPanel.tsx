@@ -316,7 +316,7 @@ export function BabyPanel({
         </div>
 
         <Button
-          className="mt-3 h-16 w-full border-violet-500 bg-violet-600 px-4 text-white shadow-sm hover:bg-violet-500"
+          className="mt-3 h-16 w-full border-[#897897] bg-[#a493b2] px-4 text-black shadow-sm hover:bg-[#b19fc0]"
           onClick={() =>
             onAddEvent({
               babyId,
@@ -331,7 +331,7 @@ export function BabyPanel({
               {sleeping ? <Sun className="h-5 w-5 shrink-0" /> : <Moon className="h-5 w-5 shrink-0" />}
               <span>{sleeping ? "起床を記録" : "睡眠を開始"}</span>
             </span>
-            <span className="border-l border-white/35 pl-3 text-right text-xs font-medium leading-snug text-violet-50">
+            <span className="border-l border-black/25 pl-3 text-right text-xs font-medium leading-snug text-black/75">
               <span className="block">前回入眠 {lastSleepElapsed}</span>
               <span className="block">今日 {todaySleepTotal}</span>
             </span>
