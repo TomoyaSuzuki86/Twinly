@@ -56,7 +56,7 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
       - name: Deploy Firebase Functions
-        run: npx --yes firebase-tools@latest deploy --only functions --project twinly-prod --non-interactive
+        run: npx --yes firebase-tools@latest deploy --only functions:sendMilkReminderNotifications --project twinly-prod --non-interactive
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
