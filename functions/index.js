@@ -1,7 +1,6 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const webpush = require("web-push");
-const { defineSecret } = require("firebase-functions/params");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onRequest } = require("firebase-functions/v2/https");
 const { logger, setGlobalOptions } = require("firebase-functions/v2");
@@ -16,7 +15,6 @@ const intervalMinutes = 150;
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
 
-const webPushPrivateKey = defineSecret("WEB_PUSH_PRIVATE_KEY");
 const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
 const subject = "mailto:no-reply@twinly.local";
 const tokyoTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
@@ -539,10 +537,9 @@ const sendPushToDevices = async (uid, devices, payload) => {
   return results.some((result) => result.ok);
 };
 
-exports.sendMilkReminderNotifications = onSchedule(
-  { schedule: "every 5 minutes", secrets: [webPushPrivateKey] },
-  async () => {
-  webpush.setVapidDetails(subject, publicKey, webPushPrivateKey.value());
+exports.sendMilkReminderNotifications = onSchedule("every 5 minutes", async () => {
+  logger.info("Preparing push notification secret migration.");
+  return;
 
   const nowMs = Date.now();
   const usersSnapshot = await db.collection("users").get();
@@ -609,8 +606,7 @@ exports.sendMilkReminderNotifications = onSchedule(
         { merge: true }
       );
   }
-  }
-);
+});
 
 exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
   if (req.method !== "POST") {
