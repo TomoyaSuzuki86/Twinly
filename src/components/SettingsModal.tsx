@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { iconGradients } from "@/lib/utils";
 import { buildMilkGauge } from "@/lib/care-gauges";
+import { getDefaultSleepTargetHours } from "@/lib/sleep";
 
 type SettingsModalProps = {
   open: boolean;
@@ -150,6 +151,7 @@ export function SettingsModal({
                   windowHours: profile.milkGaugeWindowHours ?? 3,
                   targetMilkMlOverride: null,
                 })?.targetMilkMl;
+                const defaultSleepTargetHours = getDefaultSleepTargetHours(profile.birthDate, new Date());
                 return (
                   <div key={babyId} className="space-y-4 rounded-lg border p-4">
                     <h3 className="font-semibold">赤ちゃん {babyId}</h3>
@@ -263,6 +265,46 @@ export function SettingsModal({
                           onClick={() => handleProfileChange(babyId, "milkTargetMlOverride", null)}
                         >
                           自動計算に戻す
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 rounded-lg border bg-background/40 p-3">
+                      <Label htmlFor={`sleep-target-${babyId}`}>1日の睡眠目標</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`sleep-target-${babyId}`}
+                          type="number"
+                          min="1"
+                          max="24"
+                          step="0.5"
+                          value={profile.sleepTargetHoursOverride ?? ""}
+                          placeholder={`月齢目安: ${defaultSleepTargetHours}`}
+                          onChange={(event) =>
+                            handleProfileChange(
+                              babyId,
+                              "sleepTargetHoursOverride",
+                              event.target.value === ""
+                                ? null
+                                : Math.max(1, Math.min(24, Number(event.target.value)))
+                            )
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">時間</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {profile.sleepTargetHoursOverride == null
+                            ? `月齢の目安を使用中: ${defaultSleepTargetHours}時間`
+                            : "手入力の値を使用中"}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={profile.sleepTargetHoursOverride == null}
+                          onClick={() => handleProfileChange(babyId, "sleepTargetHoursOverride", null)}
+                        >
+                          月齢の目安に戻す
                         </Button>
                       </div>
                     </div>

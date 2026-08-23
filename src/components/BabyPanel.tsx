@@ -26,7 +26,13 @@ import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
-import { analyzeSleepEvents, buildSleepDaySummary, formatSleepDuration } from "@/lib/sleep";
+import {
+  analyzeSleepEvents,
+  buildSleepDaySummary,
+  buildSleepGauge,
+  formatSleepDuration,
+  getDefaultSleepTargetHours,
+} from "@/lib/sleep";
 
 type BabyPanelProps = {
   profile: BabyProfile;
@@ -44,7 +50,6 @@ type BabyPanelProps = {
     kind: "milk" | "diaper" | "edit",
     payload: { babyId: BabyId } | { eventId: string }
   ) => void;
-  onDeleteEvent: (eventId: string) => void;
   onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
   onOpenDailyReport: () => void;
   onOpenHealthChart: () => void;
@@ -124,7 +129,6 @@ export function BabyPanel({
   milkProgress,
   onOpenHistory,
   onOpenModal,
-  onDeleteEvent,
   onAddEvent,
   onOpenDailyReport,
   onOpenHealthChart,
@@ -222,8 +226,23 @@ export function BabyPanel({
       null
     );
   const lastSleepElapsed = formatElapsed(latestSleepStart?.timestamp ?? null);
-  const todaySleepTotal = formatSleepDuration(
-    buildSleepDaySummary(sleepAnalysis, now, now).totalMinutes
+  const todaySleepSummary = buildSleepDaySummary(sleepAnalysis, now, now);
+  const todaySleepTotal = formatSleepDuration(todaySleepSummary.totalMinutes);
+  const sleepTargetHours =
+    profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
+  const sleepGauge = buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours);
+  const latestCompletedSleep = sleepAnalysis.intervals.reduce(
+    (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
+    null as (typeof sleepAnalysis.intervals)[number] | null
+  );
+  const previousSleepDuration = latestCompletedSleep
+    ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
+    : "未記録";
+  const sleepDurationByWakeId = new Map(
+    sleepAnalysis.intervals.map((interval) => [
+      interval.wakeEventId,
+      (interval.end - interval.start) / (60 * 1000),
+    ])
   );
 
   const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
@@ -316,7 +335,7 @@ export function BabyPanel({
         </div>
 
         <Button
-          className="mt-3 h-16 w-full border-[#7862b3] bg-[#8f75d1] px-4 text-black shadow-sm hover:bg-[#9c84dc]"
+          className="relative mt-3 h-20 w-full overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40"
           onClick={() =>
             onAddEvent({
               babyId,
@@ -324,16 +343,23 @@ export function BabyPanel({
               note: sleeping ? "手動: 起床" : "手動: 入眠",
             })
           }
-          aria-label={sleeping ? "起床を記録" : "入眠を記録"}
+          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・睡眠目標残り${sleepGauge.remainingPercent}%`}
         >
-          <span className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-            <span className="flex min-w-0 items-center justify-start gap-2 text-left text-base font-bold">
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-0 left-0 bg-[#8f75d1] transition-[width] duration-500"
+            data-testid="sleep-gauge-fill"
+            style={{ width: `${sleepGauge.remainingPercent}%` }}
+          />
+          <span className="relative z-10 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4">
+            <span className="flex min-w-0 items-center justify-start gap-2 text-left text-xl font-bold">
               {sleeping ? <Sun className="h-5 w-5 shrink-0" /> : <Moon className="h-5 w-5 shrink-0" />}
-              <span>{sleeping ? "起床を記録" : "睡眠を開始"}</span>
+              <span>{sleeping ? "起床" : "入眠"}</span>
             </span>
-            <span className="border-l border-black/25 pl-3 text-right text-xs font-medium leading-snug text-black/75">
+            <span className="border-l border-black/25 pl-3 text-right text-sm font-medium leading-snug text-black/75">
               <span className="block">前回入眠 {lastSleepElapsed}</span>
-              <span className="block">今日 {todaySleepTotal}</span>
+              <span className="block">前回睡眠 {previousSleepDuration}</span>
+              <span className="block">今日 {todaySleepTotal} / {sleepGauge.targetHours}時間</span>
             </span>
           </span>
         </Button>
@@ -583,8 +609,8 @@ export function BabyPanel({
                 key={event.id}
                 event={event}
                 onEdit={() => onOpenModal("edit", { eventId: event.id })}
-                onDelete={() => onDeleteEvent(event.id)}
                 invalidSleepMarker={event.type === "wake" && sleepAnalysis.invalidWakeIds.has(event.id)}
+                sleepDurationMinutes={event.type === "wake" ? sleepDurationByWakeId.get(event.id) : undefined}
               />
             ))
           )}

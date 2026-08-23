@@ -20,6 +20,7 @@ type EditModalProps = {
   onOpenChange: (open: boolean) => void;
   event: LogEvent | null;
   onSave: (eventId: string, payload: Partial<LogEvent>) => void;
+  onDelete: (eventId: string) => void;
 };
 
 const diaperKindOptions = [
@@ -27,16 +28,18 @@ const diaperKindOptions = [
   { k: "poop", label: "うんち" },
 ] as const;
 
-export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps) {
+export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
 
   useEffect(() => {
     if (event) {
       setMilkMl(event.milkMl ?? 0);
       setDiaperKind(event.diaperKind ?? "pee");
       setNote(event.note ?? "");
+      setDeleteConfirming(false);
     }
   }, [event]);
 
@@ -49,6 +52,13 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
         ? { diaperKind, note }
         : { note };
     onSave(event.id, payload);
+    onOpenChange(false);
+  };
+
+  const handleDelete = () => {
+    if (!event) return;
+    onDelete(event.id);
+    setDeleteConfirming(false);
     onOpenChange(false);
   };
 
@@ -109,14 +119,28 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
         </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="ghost">キャンセル</Button>
-          </DialogClose>
-          <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
-            保存する
-          </Button>
-        </DialogFooter>
+        {deleteConfirming ? (
+          <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4" role="alert">
+            <p className="font-semibold">この記録を削除しますか？</p>
+            <p className="text-sm text-muted-foreground">削除した記録は元に戻せません。</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setDeleteConfirming(false)}>削除を中止</Button>
+              <Button variant="destructive" onClick={handleDelete}>削除を確定</Button>
+            </div>
+          </div>
+        ) : (
+          <DialogFooter className="sm:justify-between sm:space-x-0">
+            <Button variant="destructive" onClick={() => setDeleteConfirming(true)}>削除する</Button>
+            <div className="flex justify-end gap-2">
+              <DialogClose asChild>
+                <Button variant="ghost">キャンセル</Button>
+              </DialogClose>
+              <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
+                保存する
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

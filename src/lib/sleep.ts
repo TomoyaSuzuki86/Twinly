@@ -18,6 +18,33 @@ export type SleepDaySummary = {
   totalMinutes: number;
 };
 
+export type SleepGauge = {
+  targetHours: number;
+  totalMinutes: number;
+  remainingMinutes: number;
+  remainingPercent: number;
+};
+
+const parseLocalDate = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+export const getDefaultSleepTargetHours = (birthDate: string, now: Date) => {
+  const birth = parseLocalDate(birthDate);
+  if (!birth || birth.getTime() > now.getTime()) return 13;
+
+  let completedMonths =
+    (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
+  if (now.getDate() < birth.getDate()) completedMonths -= 1;
+
+  if (completedMonths < 4) return 15;
+  if (completedMonths < 12) return 13;
+  return 12;
+};
+
 export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAnalysis => {
   const markers = events
     .filter(
@@ -130,6 +157,25 @@ export const buildSleepDaySummary = (
       (sum, segment) => sum + (segment.end - segment.start) / (60 * 1000),
       0
     ),
+  };
+};
+
+export const buildSleepGauge = (
+  analysis: SleepAnalysis,
+  date: Date,
+  now: Date,
+  targetHours: number
+): SleepGauge => {
+  const normalizedTargetHours = Math.max(1, Math.min(24, targetHours));
+  const totalMinutes = buildSleepDaySummary(analysis, date, now).totalMinutes;
+  const targetMinutes = normalizedTargetHours * 60;
+  const remainingMinutes = Math.max(0, targetMinutes - totalMinutes);
+
+  return {
+    targetHours: normalizedTargetHours,
+    totalMinutes,
+    remainingMinutes,
+    remainingPercent: Math.round((remainingMinutes / targetMinutes) * 100),
   };
 };
 

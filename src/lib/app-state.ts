@@ -41,6 +41,7 @@ const createBaseProfiles = (now: Date) =>
       voiceAliases: [],
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
+      sleepTargetHoursOverride: null,
     },
     B: {
       babyId: "B",
@@ -54,6 +55,7 @@ const createBaseProfiles = (now: Date) =>
       voiceAliases: [],
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
+      sleepTargetHoursOverride: null,
     },
   }) as AppState["profiles"];
 
@@ -82,6 +84,7 @@ export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]):
         ...profile,
         milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
         milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+        sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
       },
     ])
   ) as AppState["profiles"],
@@ -99,6 +102,7 @@ export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
           ...rest,
           milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
           milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
+          sleepTargetHoursOverride: rest.sleepTargetHoursOverride ?? null,
         },
       ];
     })

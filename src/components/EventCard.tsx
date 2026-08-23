@@ -1,20 +1,18 @@
 import { Card } from "@/components/ui/card";
 import { LogEvent } from "@/types";
 import { fmtTime } from "@/lib/utils";
+import { formatSleepDuration } from "@/lib/sleep";
 import {
   Droplets,
   FileText,
   Milk,
   Moon,
-  Pencil,
   Ruler,
   Thermometer,
-  Trash2,
   Utensils,
   Sun,
   Weight,
 } from "lucide-react";
-import { Button } from "./ui/button";
 
 const formatEventTitle = (event: LogEvent) => {
   if (event.type === "milk") {
@@ -52,15 +50,19 @@ const formatEventTitle = (event: LogEvent) => {
 export function EventCard({
   event,
   onEdit,
-  onDelete,
   invalidSleepMarker = false,
+  sleepDurationMinutes,
 }: {
   event: LogEvent;
   onEdit: (event: LogEvent) => void;
-  onDelete: (event: LogEvent) => void;
   invalidSleepMarker?: boolean;
+  sleepDurationMinutes?: number;
 }) {
   const time = fmtTime(new Date(event.timestamp));
+  const title =
+    event.type === "wake" && sleepDurationMinutes !== undefined
+      ? `起床・睡眠 ${formatSleepDuration(sleepDurationMinutes)}`
+      : formatEventTitle(event);
   const iconBg =
     event.type === "milk"
       ? "bg-sky-500/20"
@@ -102,27 +104,26 @@ export function EventCard({
     );
 
   return (
-    <Card className={`flex items-center justify-between p-4 ${invalidSleepMarker ? "opacity-40 grayscale" : ""}`}>
-      <div className="flex min-w-0 items-center gap-3">
-        <div className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-lg ${iconBg}`}>{icon}</div>
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{formatEventTitle(event)}</p>
-          {invalidSleepMarker ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">対応する入眠記録がないため集計対象外</p>
-          ) : event.note ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">{event.note}</p>
-          ) : null}
+    <button
+      type="button"
+      className="w-full text-left"
+      onClick={() => onEdit(event)}
+      aria-label={`${title} ${time}を編集`}
+    >
+      <Card className={`flex items-start justify-between gap-3 p-3 transition-colors hover:bg-accent/40 sm:p-4 ${invalidSleepMarker ? "opacity-40 grayscale" : ""}`}>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <div className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-lg ${iconBg}`}>{icon}</div>
+          <div className="min-w-0 flex-1 py-0.5">
+            <p className="font-semibold">{title}</p>
+            {invalidSleepMarker ? (
+              <p className="mt-1 break-words text-sm text-muted-foreground">対応する入眠記録がないため集計対象外</p>
+            ) : event.note ? (
+              <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{event.note}</p>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <div className="flex flex-shrink-0 items-center gap-1">
-        <div className="w-14 text-right text-sm text-muted-foreground">{time}</div>
-        <Button variant="ghost" size="icon" onClick={() => onEdit(event)} aria-label="edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => onDelete(event)} aria-label="delete">
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-    </Card>
+        <div className="flex-shrink-0 py-0.5 text-right text-sm text-muted-foreground">{time}</div>
+      </Card>
+    </button>
   );
 }

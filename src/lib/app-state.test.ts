@@ -57,6 +57,7 @@ describe("stripLegacyCalendarFields", () => {
     expect(migrated.events[0]).not.toHaveProperty("calendarStatus");
     expect(migrated.events[0]).not.toHaveProperty("calendarEventId");
     expect(migrated.events[1]).not.toHaveProperty("calendarStatus");
+    expect(migrated.profiles.A.sleepTargetHoursOverride).toBeNull();
   });
 });
 
@@ -69,6 +70,7 @@ describe("createInitialAppState", () => {
     expect(app.profiles.B).not.toHaveProperty("calendarName");
     expect(app.profiles.B).not.toHaveProperty("calendarId");
     expect(app.events).toEqual([]);
+    expect(app.profiles.A.sleepTargetHoursOverride).toBeNull();
   });
 });
 

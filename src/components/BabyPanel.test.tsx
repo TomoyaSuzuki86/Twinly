@@ -38,7 +38,6 @@ const renderPanel = ({
       milkProgress={null}
       onOpenHistory={onOpenHistory}
       onOpenModal={onOpenModal}
-      onDeleteEvent={vi.fn()}
       onAddEvent={onAddEvent}
       onOpenDailyReport={vi.fn()}
       onOpenHealthChart={vi.fn()}
@@ -173,13 +172,15 @@ describe("BabyPanel", () => {
     const onAddEvent = vi.fn();
     const { rerender } = renderPanel({ onAddEvent });
 
-    const sleepButton = screen.getByRole("button", { name: "入眠を記録" });
+    const sleepButton = screen.getByRole("button", { name: /入眠を記録/ });
     expect(sleepButton.className).toContain("w-full");
     expect(sleepButton.className).toContain("bg-[#8f75d1]");
     expect(sleepButton.className).toContain("text-black");
-    expect(screen.getByText("睡眠を開始")).toBeTruthy();
+    expect(screen.getByText("入眠")).toBeTruthy();
     expect(screen.getByText("前回入眠 未記録")).toBeTruthy();
-    expect(screen.getByText("今日 0分")).toBeTruthy();
+    expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
+    expect(screen.getByText("今日 0分 / 15時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
 
@@ -216,7 +217,6 @@ describe("BabyPanel", () => {
         milkProgress={null}
         onOpenHistory={vi.fn()}
         onOpenModal={vi.fn()}
-        onDeleteEvent={vi.fn()}
         onAddEvent={onAddEvent}
         onOpenDailyReport={vi.fn()}
         onOpenHealthChart={vi.fn()}
@@ -227,9 +227,36 @@ describe("BabyPanel", () => {
       />
     );
     expect(screen.getByText("前回入眠 10分前")).toBeTruthy();
-    expect(screen.getByText("今日 1時間30分")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "起床を記録" }));
+    expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
+    expect(screen.getByText("今日 1時間30分 / 15時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("90%");
+    fireEvent.click(screen.getByRole("button", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
+  });
+
+  it("shows the completed sleep duration on a wake log and opens editing from the whole log", () => {
+    const onOpenModal = vi.fn();
+    const events: LogEvent[] = [
+      {
+        id: "wake",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+      },
+      {
+        id: "sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+      },
+    ];
+
+    renderPanel({ events, latestEvents: events, onOpenModal });
+
+    const wakeLog = screen.getByRole("button", { name: /起床・睡眠 1時間30分.*を編集/ });
+    fireEvent.click(wakeLog);
+    expect(onOpenModal).toHaveBeenCalledWith("edit", { eventId: "wake" });
+    expect(screen.queryByRole("button", { name: "delete" })).toBeNull();
   });
 
   it("renders every event instead of limiting the list to four items", () => {

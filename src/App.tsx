@@ -1200,7 +1200,6 @@ export default function App() {
                 milkProgress={milkProgressByBaby.A}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
-                onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
@@ -1227,7 +1226,6 @@ export default function App() {
                 milkProgress={milkProgressByBaby.B}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
-                onDeleteEvent={removeEvent}
                 onAddEvent={handleAddEvent}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
@@ -1313,7 +1311,13 @@ export default function App() {
         onImport={handleImport}
         onResetAll={resetAll}
       />
-      <EditModal open={modal?.kind === "edit"} onOpenChange={(open) => !open && setModal(null)} event={editTarget} onSave={onSaveEdit} />
+      <EditModal
+        open={modal?.kind === "edit"}
+        onOpenChange={(open) => !open && setModal(null)}
+        event={editTarget}
+        onSave={onSaveEdit}
+        onDelete={removeEvent}
+      />
       <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />
       <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />
       <WeeklyTimelineModal

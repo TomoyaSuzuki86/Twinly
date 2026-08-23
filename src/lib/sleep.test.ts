@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeSleepEvents,
   buildSleepDaySummary,
+  buildSleepGauge,
   createAutoWakeTimestamp,
+  getDefaultSleepTargetHours,
   getAutoWakeTimestampForActivity,
 } from "./sleep";
 import { LogEvent } from "@/types";
@@ -80,5 +82,38 @@ describe("sleep helpers", () => {
 
     expect(summary.totalMinutes).toBe(150);
     expect(summary.segments).toHaveLength(2);
+  });
+
+  it("uses age-based default sleep targets", () => {
+    const birthDate = "2026-04-02";
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-08-01T12:00:00+09:00"))).toBe(15);
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-08-02T12:00:00+09:00"))).toBe(13);
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2027-04-02T12:00:00+09:00"))).toBe(12);
+  });
+
+  it("empties the daily sleep gauge from the target and resets at midnight", () => {
+    const firstStart = new Date("2026-08-23T00:30:00+09:00").getTime();
+    const firstWake = new Date("2026-08-23T03:30:00+09:00").getTime();
+    const analysis = analyzeSleepEvents(
+      [event("start", "sleepStart", firstStart), event("wake", "wake", firstWake)],
+      "A"
+    );
+
+    expect(
+      buildSleepGauge(
+        analysis,
+        new Date("2026-08-23T12:00:00+09:00"),
+        new Date("2026-08-23T12:00:00+09:00"),
+        15
+      ).remainingPercent
+    ).toBe(80);
+    expect(
+      buildSleepGauge(
+        analysis,
+        new Date("2026-08-24T00:05:00+09:00"),
+        new Date("2026-08-24T00:05:00+09:00"),
+        15
+      ).remainingPercent
+    ).toBe(100);
   });
 });
