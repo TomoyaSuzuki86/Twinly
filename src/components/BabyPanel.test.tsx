@@ -15,6 +15,7 @@ const renderPanel = ({
   onOpenHistory = vi.fn(),
   onOpenModal = vi.fn(),
   onAddEvent = vi.fn(),
+  sleepManagementEnabled = true,
 }: {
   events?: LogEvent[];
   latestEvents?: LogEvent[];
@@ -23,6 +24,7 @@ const renderPanel = ({
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
   onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
   onAddEvent?: ComponentProps<typeof BabyPanel>["onAddEvent"];
+  sleepManagementEnabled?: boolean;
 } = {}) => {
   const app = createInitialAppState(baseNow);
 
@@ -33,6 +35,7 @@ const renderPanel = ({
       latestEvents={latestEvents}
       now={baseNow}
       diaperStockManagementEnabled={app.diaperStockManagementEnabled}
+      sleepManagementEnabled={sleepManagementEnabled}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
       milkProgress={null}
@@ -212,6 +215,7 @@ describe("BabyPanel", () => {
         latestEvents={sleepingEvents}
         now={baseNow}
         diaperStockManagementEnabled
+        sleepManagementEnabled
         lowStock={null}
         diaperEstimate={null}
         milkProgress={null}
@@ -232,6 +236,13 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("90%");
     fireEvent.click(screen.getByRole("button", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
+  });
+
+  it("hides the sleep shortcut when sleep management is disabled", () => {
+    renderPanel({ sleepManagementEnabled: false });
+
+    expect(screen.queryByRole("button", { name: /入眠を記録/ })).toBeNull();
+    expect(screen.queryByTestId("sleep-gauge-fill")).toBeNull();
   });
 
   it("shows the completed sleep duration on a wake log and opens editing from the whole log", () => {

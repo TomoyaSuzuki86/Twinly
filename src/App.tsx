@@ -1167,14 +1167,14 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   careGaugePercents={selectedBabyTab === "A" ? undefined : tabCareGaugePercents.A}
-                  sleeping={sleepingByBaby.A}
+                  sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
                 />
               </TabsTrigger>
               <TabsTrigger value="B" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   careGaugePercents={selectedBabyTab === "B" ? undefined : tabCareGaugePercents.B}
-                  sleeping={sleepingByBaby.B}
+                  sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
                 />
               </TabsTrigger>
             </TabsList>
@@ -1195,6 +1195,7 @@ export default function App() {
                 logDateControls={renderLogDateControls()}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
+                sleepManagementEnabled={app.sleepManagementEnabled}
                 lowStock={lowStock.A}
                 diaperEstimate={diaperEstimates.A}
                 milkProgress={milkProgressByBaby.A}
@@ -1221,6 +1222,7 @@ export default function App() {
                 logDateControls={renderLogDateControls()}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
+                sleepManagementEnabled={app.sleepManagementEnabled}
                 lowStock={lowStock.B}
                 diaperEstimate={diaperEstimates.B}
                 milkProgress={milkProgressByBaby.B}

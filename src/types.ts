@@ -45,6 +45,7 @@ export type AppState = {
   profiles: Record<BabyId, BabyProfile>;
   events: LogEvent[];
   diaperStockManagementEnabled: boolean;
+  sleepManagementEnabled: boolean;
   ui: {
     lastViewedDate: string;
   };

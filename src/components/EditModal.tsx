@@ -4,7 +4,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -14,6 +13,7 @@ import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { clamp } from "@/lib/utils";
+import { Trash2 } from "lucide-react";
 
 type EditModalProps = {
   open: boolean;
@@ -119,28 +119,37 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
         </div>
-        {deleteConfirming ? (
-          <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4" role="alert">
-            <p className="font-semibold">この記録を削除しますか？</p>
-            <p className="text-sm text-muted-foreground">削除した記録は元に戻せません。</p>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setDeleteConfirming(false)}>削除を中止</Button>
-              <Button variant="destructive" onClick={handleDelete}>削除を確定</Button>
-            </div>
-          </div>
-        ) : (
-          <DialogFooter className="sm:justify-between sm:space-x-0">
-            <Button variant="destructive" onClick={() => setDeleteConfirming(true)}>削除する</Button>
-            <div className="flex justify-end gap-2">
-              <DialogClose asChild>
-                <Button variant="ghost">キャンセル</Button>
-              </DialogClose>
-              <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
-                保存する
+        <div className="flex min-h-10 items-center justify-between gap-3 border-t pt-4">
+          {deleteConfirming ? (
+            <>
+              <p className="text-sm font-semibold text-destructive" role="alert">削除しますか？</p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setDeleteConfirming(false)}>戻る</Button>
+                <Button size="sm" variant="destructive" onClick={handleDelete}>削除する</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-9 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setDeleteConfirming(true)}
+              >
+                <Trash2 className="mr-1.5 h-4 w-4" />
+                削除
               </Button>
-            </div>
-          </DialogFooter>
-        )}
+              <div className="flex items-center gap-2">
+                <DialogClose asChild>
+                  <Button variant="ghost">キャンセル</Button>
+                </DialogClose>
+                <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
+                  保存する
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

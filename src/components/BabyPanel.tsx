@@ -42,6 +42,7 @@ type BabyPanelProps = {
   logDateControls?: ReactNode;
   now: Date;
   diaperStockManagementEnabled: boolean;
+  sleepManagementEnabled: boolean;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
   milkProgress: MilkProgressComparison | null;
@@ -124,6 +125,7 @@ export function BabyPanel({
   logDateControls,
   now,
   diaperStockManagementEnabled,
+  sleepManagementEnabled,
   lowStock,
   diaperEstimate,
   milkProgress,
@@ -334,6 +336,7 @@ export function BabyPanel({
           </Button>
         </div>
 
+        {sleepManagementEnabled ? (
         <Button
           className="relative mt-3 h-20 w-full overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40"
           onClick={() =>
@@ -363,6 +366,7 @@ export function BabyPanel({
             </span>
           </span>
         </Button>
+        ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">

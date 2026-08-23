@@ -98,11 +98,11 @@ describe("EditModal", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "削除する" }));
+    fireEvent.click(screen.getByRole("button", { name: "削除" }));
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByText("この記録を削除しますか？")).toBeTruthy();
+    expect(screen.getByText("削除しますか？")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "削除を確定" }));
+    fireEvent.click(screen.getByRole("button", { name: "削除する" }));
     expect(onDelete).toHaveBeenCalledWith("daily-1");
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

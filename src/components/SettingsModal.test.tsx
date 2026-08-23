@@ -65,7 +65,41 @@ describe("SettingsModal", () => {
     const sleepTargetInputs = screen.getAllByLabelText("1日の睡眠目標") as HTMLInputElement[];
     expect(sleepTargetInputs[0].value).toBe("10");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "月齢の目安に戻す" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "睡眠目標を初期値に戻す" })[0]);
+    expect(screen.getByText("初期値に戻しますか？")).toBeTruthy();
+    expect(sleepTargetInputs[0].value).toBe("10");
+
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(sleepTargetInputs[0].value).toBe("");
+  });
+
+  it("can disable sleep management and hides sleep target settings", () => {
+    render(
+      <SettingsModal
+        open
+        onOpenChange={vi.fn()}
+        app={createInitialAppState(new Date("2026-04-18T09:00:00+09:00"))}
+        setApp={vi.fn()}
+        user={null}
+        onSignIn={vi.fn()}
+        onSignOut={vi.fn()}
+        pushPermission="unsupported"
+        pushSubscribed={false}
+        pushBusy={false}
+        webPushConfigured={false}
+        onEnablePushNotifications={vi.fn()}
+        onDisablePushNotifications={vi.fn()}
+        wearPairingToken={null}
+        wearPairingBusy={false}
+        onCreateWearPairingToken={vi.fn()}
+        onExport={vi.fn()}
+        onImport={vi.fn()}
+        onResetAll={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "オン" }));
+    expect(screen.getByRole("button", { name: "オフ" })).toBeTruthy();
+    expect(screen.queryByLabelText("1日の睡眠目標")).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ import {
 import { iconGradients } from "@/lib/utils";
 import { buildMilkGauge } from "@/lib/care-gauges";
 import { getDefaultSleepTargetHours } from "@/lib/sleep";
+import { RotateCcw } from "lucide-react";
 
 type SettingsModalProps = {
   open: boolean;
@@ -45,6 +46,12 @@ const parseVoiceAliases = (value: string) =>
     .map((alias) => alias.trim())
     .filter(Boolean);
 
+type ResetRequest = {
+  babyId: BabyId;
+  kind: "milkWindow" | "milkTarget" | "sleepTarget";
+  label: string;
+};
+
 export function SettingsModal({
   open,
   onOpenChange,
@@ -71,13 +78,19 @@ export function SettingsModal({
   const [localDiaperStockManagementEnabled, setLocalDiaperStockManagementEnabled] = useState(
     () => app.diaperStockManagementEnabled
   );
+  const [localSleepManagementEnabled, setLocalSleepManagementEnabled] = useState(
+    () => app.sleepManagementEnabled
+  );
+  const [resetRequest, setResetRequest] = useState<ResetRequest | null>(null);
 
   useEffect(() => {
     if (open) {
       setLocalProfiles(app.profiles);
       setLocalDiaperStockManagementEnabled(app.diaperStockManagementEnabled);
+      setLocalSleepManagementEnabled(app.sleepManagementEnabled);
+      setResetRequest(null);
     }
-  }, [open, app.profiles, app.diaperStockManagementEnabled]);
+  }, [open, app.profiles, app.diaperStockManagementEnabled, app.sleepManagementEnabled]);
 
   const handleProfileChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
     setLocalProfiles((prev) => ({
@@ -113,18 +126,33 @@ export function SettingsModal({
     if (
       !isOpen &&
       (JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
-        localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled)
+        localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled ||
+        localSleepManagementEnabled !== app.sleepManagementEnabled)
     ) {
       setApp((prev) => ({
         ...prev,
         profiles: localProfiles,
         diaperStockManagementEnabled: localDiaperStockManagementEnabled,
+        sleepManagementEnabled: localSleepManagementEnabled,
       }));
     }
     onOpenChange(isOpen);
   };
 
+  const handleConfirmReset = () => {
+    if (!resetRequest) return;
+    if (resetRequest.kind === "milkWindow") {
+      handleProfileChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
+    } else if (resetRequest.kind === "milkTarget") {
+      handleProfileChange(resetRequest.babyId, "milkTargetMlOverride", null);
+    } else {
+      handleProfileChange(resetRequest.babyId, "sleepTargetHoursOverride", null);
+    }
+    setResetRequest(null);
+  };
+
   return (
+    <>
     <DialogComponents.Dialog open={open} onOpenChange={handleClose}>
       <DialogComponents.DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-md">
         <DialogComponents.DialogHeader>
@@ -141,6 +169,18 @@ export function SettingsModal({
             <TabsTrigger value="diaper-stock">おむつ在庫</TabsTrigger>
           </TabsList>
           <TabsContent value="profile" className="mt-4">
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
+              <div>
+                <div className="text-sm font-semibold">睡眠管理</div>
+                <div className="text-xs text-muted-foreground">オフにするとホーム画面の睡眠記録ボタンを隠します。</div>
+              </div>
+              <Button
+                variant={localSleepManagementEnabled ? "default" : "outline"}
+                onClick={() => setLocalSleepManagementEnabled((enabled) => !enabled)}
+              >
+                {localSleepManagementEnabled ? "オン" : "オフ"}
+              </Button>
+            </div>
             <div className="grid gap-6 md:grid-cols-2">
               {(Object.keys(localProfiles) as BabyId[]).map((babyId) => {
                 const profile = localProfiles[babyId];
@@ -226,6 +266,17 @@ export function SettingsModal({
                           }
                         />
                         <span className="text-sm text-muted-foreground">時間</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 flex-shrink-0"
+                          disabled={(profile.milkGaugeWindowHours ?? 3) === 3}
+                          onClick={() => setResetRequest({ babyId, kind: "milkWindow", label: "ミルクゲージの時間" })}
+                          aria-label="ミルクゲージの時間を初期値に戻す"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">初期値は3時間です。</p>
                     </div>
@@ -250,24 +301,25 @@ export function SettingsModal({
                           }
                         />
                         <span className="text-sm text-muted-foreground">ml</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {profile.milkTargetMlOverride == null
-                            ? `自動計算${calculatedMilkTarget ? `: ${Math.round(calculatedMilkTarget)}ml` : "中"}`
-                            : "手入力の値を使用中"}
-                        </p>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-9 w-9 flex-shrink-0"
                           disabled={profile.milkTargetMlOverride == null}
-                          onClick={() => handleProfileChange(babyId, "milkTargetMlOverride", null)}
+                          onClick={() => setResetRequest({ babyId, kind: "milkTarget", label: "ミルク目安量" })}
+                          aria-label="ミルク目安量を初期値に戻す"
                         >
-                          自動計算に戻す
+                          <RotateCcw className="h-4 w-4" />
                         </Button>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {profile.milkTargetMlOverride == null
+                          ? `自動計算${calculatedMilkTarget ? `: ${Math.round(calculatedMilkTarget)}ml` : "中"}`
+                          : "手入力の値を使用中"}
+                      </p>
                     </div>
+                    {localSleepManagementEnabled ? (
                     <div className="space-y-2 rounded-lg border bg-background/40 p-3">
                       <Label htmlFor={`sleep-target-${babyId}`}>1日の睡眠目標</Label>
                       <div className="flex items-center gap-2">
@@ -290,24 +342,25 @@ export function SettingsModal({
                           }
                         />
                         <span className="text-sm text-muted-foreground">時間</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs text-muted-foreground">
-                          {profile.sleepTargetHoursOverride == null
-                            ? `月齢の目安を使用中: ${defaultSleepTargetHours}時間`
-                            : "手入力の値を使用中"}
-                        </p>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
+                          size="icon"
+                          className="h-9 w-9 flex-shrink-0"
                           disabled={profile.sleepTargetHoursOverride == null}
-                          onClick={() => handleProfileChange(babyId, "sleepTargetHoursOverride", null)}
+                          onClick={() => setResetRequest({ babyId, kind: "sleepTarget", label: "睡眠目標" })}
+                          aria-label="睡眠目標を初期値に戻す"
                         >
-                          月齢の目安に戻す
+                          <RotateCcw className="h-4 w-4" />
                         </Button>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {profile.sleepTargetHoursOverride == null
+                          ? `月齢の目安を使用中: ${defaultSleepTargetHours}時間`
+                          : "手入力の値を使用中"}
+                      </p>
                     </div>
+                    ) : null}
                     {localDiaperStockManagementEnabled ? (
                     <div className="space-y-2">
                       <Label>おむつ購入リンク</Label>
@@ -504,5 +557,25 @@ export function SettingsModal({
         </DialogComponents.DialogFooter>
       </DialogComponents.DialogContent>
     </DialogComponents.Dialog>
+    <DialogComponents.Dialog
+      open={Boolean(resetRequest)}
+      onOpenChange={(isOpen) => !isOpen && setResetRequest(null)}
+    >
+      <DialogComponents.DialogContent className="sm:max-w-sm">
+        <DialogComponents.DialogHeader>
+          <DialogComponents.DialogTitle>初期値に戻しますか？</DialogComponents.DialogTitle>
+          <DialogComponents.DialogDescription>
+            {resetRequest?.label ?? "設定値"}を初期値に戻します。現在の入力内容は失われます。
+          </DialogComponents.DialogDescription>
+        </DialogComponents.DialogHeader>
+        <DialogComponents.DialogFooter>
+          <DialogComponents.DialogClose asChild>
+            <Button variant="ghost">キャンセル</Button>
+          </DialogComponents.DialogClose>
+          <Button onClick={handleConfirmReset}>OK</Button>
+        </DialogComponents.DialogFooter>
+      </DialogComponents.DialogContent>
+    </DialogComponents.Dialog>
+    </>
   );
 }
