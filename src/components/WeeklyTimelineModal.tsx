@@ -50,12 +50,10 @@ const getMarkerTop = (timestamp: number) => {
   return `${Math.min(99.2, Math.max(0.8, percentage))}%`;
 };
 
-const getMarkerLane = (events: LogEvent[], eventIndex: number) => {
-  const currentMinutes = getMinutesFromMidnight(events[eventIndex].timestamp);
-  const nearbyPreviousEvents = events
-    .slice(0, eventIndex)
-    .filter((event) => currentMinutes - getMinutesFromMidnight(event.timestamp) <= 20);
-  return nearbyPreviousEvents.length % 3;
+const getMarkerLane = (event: LogEvent) => {
+  if (event.type === "milk") return 0;
+  if (event.diaperKind === "pee") return 1;
+  return 2;
 };
 
 const getEventPresentation = (event: LogEvent) => {
@@ -282,11 +280,11 @@ export function WeeklyTimelineModal({
                   }`}
                   aria-label={`${day.key}の記録`}
                 >
-                  {day.events.map((event, eventIndex) => {
+                  {day.events.map((event) => {
                     const profile = profiles[event.babyId];
                     const presentation = getEventPresentation(event);
                     const selected = event.babyId === selectedBabyId;
-                    const lane = getMarkerLane(day.events, eventIndex);
+                    const lane = getMarkerLane(event);
                     const markerLeft = `${25 + lane * 25}%`;
                     const time = fmtTime(new Date(event.timestamp));
 
