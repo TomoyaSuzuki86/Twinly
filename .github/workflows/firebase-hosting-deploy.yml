@@ -52,6 +52,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
+      - name: Show deploy identity
+        run: node -e 'const fs = require("fs"); const credentials = JSON.parse(fs.readFileSync(process.env.GOOGLE_GHA_CREDS_PATH, "utf8")); console.log("Deploy identity:", credentials.client_email)'
+
       - name: Deploy Firebase Functions
         run: npx --yes firebase-tools@latest deploy --only functions --project twinly-prod --non-interactive
 
