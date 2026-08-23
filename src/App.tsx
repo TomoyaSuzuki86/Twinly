@@ -31,7 +31,7 @@ import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
-import { getAutoWakeTimestampForMilk, isBabySleeping } from "./lib/sleep";
+import { AutoWakeActivityType, getAutoWakeTimestampForActivity, isBabySleeping } from "./lib/sleep";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -55,6 +55,11 @@ declare global {
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 60 * 1000;
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
+const autoWakeActivityLabels: Record<AutoWakeActivityType, string> = {
+  milk: "ミルク",
+  solidFood: "離乳食",
+  diaper: "おむつ",
+};
 
 function AppContainer({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-background text-foreground">{children}</div>;
@@ -456,13 +461,13 @@ export default function App() {
     const event = createEvent(babyId, type, payload);
     const createdEvents = [event];
 
-    if (type === "milk") {
-      const autoWakeTimestamp = getAutoWakeTimestampForMilk(app.events, babyId, event.timestamp);
+    if (type === "milk" || type === "solidFood" || type === "diaper") {
+      const autoWakeTimestamp = getAutoWakeTimestampForActivity(app.events, babyId, event.timestamp, type);
       if (autoWakeTimestamp !== null) {
         createdEvents.push(
           createEvent(babyId, "wake", {
             timestamp: autoWakeTimestamp,
-            note: "ミルク記録により自動起床",
+            note: `${autoWakeActivityLabels[type]}記録により自動起床`,
           })
         );
       }
@@ -619,17 +624,18 @@ export default function App() {
 
     const eventsWithAutoWake: LogEvent[] = [];
     createdEvents.forEach((event) => {
-      if (event.type === "milk") {
-        const autoWakeTimestamp = getAutoWakeTimestampForMilk(
+      if (event.type === "milk" || event.type === "solidFood" || event.type === "diaper") {
+        const autoWakeTimestamp = getAutoWakeTimestampForActivity(
           [...eventsWithAutoWake, ...app.events],
           event.babyId,
-          event.timestamp
+          event.timestamp,
+          event.type
         );
         if (autoWakeTimestamp !== null) {
           eventsWithAutoWake.push(
             createEvent(event.babyId, "wake", {
               timestamp: autoWakeTimestamp,
-              note: "ミルク記録により自動起床",
+              note: `${autoWakeActivityLabels[event.type]}記録により自動起床`,
             })
           );
         }

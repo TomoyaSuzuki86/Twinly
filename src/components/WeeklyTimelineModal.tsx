@@ -222,7 +222,7 @@ export function WeeklyTimelineModal({
               うんち
             </span>
             <span className="flex items-center justify-center gap-1">
-              <Moon className="h-2.5 w-2.5 text-indigo-300" />
+              <Moon className="h-2.5 w-2.5 text-violet-300" />
               睡眠
             </span>
           </div>
@@ -310,8 +310,8 @@ export function WeeklyTimelineModal({
                       <span
                         key={`${segment.start}-${segmentIndex}`}
                         aria-label={`${profiles[selectedBabyId].displayName}の睡眠時間帯`}
-                        className={`pointer-events-none absolute inset-x-0 z-0 bg-indigo-950/70 ${
-                          segment.complete ? "" : "border-y border-dashed border-indigo-300/50"
+                        className={`pointer-events-none absolute inset-x-0 z-0 bg-violet-600/55 ${
+                          segment.complete ? "" : "border-y border-dashed border-violet-200/70"
                         }`}
                         style={{ top: `${startPercent}%`, height: `${Math.max(0.3, endPercent - startPercent)}%` }}
                       />
@@ -352,7 +352,7 @@ export function WeeklyTimelineModal({
             {sleepDays.map((summary, index) => (
               <div
                 key={days[index].key}
-                className="truncate border-l border-border/50 px-0.5 pt-1 text-center text-[8px] font-semibold text-indigo-200 min-[390px]:text-[9px]"
+                className="truncate border-l border-border/50 px-0.5 pt-1 text-center text-[8px] font-semibold text-violet-200 min-[390px]:text-[9px]"
                 aria-label={`${days[index].key}の睡眠合計 ${formatSleepDuration(summary.totalMinutes)}`}
               >
                 {summary.totalMinutes > 0 ? formatSleepDuration(summary.totalMinutes) : "—"}

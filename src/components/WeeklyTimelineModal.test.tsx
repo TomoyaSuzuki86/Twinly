@@ -189,7 +189,7 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
-    expect(screen.getByLabelText("奏汰の睡眠時間帯")).toBeTruthy();
+    expect(screen.getByLabelText("奏汰の睡眠時間帯").className).toContain("bg-violet-600/55");
     expect(screen.getByLabelText("2026-07-29の睡眠合計 2時間30分")).toBeTruthy();
   });
 });

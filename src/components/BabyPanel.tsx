@@ -302,6 +302,27 @@ export function BabyPanel({
           </Button>
         </div>
 
+        <Button
+          variant={sleeping ? "secondary" : "outline"}
+          className={`mt-3 h-11 w-full gap-2 border-violet-400/40 text-sm font-semibold ${
+            sleeping
+              ? "bg-violet-600/35 text-violet-100 hover:bg-violet-600/45"
+              : "bg-violet-500/10 text-violet-200 hover:bg-violet-500/20"
+          }`}
+          onClick={() =>
+            onAddEvent({
+              babyId,
+              type: sleeping ? "wake" : "sleepStart",
+              note: sleeping ? "手動: 起床" : "手動: 入眠",
+            })
+          }
+          aria-label={sleeping ? "起床を記録" : "入眠を記録"}
+        >
+          {sleeping ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          <span>{sleeping ? "起床を記録" : "睡眠を開始"}</span>
+          {!sleeping ? <span className="text-xs font-bold tracking-wide opacity-75">Zzz</span> : null}
+        </Button>
+
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">
             <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
@@ -318,23 +339,6 @@ export function BabyPanel({
               }}
               className="h-7 flex-1 px-2 text-sm"
             />
-            <Button
-              variant={sleeping ? "secondary" : "ghost"}
-              size="icon"
-              className={`relative h-7 w-7 flex-shrink-0 ${sleeping ? "bg-indigo-500/25 text-indigo-200" : ""}`}
-              onClick={() =>
-                onAddEvent({
-                  babyId,
-                  type: sleeping ? "wake" : "sleepStart",
-                  note: sleeping ? "手動: 起床" : "手動: 入眠",
-                })
-              }
-              aria-label={sleeping ? "起床を記録" : "入眠を記録"}
-              title={sleeping ? "起床を記録" : "入眠を記録"}
-            >
-              {sleeping ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {!sleeping ? <span className="absolute -right-1 -top-1 text-[8px] font-bold">Zzz</span> : null}
-            </Button>
             <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={handleSaveDailyNote} disabled={!dailyNote.trim()}>
               <Check className="h-4 w-4" />
             </Button>

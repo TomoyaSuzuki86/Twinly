@@ -173,7 +173,10 @@ describe("BabyPanel", () => {
     const onAddEvent = vi.fn();
     const { rerender } = renderPanel({ onAddEvent });
 
-    fireEvent.click(screen.getByRole("button", { name: "入眠を記録" }));
+    const sleepButton = screen.getByRole("button", { name: "入眠を記録" });
+    expect(sleepButton.className).toContain("w-full");
+    expect(screen.getByText("睡眠を開始")).toBeTruthy();
+    fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
 
     const app = createInitialAppState(baseNow);

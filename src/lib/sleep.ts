@@ -56,20 +56,40 @@ export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAna
 export const isBabySleeping = (events: LogEvent[], babyId: BabyId) =>
   Boolean(analyzeSleepEvents(events, babyId).currentSleepStart);
 
-export const createAutoWakeTimestamp = (sleepStartedAt: number, activityTimestamp: number) =>
-  Math.min(activityTimestamp, Math.max(sleepStartedAt + 1000, activityTimestamp - 60 * 1000));
+export type AutoWakeActivityType = "milk" | "solidFood" | "diaper";
 
-export const getAutoWakeTimestampForMilk = (
+const autoWakeLeadMinutes: Record<AutoWakeActivityType, number> = {
+  milk: 15,
+  solidFood: 15,
+  diaper: 1,
+};
+
+export const createAutoWakeTimestamp = (
+  sleepStartedAt: number,
+  activityTimestamp: number,
+  leadMinutes: number
+) =>
+  Math.min(
+    activityTimestamp,
+    Math.max(sleepStartedAt + 1000, activityTimestamp - leadMinutes * 60 * 1000)
+  );
+
+export const getAutoWakeTimestampForActivity = (
   events: LogEvent[],
   babyId: BabyId,
-  milkTimestamp: number
+  activityTimestamp: number,
+  activityType: AutoWakeActivityType
 ) => {
   const sleepState = analyzeSleepEvents(
-    events.filter((event) => event.timestamp < milkTimestamp),
+    events.filter((event) => event.timestamp < activityTimestamp),
     babyId
   );
   return sleepState.currentSleepStart
-    ? createAutoWakeTimestamp(sleepState.currentSleepStart.timestamp, milkTimestamp)
+    ? createAutoWakeTimestamp(
+        sleepState.currentSleepStart.timestamp,
+        activityTimestamp,
+        autoWakeLeadMinutes[activityType]
+      )
     : null;
 };
 

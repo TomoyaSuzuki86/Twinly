@@ -3,7 +3,7 @@ import {
   analyzeSleepEvents,
   buildSleepDaySummary,
   createAutoWakeTimestamp,
-  getAutoWakeTimestampForMilk,
+  getAutoWakeTimestampForActivity,
 } from "./sleep";
 import { LogEvent } from "@/types";
 
@@ -33,18 +33,33 @@ describe("sleep helpers", () => {
     expect(analysis.intervals).toHaveLength(0);
   });
 
-  it("places an automatic wake one minute before activity without preceding sleep start", () => {
-    expect(createAutoWakeTimestamp(100_000, 200_000)).toBe(140_000);
-    expect(createAutoWakeTimestamp(190_000, 200_000)).toBe(191_000);
+  it("places an automatic wake at the requested lead time without preceding sleep start", () => {
+    expect(createAutoWakeTimestamp(100_000, 200_000, 1)).toBe(140_000);
+    expect(createAutoWakeTimestamp(190_000, 200_000, 15)).toBe(191_000);
+  });
+
+  it("uses 15 minutes for meals and one minute for diapers", () => {
+    const sleepStartedAt = new Date("2026-08-23T09:00:00+09:00").getTime();
+    const activityAt = new Date("2026-08-23T10:00:00+09:00").getTime();
+    const events = [event("sleep", "sleepStart", sleepStartedAt)];
+    expect(getAutoWakeTimestampForActivity(events, "A", activityAt, "milk")).toBe(
+      new Date("2026-08-23T09:45:00+09:00").getTime()
+    );
+    expect(getAutoWakeTimestampForActivity(events, "A", activityAt, "solidFood")).toBe(
+      new Date("2026-08-23T09:45:00+09:00").getTime()
+    );
+    expect(getAutoWakeTimestampForActivity(events, "A", activityAt, "diaper")).toBe(
+      new Date("2026-08-23T09:59:00+09:00").getTime()
+    );
   });
 
   it("automatically wakes only a baby with an open sleep interval", () => {
-    expect(getAutoWakeTimestampForMilk([event("sleep", "sleepStart", 100_000)], "A", 200_000)).toBe(140_000);
     expect(
-      getAutoWakeTimestampForMilk(
+      getAutoWakeTimestampForActivity(
         [event("sleep", "sleepStart", 100_000), event("wake", "wake", 150_000)],
         "A",
-        200_000
+        200_000,
+        "milk"
       )
     ).toBeNull();
   });
