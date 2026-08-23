@@ -9,7 +9,7 @@ import {
 import { LogEvent } from "@/types";
 
 describe("createDefaultMilkDraft", () => {
-  it("reuses the previous milk amount and method for the same baby", () => {
+  it("reuses the previous milk amount for the same baby", () => {
     const events: LogEvent[] = [
       {
         id: "milk-b",
@@ -41,11 +41,6 @@ describe("createDefaultMilkDraft", () => {
     const draft = createDefaultMilkDraft(events, "A", now);
 
     expect(draft.milkMl).toBe(50);
-    expect(draft.milkMethod).toBe("bottle");
-    expect(draft.milkMlByMethod).toEqual({
-      bottle: 50,
-      breast: 90,
-    });
     expect(draft.timestamp).toBe(now.getTime());
   });
 
@@ -54,11 +49,6 @@ describe("createDefaultMilkDraft", () => {
     const draft = createDefaultMilkDraft([], "A", now);
 
     expect(draft.milkMl).toBe(140);
-    expect(draft.milkMethod).toBe("breast");
-    expect(draft.milkMlByMethod).toEqual({
-      bottle: 140,
-      breast: 140,
-    });
     expect(draft.timestamp).toBe(now.getTime());
   });
 });

@@ -5,7 +5,7 @@ import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWit
 import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
-import { AppState, BabyId, DiaperKind, EventType, LogEvent, MilkMethod } from "./types";
+import { AppState, BabyId, DiaperKind, EventType, LogEvent } from "./types";
 import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
@@ -459,9 +459,14 @@ export default function App() {
     scheduleUndo(event);
   };
 
-  const onSaveMilk = (payload: { milkMl: number; milkMethod: MilkMethod; note: string; timestamp: number }) => {
+  const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number }) => {
     if (!modal || modal.kind !== "milk") return;
     addEvent(modal.babyId, "milk", payload);
+  };
+
+  const onSaveSolidFood = (payload: { note: string; timestamp: number }) => {
+    if (!modal || modal.kind !== "milk") return;
+    addEvent(modal.babyId, "solidFood", payload);
   };
 
   const onSaveDiaper = (payload: {
@@ -503,7 +508,7 @@ export default function App() {
 
     const createdEvents: LogEvent[] = [];
 
-    if (command.type === "milk" || command.type === "diaper") {
+    if (command.type === "milk" || command.type === "solidFood" || command.type === "diaper") {
       const targetedCommands = expandVoiceCommandTargets(command);
 
       targetedCommands.forEach((targetedCommand) => {
@@ -513,20 +518,31 @@ export default function App() {
             createEvent(targetedCommand.babyId, "milk", {
               timestamp: targetedCommand.timestamp,
               milkMl,
-              milkMethod: targetedCommand.milkMethod,
               note: targetedCommand.note,
             })
           );
           return;
         }
 
-        createdEvents.push(
-          createEvent(targetedCommand.babyId, "diaper", {
-            timestamp: targetedCommand.timestamp,
-            diaperKind: targetedCommand.diaperKind,
-            note: targetedCommand.note,
-          })
-        );
+        if (targetedCommand.type === "solidFood") {
+          createdEvents.push(
+            createEvent(targetedCommand.babyId, "solidFood", {
+              timestamp: targetedCommand.timestamp,
+              note: targetedCommand.note,
+            })
+          );
+          return;
+        }
+
+        if (targetedCommand.type === "diaper") {
+          createdEvents.push(
+            createEvent(targetedCommand.babyId, "diaper", {
+              timestamp: targetedCommand.timestamp,
+              diaperKind: targetedCommand.diaperKind,
+              note: targetedCommand.note,
+            })
+          );
+        }
       });
     }
 
@@ -1183,6 +1199,7 @@ export default function App() {
         displayName={modal?.kind === "milk" ? app.profiles[modal.babyId].displayName : ""}
         initialDraft={milkDraft}
         onSave={onSaveMilk}
+        onSaveSolidFood={onSaveSolidFood}
       />
       <DiaperModal
         open={modal?.kind === "diaper"}

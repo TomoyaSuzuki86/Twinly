@@ -66,7 +66,7 @@ type VoiceCommandParseErrorReason = Extract<VoiceCommandParseResult, { ok: false
 const parseErrorMessage = (reason: VoiceCommandParseErrorReason) => {
   if (reason === "missingBaby") return "A/Bが聞き取れませんでした";
   if (reason === "missingMilkAmount") return "ミルク量が聞き取れませんでした";
-  return "ミルク/おむつが聞き取れませんでした";
+  return "ミルク/離乳食/おむつが聞き取れませんでした";
 };
 
 const SILENCE_SUBMIT_MS = 1400;

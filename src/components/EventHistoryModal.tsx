@@ -79,8 +79,7 @@ const formatMilkComparison = (difference: number) => {
 
 const describeEvent = (event: LogEvent) => {
   if (event.type === "milk") {
-    const method = event.milkMethod === "breast" ? "母乳" : "哺乳瓶";
-    return `${event.milkMl ?? 0}ml・${method}`;
+    return `${event.milkMl ?? 0}ml・ミルク`;
   }
 
   if (event.type === "diaper") {
@@ -136,29 +135,10 @@ function MilkPeriodTooltipCard({ title, datum }: { title: string; datum: MilkCha
     <div className="min-w-[220px] rounded-lg border bg-background/95 p-3 shadow-xl backdrop-blur">
       <div className="text-sm font-semibold">{title}</div>
       <div className="mt-3 space-y-3 text-sm">
-        <div>
-          <div className="text-xs text-muted-foreground">合算</div>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <span>{datum.total.count}回</span>
-            <span>{datum.total.amount}ml</span>
-            <span>{formatAverageMilkAmount(datum.total.average)}</span>
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground">哺乳瓶</div>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <span>{datum.bottle.count}回</span>
-            <span>{datum.bottle.amount}ml</span>
-            <span>{formatAverageMilkAmount(datum.bottle.average)}</span>
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-muted-foreground">母乳</div>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <span>{datum.breast.count}回</span>
-            <span>{datum.breast.amount}ml</span>
-            <span>{formatAverageMilkAmount(datum.breast.average)}</span>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <span>{datum.total.count}回</span>
+          <span>{datum.total.amount}ml</span>
+          <span>{formatAverageMilkAmount(datum.total.average)}</span>
         </div>
       </div>
     </div>
@@ -326,10 +306,8 @@ export function EventHistoryModal({
           <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
             {historyType === "milk" ? (
               <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <MilkSummaryCard title="合算" stats={visibleMilkSummary.total} />
-                  <MilkSummaryCard title="哺乳瓶" stats={visibleMilkSummary.bottle} />
-                  <MilkSummaryCard title="母乳" stats={visibleMilkSummary.breast} />
+                <div>
+                  <MilkSummaryCard title="ミルク" stats={visibleMilkSummary.total} />
                 </div>
                 <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
                   <div className="flex items-center justify-between gap-3">

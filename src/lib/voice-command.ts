@@ -1,4 +1,4 @@
-import { BabyId, BabyProfile, DiaperKind, LogEvent, MilkMethod } from "@/types";
+import { BabyId, BabyProfile, DiaperKind, LogEvent } from "@/types";
 
 export type VoiceCommandTarget = BabyId | "both";
 
@@ -9,7 +9,13 @@ export type VoiceCommand =
       type: "milk";
       milkMl?: number;
       milkMlByBaby?: Partial<Record<BabyId, number>>;
-      milkMethod: MilkMethod;
+      timestamp: number;
+      note: string;
+    }
+  | {
+      kind: "event";
+      babyId: VoiceCommandTarget;
+      type: "solidFood";
       timestamp: number;
       note: string;
     }
@@ -262,6 +268,7 @@ export const parseVoiceCommand = (
   const isTemperature = includesAny(normalizedText, ["体温", "熱"]);
   const isWeight = includesAny(normalizedText, ["体重"]);
   const isHeight = includesAny(normalizedText, ["身長", "慎重"]);
+  const isSolidFood = includesAny(normalizedText, ["離乳食", "ごはん", "おかゆ", "お粥"]);
   const isMilk = includesAny(normalizedText, ["ミルク", "授乳", "母乳", "哺乳", "milk"]);
   const isDiaper = includesAny(normalizedText, [
     "おむつ",
@@ -349,6 +356,19 @@ export const parseVoiceCommand = (
     };
   }
 
+  if (isSolidFood) {
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId: targetBabyId,
+        type: "solidFood",
+        timestamp,
+        note: text.trim(),
+      },
+    };
+  }
+
   if (isMilk) {
     const milkMl = detectMilkAmount(normalizedText);
     const defaultMilkMlByBaby = options.defaultMilkMlByBaby ?? {};
@@ -375,7 +395,6 @@ export const parseVoiceCommand = (
         type: "milk",
         milkMl: milkMl ?? fallbackMilkMl,
         milkMlByBaby,
-        milkMethod: includesAny(normalizedText, ["母乳", "breast"]) ? "breast" : "bottle",
         timestamp,
         note: `voice: ${text}`,
       },
@@ -425,7 +444,7 @@ export const expandVoiceCommandTargets = (command: VoiceCommand): Array<VoiceCom
   ];
 };
 
-export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): Omit<LogEvent, "id" | "timestamp"> => {
+export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): Omit<LogEvent, "id"> => {
   if (command.type === "milk") {
     const milkMl = command.milkMlByBaby?.[command.babyId] ?? command.milkMl;
     return {
@@ -433,7 +452,15 @@ export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): O
       type: "milk",
       timestamp: command.timestamp,
       milkMl,
-      milkMethod: command.milkMethod,
+      note: command.note,
+    };
+  }
+
+  if (command.type === "solidFood") {
+    return {
+      babyId: command.babyId,
+      type: "solidFood",
+      timestamp: command.timestamp,
       note: command.note,
     };
   }

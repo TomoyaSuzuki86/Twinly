@@ -1,5 +1,5 @@
 export type BabyId = "A" | "B";
-export type EventType = "milk" | "diaper" | "daily" | "temperature" | "weight" | "height";
+export type EventType = "milk" | "solidFood" | "diaper" | "daily" | "temperature" | "weight" | "height";
 export type DiaperKind = "pee" | "poop" | "mix";
 export type MilkMethod = "bottle" | "breast";
 

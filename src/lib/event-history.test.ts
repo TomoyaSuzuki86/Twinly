@@ -38,16 +38,12 @@ describe("event-history helpers", () => {
     },
   ];
 
-  it("summarizes milk totals by method and overall", () => {
+  it("summarizes milk totals without method breakdowns", () => {
     const summary = summarizeMilkEvents(milkEvents);
 
     expect(summary.total.count).toBe(3);
     expect(summary.total.amount).toBe(300);
     expect(summary.total.average).toBe(100);
-    expect(summary.bottle.count).toBe(2);
-    expect(summary.bottle.amount).toBe(220);
-    expect(summary.breast.count).toBe(1);
-    expect(summary.breast.amount).toBe(80);
   });
 
   it("filters events by the active range", () => {
@@ -63,14 +59,10 @@ describe("event-history helpers", () => {
     expect(chartData[0]).toMatchObject({
       label: "04-20",
       total: { count: 1, amount: 80, average: 80 },
-      breast: { count: 1, amount: 80, average: 80 },
-      bottle: { count: 0, amount: 0, average: 0 },
     });
     expect(chartData[1]).toMatchObject({
       label: "04-21",
       total: { count: 1, amount: 120, average: 120 },
-      breast: { count: 0, amount: 0, average: 0 },
-      bottle: { count: 1, amount: 120, average: 120 },
     });
   });
 

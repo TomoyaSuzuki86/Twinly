@@ -70,6 +70,7 @@ describe("WeeklyTimelineModal", () => {
 
     expect(grid.dataset.dayCount).toBe("7");
     expect(grid.dataset.hourCount).toBe("24");
+    expect(screen.queryByText("食事/おむつ")).toBeNull();
     expect(kanataEvent.className).toContain("bg-blue-500");
     expect(poopEvent.className).toContain("bg-amber-400");
     expect(kanataEvent.dataset.selected).toBe("true");
@@ -84,7 +85,7 @@ describe("WeeklyTimelineModal", () => {
     expect(hinataEvent.className).toContain("bg-cyan-300");
   });
 
-  it("keeps marker lanes fixed as milk, pee, and poop regardless of event order", () => {
+  it("keeps two grouped lanes with fixed subtype positions regardless of event order", () => {
     const timestamp = new Date("2026-07-29T09:00:00+09:00").getTime();
     const overlappingEvents: LogEvent[] = [
       {
@@ -109,6 +110,13 @@ describe("WeeklyTimelineModal", () => {
         diaperKind: "pee",
         timestamp,
       },
+      {
+        id: "solid-food",
+        babyId: "A",
+        type: "solidFood",
+        note: "10倍がゆ",
+        timestamp,
+      },
     ];
 
     render(
@@ -123,9 +131,10 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
-    expect(screen.getByLabelText("奏汰のミルク 09:00").style.left).toBe("25%");
-    expect(screen.getByLabelText("奏汰のおしっこ 09:00").style.left).toBe("50%");
-    expect(screen.getByLabelText("奏汰のうんち 09:00").style.left).toBe("75%");
+    expect(screen.getByLabelText("奏汰のミルク 09:00").style.left).toBe("20%");
+    expect(screen.getByLabelText("奏汰の離乳食 09:00").style.left).toBe("30%");
+    expect(screen.getByLabelText("奏汰のおしっこ 09:00").style.left).toBe("70%");
+    expect(screen.getByLabelText("奏汰のうんち 09:00").style.left).toBe("80%");
   });
 
   it("keeps a lone poop marker in the poop lane", () => {
@@ -149,6 +158,6 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
-    expect(screen.getByLabelText("奏汰のうんち 15:00").style.left).toBe("75%");
+    expect(screen.getByLabelText("奏汰のうんち 15:00").style.left).toBe("80%");
   });
 });

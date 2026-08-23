@@ -12,6 +12,7 @@ import {
   Ruler,
   FileText,
   CalendarRange,
+  Utensils,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -191,16 +192,9 @@ export function BabyPanel({
   };
 
   const milkEvents = logEvents.filter((event) => event.type === "milk");
+  const solidFoodEvents = logEvents.filter((event) => event.type === "solidFood");
   const diaperEvents = logEvents.filter((event) => event.type === "diaper");
   const milkTotal = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
-  const bottleMilkTotal = milkEvents.reduce(
-    (sum, event) => sum + (event.milkMethod === "bottle" ? event.milkMl ?? 0 : 0),
-    0
-  );
-  const breastMilkTotal = milkEvents.reduce(
-    (sum, event) => sum + (event.milkMethod === "breast" ? event.milkMl ?? 0 : 0),
-    0
-  );
   const peeCount = diaperEvents.reduce(
     (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
     0
@@ -238,7 +232,7 @@ export function BabyPanel({
             size="lg"
             className="relative h-28 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
             onClick={() => onOpenModal("milk", { babyId })}
-            aria-label={`ミルクを記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・1回の目安${milkTargetMl}ml` : ""}`}
+            aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・ミルクあと${milkNeededMl}ml・1回の目安${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
@@ -248,12 +242,12 @@ export function BabyPanel({
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-center">
               <div className="flex items-center">
-                <Milk className="mr-3 h-7 w-7" />
-                ミルク
+                <Utensils className="mr-3 h-7 w-7" />
+                食事
               </div>
               {milkNeededMl !== null && milkTargetMl !== null ? (
                 <span className="mt-1 text-base font-semibold">
-                  あと {milkNeededMl}ml
+                  ミルク あと {milkNeededMl}ml
                   <span className="ml-1 text-sm font-normal opacity-80">/ 目安 {milkTargetMl}ml</span>
                 </span>
               ) : (
@@ -466,12 +460,12 @@ export function BabyPanel({
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
-                    <span>哺乳瓶</span>
-                    <span>{bottleMilkTotal}ml</span>
+                    <span>ミルク</span>
+                    <span>{milkEvents.length}回</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>母乳</span>
-                    <span>{breastMilkTotal}ml</span>
+                  <div className="flex items-center justify-between gap-3 text-emerald-300">
+                    <span>離乳食</span>
+                    <span>{solidFoodEvents.length}回</span>
                   </div>
                 </div>
               </CardContent>

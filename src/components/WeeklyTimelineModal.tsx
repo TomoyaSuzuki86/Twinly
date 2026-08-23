@@ -50,10 +50,11 @@ const getMarkerTop = (timestamp: number) => {
   return `${Math.min(99.2, Math.max(0.8, percentage))}%`;
 };
 
-const getMarkerLane = (event: LogEvent) => {
-  if (event.type === "milk") return 0;
-  if (event.diaperKind === "pee") return 1;
-  return 2;
+const getMarkerLeft = (event: LogEvent) => {
+  if (event.type === "milk") return "20%";
+  if (event.type === "solidFood") return "30%";
+  if (event.diaperKind === "pee") return "70%";
+  return "80%";
 };
 
 const getEventPresentation = (event: LogEvent) => {
@@ -62,6 +63,14 @@ const getEventPresentation = (event: LogEvent) => {
       label: "ミルク",
       detail: `${event.milkMl ?? 0}ml`,
       selectedClass: "rounded-full border-sky-100 bg-blue-500",
+    };
+  }
+
+  if (event.type === "solidFood") {
+    return {
+      label: "離乳食",
+      detail: event.note || "食事",
+      selectedClass: "rotate-45 rounded-[2px] border-emerald-100 bg-emerald-500",
     };
   }
 
@@ -128,7 +137,7 @@ export function WeeklyTimelineModal({
         <DialogHeader className="flex-none border-b px-4 py-3 pr-12 text-left">
           <DialogTitle className="text-base">週間タイムライン</DialogTitle>
           <DialogDescription className="sr-only">
-            1週間のミルク、おしっこ、うんちの記録を24時間軸で表示します。
+            1週間のミルク、離乳食、おしっこ、うんちの記録を24時間軸で表示します。
           </DialogDescription>
         </DialogHeader>
 
@@ -196,16 +205,16 @@ export function WeeklyTimelineModal({
               ミルク
             </span>
             <span className="flex items-center justify-center gap-1">
+              <span className="h-2 w-2 rotate-45 rounded-[2px] border border-emerald-100 bg-emerald-500" />
+              離乳食
+            </span>
+            <span className="flex items-center justify-center gap-1">
               <span className="h-2 w-2 rounded-[2px] border border-cyan-100 bg-cyan-300" />
               おしっこ
             </span>
             <span className="flex items-center justify-center gap-1">
               <span className="h-2 w-2 rounded-full border border-amber-100 bg-amber-400" />
               うんち
-            </span>
-            <span className="flex items-center justify-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-slate-400 opacity-35" />
-              薄表示
             </span>
           </div>
         </div>
@@ -280,12 +289,14 @@ export function WeeklyTimelineModal({
                   }`}
                   aria-label={`${day.key}の記録`}
                 >
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-border/25"
+                  />
                   {day.events.map((event) => {
                     const profile = profiles[event.babyId];
                     const presentation = getEventPresentation(event);
                     const selected = event.babyId === selectedBabyId;
-                    const lane = getMarkerLane(event);
-                    const markerLeft = `${25 + lane * 25}%`;
                     const time = fmtTime(new Date(event.timestamp));
 
                     return (
@@ -300,7 +311,7 @@ export function WeeklyTimelineModal({
                             ? presentation.selectedClass
                             : "rounded-[2px] border-slate-300/40 bg-slate-400 opacity-25 grayscale"
                         }`}
-                        style={{ top: getMarkerTop(event.timestamp), left: markerLeft }}
+                        style={{ top: getMarkerTop(event.timestamp), left: getMarkerLeft(event) }}
                       />
                     );
                   })}

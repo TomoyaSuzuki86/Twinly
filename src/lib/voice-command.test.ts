@@ -9,7 +9,6 @@ describe("parseVoiceCommand", () => {
         babyId: "A",
         type: "milk",
         milkMl: 80,
-        milkMethod: "bottle",
       },
     });
   });
@@ -32,6 +31,22 @@ describe("parseVoiceCommand", () => {
         babyId: "B",
         type: "diaper",
         diaperKind: "poop",
+      },
+    });
+  });
+
+  it("parses a solid food command and keeps the spoken details as its memo", () => {
+    expect(
+      parseVoiceCommand("奏汰 離乳食 10倍がゆ 小さじ2", {
+        A: ["奏汰"],
+        B: ["日向"],
+      })
+    ).toMatchObject({
+      ok: true,
+      command: {
+        babyId: "A",
+        type: "solidFood",
+        note: "奏汰 離乳食 10倍がゆ 小さじ2",
       },
     });
   });

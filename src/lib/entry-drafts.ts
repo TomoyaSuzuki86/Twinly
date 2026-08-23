@@ -1,10 +1,8 @@
-import { BabyId, DiaperKind, LogEvent, MilkMethod } from "@/types";
+import { BabyId, DiaperKind, LogEvent } from "@/types";
 import { clamp, pad2 } from "./utils";
 
 export type MilkDraft = {
   milkMl: number;
-  milkMethod: MilkMethod;
-  milkMlByMethod: Record<MilkMethod, number>;
   note: string;
   timestamp: number;
 };
@@ -27,16 +25,9 @@ export const createDefaultMilkDraft = (
     .filter((event) => event.babyId === babyId && event.type === "milk")
     .sort((a, b) => b.timestamp - a.timestamp);
   const lastMilkEvent = milkEvents[0];
-  const lastBottleEvent = milkEvents.find((event) => event.milkMethod === "bottle");
-  const lastBreastEvent = milkEvents.find((event) => event.milkMethod === "breast");
 
   return {
     milkMl: lastMilkEvent?.milkMl ?? 140,
-    milkMethod: lastMilkEvent?.milkMethod ?? "breast",
-    milkMlByMethod: {
-      bottle: lastBottleEvent?.milkMl ?? 140,
-      breast: lastBreastEvent?.milkMl ?? 140,
-    },
     note: "",
     timestamp: now.getTime(),
   };

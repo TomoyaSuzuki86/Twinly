@@ -9,9 +9,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MilkMethod } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
+import { Textarea } from "./ui/textarea";
 import { MilkDraft, formatDateTimeLocalValue, parseDateTimeLocalValue, stepMilkAmount } from "@/lib/entry-drafts";
 
 type MilkModalProps = {
@@ -19,44 +19,49 @@ type MilkModalProps = {
   onOpenChange: (open: boolean) => void;
   displayName: string;
   initialDraft: MilkDraft;
-  onSave: (payload: { milkMl: number; milkMethod: MilkMethod; note: string; timestamp: number }) => void;
+  onSave: (payload: { milkMl: number; note: string; timestamp: number }) => void;
+  onSaveSolidFood?: (payload: { note: string; timestamp: number }) => void;
 };
 
-export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSave }: MilkModalProps) {
+export function MilkModal({
+  open,
+  onOpenChange,
+  displayName,
+  initialDraft,
+  onSave,
+  onSaveSolidFood,
+}: MilkModalProps) {
+  const [recordType, setRecordType] = useState<"milk" | "solidFood">("milk");
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
-  const [milkMethod, setMilkMethod] = useState<MilkMethod>(initialDraft.milkMethod);
-  const [milkMlByMethod, setMilkMlByMethod] = useState(initialDraft.milkMlByMethod);
   const [note, setNote] = useState(initialDraft.note);
+  const [solidFoodNote, setSolidFoodNote] = useState("");
   const [dateTimeValue, setDateTimeValue] = useState(formatDateTimeLocalValue(initialDraft.timestamp));
 
   useEffect(() => {
     if (!open) return;
+    setRecordType("milk");
     setMilkMl(initialDraft.milkMl);
-    setMilkMethod(initialDraft.milkMethod);
-    setMilkMlByMethod(initialDraft.milkMlByMethod);
     setNote(initialDraft.note);
+    setSolidFoodNote("");
     setDateTimeValue(formatDateTimeLocalValue(initialDraft.timestamp));
   }, [open, initialDraft]);
 
   const handleMilkAmountChange = (nextValue: number) => {
     setMilkMl(nextValue);
-    setMilkMlByMethod((current) => ({
-      ...current,
-      [milkMethod]: nextValue,
-    }));
-  };
-
-  const handleMethodChange = (nextMethod: MilkMethod) => {
-    setMilkMethod(nextMethod);
-    setMilkMl(milkMlByMethod[nextMethod]);
   };
 
   const handleSave = () => {
+    const timestamp = parseDateTimeLocalValue(dateTimeValue);
+    if (recordType === "solidFood") {
+      onSaveSolidFood?.({ note: solidFoodNote.trim(), timestamp });
+      onOpenChange(false);
+      return;
+    }
+
     onSave({
       milkMl,
-      milkMethod,
       note,
-      timestamp: parseDateTimeLocalValue(dateTimeValue),
+      timestamp,
     });
     onOpenChange(false);
   };
@@ -65,78 +70,111 @@ export function MilkModal({ open, onOpenChange, displayName, initialDraft, onSav
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{displayName}: ミルク記録</DialogTitle>
-          <DialogDescription>量や方法、記録日時を確認して保存できます。</DialogDescription>
+          <DialogTitle>{displayName}: 食事記録</DialogTitle>
+          <DialogDescription>ミルクまたは離乳食を選んで記録します。</DialogDescription>
         </DialogHeader>
-        <div className="space-y-8 py-4">
-          <div className="text-center">
-            <Label className="text-sm font-semibold text-muted-foreground">量 (ml)</Label>
-            <div className="mt-4 flex items-center justify-center gap-6">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-16 w-16 rounded-full"
-                aria-label="ミルク量を減らす"
-                onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, -1))}
-              >
-                <span className="text-3xl font-semibold">-</span>
-              </Button>
-              <div className="w-32 text-center text-7xl font-extrabold tracking-tight text-sky-300">{milkMl}</div>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-16 w-16 rounded-full"
-                aria-label="ミルク量を増やす"
-                onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, 1))}
-              >
-                <span className="text-3xl font-semibold">+</span>
-              </Button>
+        <div className="space-y-6 py-4">
+          <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1">
+            <Button
+              type="button"
+              variant={recordType === "milk" ? "secondary" : "ghost"}
+              className={recordType === "milk" ? "text-sky-200" : ""}
+              onClick={() => setRecordType("milk")}
+            >
+              ミルク
+            </Button>
+            <Button
+              type="button"
+              variant={recordType === "solidFood" ? "secondary" : "ghost"}
+              className={recordType === "solidFood" ? "text-emerald-300" : ""}
+              onClick={() => setRecordType("solidFood")}
+            >
+              離乳食
+            </Button>
+          </div>
+
+          {recordType === "milk" ? (
+            <>
+              <div className="text-center">
+                <Label className="text-sm font-semibold text-muted-foreground">量 (ml)</Label>
+                <div className="mt-4 flex items-center justify-center gap-6">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-16 w-16 rounded-full"
+                    aria-label="ミルク量を減らす"
+                    onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, -1))}
+                  >
+                    <span className="text-3xl font-semibold">-</span>
+                  </Button>
+                  <div className="w-32 text-center text-7xl font-extrabold tracking-tight text-sky-300">
+                    {milkMl}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-16 w-16 rounded-full"
+                    aria-label="ミルク量を増やす"
+                    onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, 1))}
+                  >
+                    <span className="text-3xl font-semibold">+</span>
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <Label htmlFor="solid-food-note" className="font-semibold text-emerald-200">
+                メモ
+              </Label>
+              <Textarea
+                id="solid-food-note"
+                value={solidFoodNote}
+                onChange={(e) => setSolidFoodNote(e.target.value)}
+                placeholder="例：10倍がゆ 小さじ2、にんじん 少し"
+                className="min-h-28"
+              />
+              <p className="text-xs text-muted-foreground">食べたものや量、様子などを自由に記録できます。</p>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              variant={milkMethod === "bottle" ? "secondary" : "outline"}
-              className="py-6 text-base"
-              onClick={() => handleMethodChange("bottle")}
-            >
-              哺乳瓶
-            </Button>
-            <Button
-              variant={milkMethod === "breast" ? "default" : "outline"}
-              className="py-6 text-base"
-              onClick={() => handleMethodChange("breast")}
-            >
-              母乳
-            </Button>
-          </div>
+          )}
+
           <div className="space-y-2">
-            <Label htmlFor="milk-datetime" className="text-xs text-muted-foreground">
+            <Label htmlFor="feeding-datetime" className="text-xs text-muted-foreground">
               日時
             </Label>
             <Input
-              id="milk-datetime"
+              id="feeding-datetime"
               type="datetime-local"
               value={dateTimeValue}
               onChange={(e) => setDateTimeValue(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="milk-note" className="text-xs text-muted-foreground">
-              メモ（任意）
-            </Label>
-            <Input
-              id="milk-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="機嫌や飲み方など"
-            />
-          </div>
+          {recordType === "milk" ? (
+            <div className="space-y-2">
+              <Label htmlFor="milk-note" className="text-xs text-muted-foreground">
+                メモ（任意）
+              </Label>
+              <Input
+                id="milk-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="機嫌や飲み方など"
+              />
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="ghost">キャンセル</Button>
           </DialogClose>
-          <Button onClick={handleSave} className="bg-sky-600 hover:bg-sky-500">
+          <Button
+            onClick={handleSave}
+            className={
+              recordType === "solidFood"
+                ? "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-sky-600 hover:bg-sky-500"
+            }
+          >
             保存する
           </Button>
         </DialogFooter>

@@ -8,6 +8,30 @@ describe("EditModal", () => {
     cleanup();
   });
 
+  it("edits milk without bottle or breast choices", () => {
+    const onSave = vi.fn();
+    const event: LogEvent = {
+      id: "milk-legacy",
+      babyId: "A",
+      type: "milk",
+      timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+      milkMl: 100,
+      milkMethod: "breast",
+      note: "legacy",
+    };
+
+    render(<EditModal open onOpenChange={vi.fn()} event={event} onSave={onSave} />);
+
+    expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(onSave).toHaveBeenCalledWith("milk-legacy", {
+      milkMl: 100,
+      note: "legacy",
+    });
+  });
+
   it("does not offer mix when editing diaper records", () => {
     const event: LogEvent = {
       id: "diaper-1",

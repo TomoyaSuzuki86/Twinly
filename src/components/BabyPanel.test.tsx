@@ -13,12 +13,14 @@ const renderPanel = ({
   diaperEstimate = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
+  onOpenModal = vi.fn(),
 }: {
   events?: LogEvent[];
   latestEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
+  onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
 } = {}) => {
   const app = createInitialAppState(baseNow);
 
@@ -31,10 +33,14 @@ const renderPanel = ({
       diaperStockManagementEnabled={app.diaperStockManagementEnabled}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
+      milkProgress={null}
       onOpenHistory={onOpenHistory}
-      onOpenModal={vi.fn()}
+      onOpenModal={onOpenModal}
       onDeleteEvent={vi.fn()}
       onAddEvent={vi.fn()}
+      onOpenDailyReport={vi.fn()}
+      onOpenHealthChart={vi.fn()}
+      onOpenTimeline={vi.fn()}
       lastWeight={null}
       lastHeight={null}
       themeDimmedBgColor="bg-background"
@@ -149,6 +155,18 @@ describe("BabyPanel", () => {
     expect(screen.getByRole("button", { name: /交換必要度/ })).toBeTruthy();
   });
 
+  it("keeps exactly two primary actions and opens meal entry from the food button", () => {
+    const onOpenModal = vi.fn();
+
+    renderPanel({ onOpenModal });
+
+    fireEvent.click(screen.getByRole("button", { name: /食事を記録/ }));
+    expect(screen.getByText("食事")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /おむつを記録/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /離乳食を記録/ })).toBeNull();
+    expect(onOpenModal).toHaveBeenCalledWith("milk", { babyId: "A" });
+  });
+
   it("renders every event instead of limiting the list to four items", () => {
     const events: LogEvent[] = Array.from({ length: 6 }, (_, index) => ({
       id: `milk-${index + 1}`,
@@ -179,7 +197,7 @@ describe("BabyPanel", () => {
     expect(onOpenHistory).toHaveBeenNthCalledWith(2, "diaper", "A");
   });
 
-  it("shows milk and diaper breakdown totals in the summary cards", () => {
+  it("shows milk totals without method breakdowns and diaper totals", () => {
     const events: LogEvent[] = [
       {
         id: "milk-bottle",
@@ -223,10 +241,10 @@ describe("BabyPanel", () => {
     renderPanel({ events });
 
     expect(screen.getByText("200")).toBeTruthy();
-    expect(screen.getByText("120ml")).toBeTruthy();
-    expect(screen.getByText("80ml")).toBeTruthy();
+    expect(screen.queryByText("哺乳瓶")).toBeNull();
+    expect(screen.queryByText("母乳")).toBeNull();
     expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getAllByText("2回")).toHaveLength(2);
+    expect(screen.getAllByText("2回")).toHaveLength(3);
   });
 
   it("shows diaper stock forecast details when an estimate is available", () => {

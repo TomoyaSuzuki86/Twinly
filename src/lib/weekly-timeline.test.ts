@@ -6,7 +6,7 @@ const event = (
   id: string,
   timestamp: string,
   babyId: "A" | "B",
-  type: "milk" | "diaper" | "weight" = "milk"
+  type: "milk" | "solidFood" | "diaper" | "weight" = "milk"
 ): LogEvent => ({
   id,
   babyId,
@@ -14,6 +14,7 @@ const event = (
   timestamp: new Date(timestamp).getTime(),
   ...(type === "milk" ? { milkMl: 100, milkMethod: "bottle" as const } : {}),
   ...(type === "diaper" ? { diaperKind: "pee" as const } : {}),
+  ...(type === "solidFood" ? { note: "10倍がゆ" } : {}),
   ...(type === "weight" ? { weight: 6.2 } : {}),
 });
 
@@ -39,6 +40,7 @@ describe("weekly timeline", () => {
     const events: LogEvent[] = [
       event("b", "2026-07-28T10:30:00+09:00", "B", "diaper"),
       event("a", "2026-07-28T09:00:00+09:00", "A"),
+      event("food", "2026-07-28T10:00:00+09:00", "A", "solidFood"),
       event("health", "2026-07-28T08:00:00+09:00", "A", "weight"),
       event("outside", "2026-07-20T09:00:00+09:00", "A"),
     ];
@@ -47,7 +49,7 @@ describe("weekly timeline", () => {
     const tuesday = days.find((day) => day.key === "2026-07-28");
 
     expect(days).toHaveLength(7);
-    expect(tuesday?.events.map((item) => item.id)).toEqual(["a", "b"]);
-    expect(days.flatMap((day) => day.events)).toHaveLength(2);
+    expect(tuesday?.events.map((item) => item.id)).toEqual(["a", "food", "b"]);
+    expect(days.flatMap((day) => day.events)).toHaveLength(3);
   });
 });

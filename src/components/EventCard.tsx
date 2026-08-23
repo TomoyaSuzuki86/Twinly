@@ -9,14 +9,18 @@ import {
   Ruler,
   Thermometer,
   Trash2,
+  Utensils,
   Weight,
 } from "lucide-react";
 import { Button } from "./ui/button";
 
 const formatEventTitle = (event: LogEvent) => {
   if (event.type === "milk") {
-    const method = event.milkMethod === "breast" ? "母乳" : "哺乳瓶";
-    return `${event.milkMl ?? 0}ml・${method}`;
+    return `${event.milkMl ?? 0}ml・ミルク`;
+  }
+
+  if (event.type === "solidFood") {
+    return "離乳食";
   }
 
   if (event.type === "diaper") {
@@ -53,6 +57,8 @@ export function EventCard({
   const iconBg =
     event.type === "milk"
       ? "bg-sky-500/20"
+      : event.type === "solidFood"
+      ? "bg-emerald-500/20"
       : event.type === "diaper"
       ? "bg-amber-500/20"
       : event.type === "temperature"
@@ -66,6 +72,8 @@ export function EventCard({
   const icon =
     event.type === "milk" ? (
       <Milk className="h-5 w-5 text-sky-300" />
+    ) : event.type === "solidFood" ? (
+      <Utensils className="h-5 w-5 text-emerald-300" />
     ) : event.type === "diaper" ? (
       <Droplets className="h-5 w-5 text-amber-300" />
     ) : event.type === "temperature" ? (

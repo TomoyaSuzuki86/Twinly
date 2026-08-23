@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DiaperKind, LogEvent, MilkMethod } from "@/types";
+import { DiaperKind, LogEvent } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
@@ -29,14 +29,12 @@ const diaperKindOptions = [
 
 export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
-  const [milkMethod, setMilkMethod] = useState<MilkMethod>("breast");
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
 
   useEffect(() => {
     if (event) {
       setMilkMl(event.milkMl ?? 0);
-      setMilkMethod(event.milkMethod ?? "breast");
       setDiaperKind(event.diaperKind ?? "pee");
       setNote(event.note ?? "");
     }
@@ -46,7 +44,7 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
     if (!event) return;
     const payload: Partial<LogEvent> =
       event.type === "milk"
-        ? { milkMl, milkMethod, note }
+        ? { milkMl, note }
         : event.type === "diaper"
         ? { diaperKind, note }
         : { note };
@@ -69,32 +67,13 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
           {event.type === "milk" && (
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">ミルク</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>量 (ml)</Label>
-                  <Input
-                    type="number"
-                    value={milkMl}
-                    onChange={(e) => setMilkMl(clamp(Number(e.target.value || 0), 0, 999))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>種類</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant={milkMethod === "bottle" ? "secondary" : "outline"}
-                      onClick={() => setMilkMethod("bottle")}
-                    >
-                      哺乳瓶
-                    </Button>
-                    <Button
-                      variant={milkMethod === "breast" ? "default" : "outline"}
-                      onClick={() => setMilkMethod("breast")}
-                    >
-                      母乳
-                    </Button>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label>量 (ml)</Label>
+                <Input
+                  type="number"
+                  value={milkMl}
+                  onChange={(e) => setMilkMl(clamp(Number(e.target.value || 0), 0, 999))}
+                />
               </div>
             </div>
           )}
@@ -119,6 +98,12 @@ export function EditModal({ open, onOpenChange, event, onSave }: EditModalProps)
               </div>
             </div>
           )}
+          {event.type === "solidFood" ? (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <h3 className="font-semibold text-emerald-200">離乳食</h3>
+              <p className="mt-1 text-sm text-muted-foreground">食べたものや量、様子はメモで編集できます。</p>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label>メモ</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
