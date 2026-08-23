@@ -82,6 +82,21 @@ describe("care gauges", () => {
     expect(threeHoursLater?.neededMl).toBeCloseTo(threeHoursLater?.targetMilkMl ?? 0);
   });
 
+  it("supports a custom emptying window and a manual target override", () => {
+    const current = milk("current", "2026-04-08T12:00:00+09:00", 100);
+    const gauge = buildMilkGauge({
+      events: [...weeklyHistory, current],
+      babyId: "A",
+      now: new Date("2026-04-08T14:00:00+09:00"),
+      windowHours: 4,
+      targetMilkMlOverride: 200,
+    });
+
+    expect(gauge?.targetMilkMl).toBe(200);
+    expect(gauge?.digestingMl).toBeCloseTo(50);
+    expect(gauge?.neededMl).toBeCloseTo(150);
+  });
+
   it("updates immediately even when the first milk record is the only history", () => {
     const gauge = buildMilkGauge({
       events: [milk("only", "2026-04-08T12:00:00+09:00", 140)],

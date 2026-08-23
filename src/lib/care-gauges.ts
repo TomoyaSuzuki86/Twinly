@@ -4,7 +4,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const MILK_LOOKBACK_MS = 3 * DAY_MS;
 const DIAPER_LOOKBACK_MS = 7 * DAY_MS;
-const MILK_WINDOW_MS = 3 * HOUR_MS;
+const DEFAULT_MILK_WINDOW_HOURS = 3;
 const MILK_SESSION_GAP_MS = 30 * 60 * 1000;
 const MILK_TARGET_SAMPLE_COUNT = 3;
 const DIAPER_INTERVAL_MS = 2 * HOUR_MS;
@@ -33,10 +33,14 @@ export const buildMilkGauge = ({
   events,
   babyId,
   now,
+  windowHours = DEFAULT_MILK_WINDOW_HOURS,
+  targetMilkMlOverride = null,
 }: {
   events: LogEvent[];
   babyId: BabyId;
   now: Date;
+  windowHours?: number;
+  targetMilkMlOverride?: number | null;
 }): MilkGauge | null => {
   const nowMs = now.getTime();
   const cutoffMs = nowMs - MILK_LOOKBACK_MS;
@@ -74,15 +78,20 @@ export const buildMilkGauge = ({
     .map((session) => session.totalMl)
     .sort((a, b) => b - a)
     .slice(0, MILK_TARGET_SAMPLE_COUNT);
-  const targetMilkMl = largestSessions.reduce((sum, amount) => sum + amount, 0) / largestSessions.length;
+  const calculatedTargetMilkMl = largestSessions.reduce((sum, amount) => sum + amount, 0) / largestSessions.length;
+  const targetMilkMl =
+    typeof targetMilkMlOverride === "number" && targetMilkMlOverride > 0
+      ? targetMilkMlOverride
+      : calculatedTargetMilkMl;
+  const milkWindowMs = Math.max(0.5, Math.min(12, windowHours)) * HOUR_MS;
 
   // Only the latest three hours contribute to fullness. Each feed is treated
   // as fully undigested at first and linearly reaches zero after three hours.
   // This lets the UI increase hunger smoothly instead of dropping all at once.
   const digestingMl = milkEvents.reduce((sum, event) => {
     const ageMs = nowMs - event.timestamp;
-    if (ageMs < 0 || ageMs >= MILK_WINDOW_MS) return sum;
-    const undigestedRatio = 1 - ageMs / MILK_WINDOW_MS;
+    if (ageMs < 0 || ageMs >= milkWindowMs) return sum;
+    const undigestedRatio = 1 - ageMs / milkWindowMs;
     return sum + (event.milkMl ?? 0) * undigestedRatio;
   }, 0);
 
@@ -130,11 +139,21 @@ export const buildCareGauges = ({
   events,
   babyId,
   now,
+  milkWindowHours,
+  milkTargetMlOverride,
 }: {
   events: LogEvent[];
   babyId: BabyId;
   now: Date;
+  milkWindowHours?: number;
+  milkTargetMlOverride?: number | null;
 }): CareGauges => ({
-  milk: buildMilkGauge({ events, babyId, now }),
+  milk: buildMilkGauge({
+    events,
+    babyId,
+    now,
+    windowHours: milkWindowHours,
+    targetMilkMlOverride: milkTargetMlOverride,
+  }),
   diaper: buildDiaperGauge({ events, babyId, now }),
 });

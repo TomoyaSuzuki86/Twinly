@@ -39,11 +39,20 @@ describe("event-history helpers", () => {
   ];
 
   it("summarizes milk totals without method breakdowns", () => {
-    const summary = summarizeMilkEvents(milkEvents);
+    const summary = summarizeMilkEvents([
+      ...milkEvents,
+      {
+        id: "food",
+        babyId: "A",
+        type: "solidFood",
+        timestamp: now.getTime(),
+      },
+    ]);
 
     expect(summary.total.count).toBe(3);
     expect(summary.total.amount).toBe(300);
     expect(summary.total.average).toBe(100);
+    expect(summary.solidFoodCount).toBe(1);
   });
 
   it("filters events by the active range", () => {
@@ -53,7 +62,19 @@ describe("event-history helpers", () => {
   });
 
   it("builds milk chart data with range-based totals", () => {
-    const chartData = buildMilkChartData(milkEvents, "1W", now);
+    const chartData = buildMilkChartData(
+      [
+        ...milkEvents,
+        {
+          id: "food",
+          babyId: "A",
+          type: "solidFood",
+          timestamp: new Date("2026-04-21T10:00:00+09:00").getTime(),
+        },
+      ],
+      "1W",
+      now
+    );
 
     expect(chartData).toHaveLength(2);
     expect(chartData[0]).toMatchObject({
@@ -63,6 +84,7 @@ describe("event-history helpers", () => {
     expect(chartData[1]).toMatchObject({
       label: "04-21",
       total: { count: 1, amount: 120, average: 120 },
+      solidFoodCount: 1,
     });
   });
 

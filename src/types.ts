@@ -1,5 +1,14 @@
 export type BabyId = "A" | "B";
-export type EventType = "milk" | "solidFood" | "diaper" | "daily" | "temperature" | "weight" | "height";
+export type EventType =
+  | "milk"
+  | "solidFood"
+  | "diaper"
+  | "sleepStart"
+  | "wake"
+  | "daily"
+  | "temperature"
+  | "weight"
+  | "height";
 export type DiaperKind = "pee" | "poop" | "mix";
 export type MilkMethod = "bottle" | "breast";
 
@@ -27,6 +36,8 @@ export type BabyProfile = {
   iconEmoji?: string;
   iconGradient?: string;
   voiceAliases?: string[];
+  milkGaugeWindowHours?: number;
+  milkTargetMlOverride?: number | null;
 };
 
 export type AppState = {

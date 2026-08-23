@@ -18,5 +18,8 @@ describe("BabyTabTrigger", () => {
     expect(screen.getByTestId("baby-A-milk-mini-gauge").style.width).toBe("35%");
     expect(screen.getByTestId("baby-A-diaper-mini-gauge").style.width).toBe("70%");
     expect(screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%`)).toBeTruthy();
+
+    rerender(<BabyTabTrigger profile={profile} sleeping />);
+    expect(screen.getByLabelText(`${profile.displayName}は睡眠中`)).toBeTruthy();
   });
 });

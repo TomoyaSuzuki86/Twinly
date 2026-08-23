@@ -13,6 +13,8 @@ import {
   FileText,
   CalendarRange,
   Utensils,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +26,7 @@ import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
+import { analyzeSleepEvents } from "@/lib/sleep";
 
 type BabyPanelProps = {
   profile: BabyProfile;
@@ -207,6 +210,8 @@ export function BabyPanel({
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const diaperEstimateSummary = diaperStockManagementEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
+  const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
+  const sleeping = Boolean(sleepAnalysis.currentSleepStart);
 
   const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
   const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
@@ -218,14 +223,24 @@ export function BabyPanel({
   const lastDiaperEvent = latestDiaperEvents[0] ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
-  const careGauges = buildCareGauges({ events: latestEvents, babyId, now });
+  const careGauges = buildCareGauges({
+    events: latestEvents,
+    babyId,
+    now,
+    milkWindowHours: profile.milkGaugeWindowHours ?? 3,
+    milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+  });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
   const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
   const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
   const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
 
   return (
-    <Card className={`flex flex-col border-border/60 ${themeDimmedBgColor}`}>
+    <Card
+      className={`flex flex-col border-border/60 ${themeDimmedBgColor} ${
+        sleeping ? "ring-1 ring-indigo-400/60" : ""
+      }`}
+    >
       <CardContent className="p-4">
         <div className="grid grid-cols-2 gap-4">
           <Button
@@ -303,6 +318,23 @@ export function BabyPanel({
               }}
               className="h-7 flex-1 px-2 text-sm"
             />
+            <Button
+              variant={sleeping ? "secondary" : "ghost"}
+              size="icon"
+              className={`relative h-7 w-7 flex-shrink-0 ${sleeping ? "bg-indigo-500/25 text-indigo-200" : ""}`}
+              onClick={() =>
+                onAddEvent({
+                  babyId,
+                  type: sleeping ? "wake" : "sleepStart",
+                  note: sleeping ? "手動: 起床" : "手動: 入眠",
+                })
+              }
+              aria-label={sleeping ? "起床を記録" : "入眠を記録"}
+              title={sleeping ? "起床を記録" : "入眠を記録"}
+            >
+              {sleeping ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {!sleeping ? <span className="absolute -right-1 -top-1 text-[8px] font-bold">Zzz</span> : null}
+            </Button>
             <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={handleSaveDailyNote} disabled={!dailyNote.trim()}>
               <Check className="h-4 w-4" />
             </Button>
@@ -435,7 +467,7 @@ export function BabyPanel({
             type="button"
             className="min-w-0 text-left"
             onClick={() => onOpenHistory("milk", babyId)}
-            aria-label={`${profile.displayName}のミルク履歴を開く`}
+            aria-label={`${profile.displayName}の食事履歴を開く`}
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-4">
@@ -533,6 +565,7 @@ export function BabyPanel({
                 event={event}
                 onEdit={() => onOpenModal("edit", { eventId: event.id })}
                 onDelete={() => onDeleteEvent(event.id)}
+                invalidSleepMarker={event.type === "wake" && sleepAnalysis.invalidWakeIds.has(event.id)}
               />
             ))
           )}

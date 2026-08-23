@@ -14,6 +14,7 @@ const renderPanel = ({
   lowStock = null,
   onOpenHistory = vi.fn(),
   onOpenModal = vi.fn(),
+  onAddEvent = vi.fn(),
 }: {
   events?: LogEvent[];
   latestEvents?: LogEvent[];
@@ -21,6 +22,7 @@ const renderPanel = ({
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
   onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
+  onAddEvent?: ComponentProps<typeof BabyPanel>["onAddEvent"];
 } = {}) => {
   const app = createInitialAppState(baseNow);
 
@@ -37,7 +39,7 @@ const renderPanel = ({
       onOpenHistory={onOpenHistory}
       onOpenModal={onOpenModal}
       onDeleteEvent={vi.fn()}
-      onAddEvent={vi.fn()}
+      onAddEvent={onAddEvent}
       onOpenDailyReport={vi.fn()}
       onOpenHealthChart={vi.fn()}
       onOpenTimeline={vi.fn()}
@@ -167,6 +169,48 @@ describe("BabyPanel", () => {
     expect(onOpenModal).toHaveBeenCalledWith("milk", { babyId: "A" });
   });
 
+  it("toggles the sleep shortcut between sleep and wake", () => {
+    const onAddEvent = vi.fn();
+    const { rerender } = renderPanel({ onAddEvent });
+
+    fireEvent.click(screen.getByRole("button", { name: "入眠を記録" }));
+    expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
+
+    const app = createInitialAppState(baseNow);
+    const sleepingEvents: LogEvent[] = [
+      {
+        id: "sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: baseNow.getTime() - 10 * 60 * 1000,
+      },
+    ];
+    rerender(
+      <BabyPanel
+        profile={app.profiles.A}
+        events={sleepingEvents}
+        latestEvents={sleepingEvents}
+        now={baseNow}
+        diaperStockManagementEnabled
+        lowStock={null}
+        diaperEstimate={null}
+        milkProgress={null}
+        onOpenHistory={vi.fn()}
+        onOpenModal={vi.fn()}
+        onDeleteEvent={vi.fn()}
+        onAddEvent={onAddEvent}
+        onOpenDailyReport={vi.fn()}
+        onOpenHealthChart={vi.fn()}
+        onOpenTimeline={vi.fn()}
+        lastWeight={null}
+        lastHeight={null}
+        themeDimmedBgColor="bg-background"
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "起床を記録" }));
+    expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
+  });
+
   it("renders every event instead of limiting the list to four items", () => {
     const events: LogEvent[] = Array.from({ length: 6 }, (_, index) => ({
       id: `milk-${index + 1}`,
@@ -190,7 +234,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ onOpenHistory });
 
-    fireEvent.click(screen.getByLabelText(/ミルク履歴を開く/));
+    fireEvent.click(screen.getByLabelText(/食事履歴を開く/));
     fireEvent.click(screen.getByLabelText(/おむつ履歴を開く/));
 
     expect(onOpenHistory).toHaveBeenNthCalledWith(1, "milk", "A");

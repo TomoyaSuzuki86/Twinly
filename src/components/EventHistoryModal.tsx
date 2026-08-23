@@ -19,7 +19,7 @@ import {
   Tooltip,
   Cell,
 } from "recharts";
-import { Droplets, Milk } from "lucide-react";
+import { Droplets, Utensils } from "lucide-react";
 import { buildMilkProgressComparison } from "@/lib/milk-progress";
 import {
   buildDiaperChartData,
@@ -62,11 +62,11 @@ const strokeMap: Record<string, string> = {
 };
 
 const formatHistoryTitle = (historyType: HistoryType) =>
-  historyType === "milk" ? "ミルク履歴" : "おむつ履歴";
+  historyType === "milk" ? "食事履歴" : "おむつ履歴";
 
 const formatHistoryDescription = (historyType: HistoryType) =>
   historyType === "milk"
-    ? "表示期間の累計回数、ミルク量、平均量と、期間別の詳細を確認できます。"
+    ? "表示期間のミルク量と離乳食回数を、日付・週単位で確認できます。"
     : "表示期間のうんち・おしっこ回数と、期間別の詳細を確認できます。";
 
 const formatMilkComparison = (difference: number) => {
@@ -81,6 +81,8 @@ const describeEvent = (event: LogEvent) => {
   if (event.type === "milk") {
     return `${event.milkMl ?? 0}ml・ミルク`;
   }
+
+  if (event.type === "solidFood") return "離乳食";
 
   if (event.type === "diaper") {
     const kind = event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方";
@@ -112,6 +114,24 @@ function MilkSummaryCard({ title, stats }: { title: string; stats: MilkStats }) 
   );
 }
 
+function SolidFoodSummaryCard({ count, daySpan }: { count: number; daySpan: number }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="text-sm text-muted-foreground">離乳食</div>
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">累計回数</span>
+          <span className="font-semibold">{count}回</span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">1日平均</span>
+          <span className="font-semibold">{(count / daySpan).toFixed(1)}回/日</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DiaperSummaryCard({ title, stats }: { title: string; stats: DiaperStats }) {
   return (
     <div className="rounded-xl border bg-card p-4">
@@ -135,10 +155,17 @@ function MilkPeriodTooltipCard({ title, datum }: { title: string; datum: MilkCha
     <div className="min-w-[220px] rounded-lg border bg-background/95 p-3 shadow-xl backdrop-blur">
       <div className="text-sm font-semibold">{title}</div>
       <div className="mt-3 space-y-3 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">ミルク</div>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <span>{datum.total.count}回</span>
+            <span>{datum.total.amount}ml</span>
+            <span>{formatAverageMilkAmount(datum.total.average)}</span>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-3">
-          <span>{datum.total.count}回</span>
-          <span>{datum.total.amount}ml</span>
-          <span>{formatAverageMilkAmount(datum.total.average)}</span>
+          <span className="text-muted-foreground">離乳食</span>
+          <span>{datum.solidFoodCount}回</span>
         </div>
       </div>
     </div>
@@ -239,7 +266,13 @@ export function EventHistoryModal({
   const filteredEvents = useMemo(
     () =>
       events
-        .filter((event) => event.babyId === profile.babyId && event.type === historyType)
+        .filter(
+          (event) =>
+            event.babyId === profile.babyId &&
+            (historyType === "milk"
+              ? event.type === "milk" || event.type === "solidFood"
+              : event.type === "diaper")
+        )
         .sort((a, b) => b.timestamp - a.timestamp),
     [events, historyType, profile.babyId]
   );
@@ -275,7 +308,7 @@ export function EventHistoryModal({
   const selectedDiaperDatum = diaperChartData.find((datum) => datum.key === selectedPeriodKey) ?? null;
   const chartColor =
     strokeMap[profile.iconGradient ?? ""] ?? (historyType === "milk" ? "#0ea5e9" : "#f59e0b");
-  const Icon = historyType === "milk" ? Milk : Droplets;
+  const Icon = historyType === "milk" ? Utensils : Droplets;
 
   const handleChartClick = (state: { activePayload?: Array<{ payload?: { key?: string } }> } | undefined) => {
     const clickedKey = state?.activePayload?.[0]?.payload?.key;
@@ -306,8 +339,12 @@ export function EventHistoryModal({
           <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
             {historyType === "milk" ? (
               <div className="space-y-4">
-                <div>
+                <div className="grid gap-4 sm:grid-cols-2">
                   <MilkSummaryCard title="ミルク" stats={visibleMilkSummary.total} />
+                  <SolidFoodSummaryCard
+                    count={visibleMilkSummary.solidFoodCount}
+                    daySpan={rangeDays[timeRange]}
+                  />
                 </div>
                 <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
                   <div className="flex items-center justify-between gap-3">
@@ -339,7 +376,7 @@ export function EventHistoryModal({
                   <div className="text-sm font-medium">表示期間の推移</div>
                   <div className="text-xs text-muted-foreground">
                     {historyType === "milk"
-                      ? "表示範囲の集計を上部に表示します。バーを選ぶと期間別の詳細を確認できます。"
+                      ? "青はミルク、紫は離乳食の回数です。バーを選ぶと期間別の詳細を確認できます。"
                       : "表示範囲の回数を上部に表示します。バーを選ぶと期間別の詳細を確認できます。"}
                   </div>
                 </div>
@@ -374,7 +411,12 @@ export function EventHistoryModal({
                     ) : (
                       <Tooltip content={<CustomDiaperTooltip />} />
                     )}
-                    <Bar dataKey={historyType === "milk" ? "total.count" : "total.count"} fill={chartColor} radius={[8, 8, 0, 0]}>
+                    <Bar
+                      dataKey="total.count"
+                      stackId={historyType === "milk" ? "meal" : undefined}
+                      fill={chartColor}
+                      radius={historyType === "milk" ? [0, 0, 0, 0] : [8, 8, 0, 0]}
+                    >
                       {chartData.map((datum) => {
                         const isSelected = selectedPeriodKey === datum.key;
                         const dimmed = selectedPeriodKey !== null && !isSelected;
@@ -389,6 +431,9 @@ export function EventHistoryModal({
                         );
                       })}
                     </Bar>
+                    {historyType === "milk" ? (
+                      <Bar dataKey="solidFoodCount" stackId="meal" fill="#a78bfa" radius={[8, 8, 0, 0]} />
+                    ) : null}
                   </BarChart>
                 </ResponsiveContainer>
               </div>

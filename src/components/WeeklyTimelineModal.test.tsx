@@ -160,4 +160,36 @@ describe("WeeklyTimelineModal", () => {
 
     expect(screen.getByLabelText("奏汰のうんち 15:00").style.left).toBe("80%");
   });
+
+  it("shows completed sleep as a band and a per-day total", () => {
+    const events: LogEvent[] = [
+      {
+        id: "sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-07-29T01:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-07-29T03:30:00+09:00").getTime(),
+      },
+    ];
+
+    render(
+      <WeeklyTimelineModal
+        open
+        onOpenChange={() => undefined}
+        events={events}
+        profiles={profiles}
+        initialDate="2026-07-29"
+        initialBabyId="A"
+        now={new Date("2026-07-29T12:00:00+09:00")}
+      />
+    );
+
+    expect(screen.getByLabelText("奏汰の睡眠時間帯")).toBeTruthy();
+    expect(screen.getByLabelText("2026-07-29の睡眠合計 2時間30分")).toBeTruthy();
+  });
 });

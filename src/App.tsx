@@ -31,6 +31,7 @@ import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
+import { getAutoWakeTimestampForMilk, isBabySleeping } from "./lib/sleep";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -453,10 +454,23 @@ export default function App() {
   const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
     if (!authUser || !db) return;
     const event = createEvent(babyId, type, payload);
+    const createdEvents = [event];
 
-    updateApp((prevApp) => ({ ...prevApp, events: [event, ...prevApp.events] }));
+    if (type === "milk") {
+      const autoWakeTimestamp = getAutoWakeTimestampForMilk(app.events, babyId, event.timestamp);
+      if (autoWakeTimestamp !== null) {
+        createdEvents.push(
+          createEvent(babyId, "wake", {
+            timestamp: autoWakeTimestamp,
+            note: "ミルク記録により自動起床",
+          })
+        );
+      }
+    }
 
-    scheduleUndo(event);
+    updateApp((prevApp) => ({ ...prevApp, events: [...createdEvents, ...prevApp.events] }));
+
+    scheduleUndo(createdEvents);
   };
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number }) => {
@@ -508,7 +522,13 @@ export default function App() {
 
     const createdEvents: LogEvent[] = [];
 
-    if (command.type === "milk" || command.type === "solidFood" || command.type === "diaper") {
+    if (
+      command.type === "milk" ||
+      command.type === "solidFood" ||
+      command.type === "diaper" ||
+      command.type === "sleepStart" ||
+      command.type === "wake"
+    ) {
       const targetedCommands = expandVoiceCommandTargets(command);
 
       targetedCommands.forEach((targetedCommand) => {
@@ -539,6 +559,16 @@ export default function App() {
             createEvent(targetedCommand.babyId, "diaper", {
               timestamp: targetedCommand.timestamp,
               diaperKind: targetedCommand.diaperKind,
+              note: targetedCommand.note,
+            })
+          );
+          return;
+        }
+
+        if (targetedCommand.type === "sleepStart" || targetedCommand.type === "wake") {
+          createdEvents.push(
+            createEvent(targetedCommand.babyId, targetedCommand.type, {
+              timestamp: targetedCommand.timestamp,
               note: targetedCommand.note,
             })
           );
@@ -587,6 +617,26 @@ export default function App() {
 
     if (!createdEvents.length) return;
 
+    const eventsWithAutoWake: LogEvent[] = [];
+    createdEvents.forEach((event) => {
+      if (event.type === "milk") {
+        const autoWakeTimestamp = getAutoWakeTimestampForMilk(
+          [...eventsWithAutoWake, ...app.events],
+          event.babyId,
+          event.timestamp
+        );
+        if (autoWakeTimestamp !== null) {
+          eventsWithAutoWake.push(
+            createEvent(event.babyId, "wake", {
+              timestamp: autoWakeTimestamp,
+              note: "ミルク記録により自動起床",
+            })
+          );
+        }
+      }
+      eventsWithAutoWake.push(event);
+    });
+
     updateApp((prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
 
@@ -609,11 +659,11 @@ export default function App() {
           });
         });
 
-      return { ...prevApp, profiles: nextProfiles, events: [...createdEvents, ...prevApp.events] };
+      return { ...prevApp, profiles: nextProfiles, events: [...eventsWithAutoWake, ...prevApp.events] };
     });
 
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
-    scheduleUndo(createdEvents, { transcript, retryVoice: true });
+    scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -937,6 +987,14 @@ export default function App() {
     return result;
   }, [activeDate, app.events, now]);
 
+  const sleepingByBaby = useMemo(
+    () => ({
+      A: isBabySleeping(app.events, "A"),
+      B: isBabySleeping(app.events, "B"),
+    }),
+    [app.events]
+  );
+
   const tabCareGaugePercents = useMemo(() => {
     const result: Record<BabyId, { milk: number; diaper: number }> = {
       A: { milk: 0, diaper: 0 },
@@ -945,7 +1003,14 @@ export default function App() {
 
     (["A", "B"] as BabyId[]).forEach((babyId) => {
       const latestEvents = latestEventsByBaby[babyId];
-      const gauges = buildCareGauges({ events: latestEvents, babyId, now });
+      const profile = app.profiles[babyId];
+      const gauges = buildCareGauges({
+        events: latestEvents,
+        babyId,
+        now,
+        milkWindowHours: profile.milkGaugeWindowHours ?? 3,
+        milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+      });
       const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
@@ -954,7 +1019,7 @@ export default function App() {
     });
 
     return result;
-  }, [latestEventsByBaby, now]);
+  }, [app.profiles, latestEventsByBaby, now]);
 
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
   useScreenWakeLock(Boolean(authUser));
@@ -1096,12 +1161,14 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   careGaugePercents={selectedBabyTab === "A" ? undefined : tabCareGaugePercents.A}
+                  sleeping={sleepingByBaby.A}
                 />
               </TabsTrigger>
               <TabsTrigger value="B" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   careGaugePercents={selectedBabyTab === "B" ? undefined : tabCareGaugePercents.B}
+                  sleeping={sleepingByBaby.B}
                 />
               </TabsTrigger>
             </TabsList>

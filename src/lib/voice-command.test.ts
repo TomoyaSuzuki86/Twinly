@@ -51,6 +51,20 @@ describe("parseVoiceCommand", () => {
     });
   });
 
+  it.each([
+    ["奏汰 入眠", "sleepStart"],
+    ["奏汰 寝ました", "sleepStart"],
+    ["奏汰 お休み", "sleepStart"],
+    ["日向 起床", "wake"],
+    ["日向 起きた", "wake"],
+    ["日向 おはよう", "wake"],
+  ] as const)("parses sleep command: %s", (transcript, type) => {
+    expect(parseVoiceCommand(transcript, { A: ["奏汰"], B: ["日向"] })).toMatchObject({
+      ok: true,
+      command: { babyId: transcript.startsWith("奏汰") ? "A" : "B", type },
+    });
+  });
+
   it("parses unko as a poop diaper command", () => {
     expect(parseVoiceCommand("B うんこ")).toMatchObject({
       ok: true,

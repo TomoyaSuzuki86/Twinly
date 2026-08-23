@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Moon } from "lucide-react";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtTime, iconGradients } from "@/lib/utils";
 import {
@@ -8,6 +8,7 @@ import {
   getWeekStart,
   shiftWeek,
 } from "@/lib/weekly-timeline";
+import { analyzeSleepEvents, buildSleepDaySummary, formatSleepDuration } from "@/lib/sleep";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -129,6 +130,10 @@ export function WeeklyTimelineModal({
   }, [initialBabyId, initialWeekStart, open]);
 
   const days = useMemo(() => buildWeeklyTimeline(events, weekStart), [events, weekStart]);
+  const sleepDays = useMemo(() => {
+    const analysis = analyzeSleepEvents(events, selectedBabyId);
+    return days.map((day) => buildSleepDaySummary(analysis, day.date, now));
+  }, [days, events, now, selectedBabyId]);
   const isCurrentWeek = weekStart.getTime() === currentWeekStart.getTime();
 
   return (
@@ -199,7 +204,7 @@ export function WeeklyTimelineModal({
             })}
           </div>
 
-          <div className="grid grid-cols-4 gap-1 text-center text-[9px] leading-none text-muted-foreground min-[390px]:text-[10px]">
+          <div className="grid grid-cols-5 gap-1 text-center text-[9px] leading-none text-muted-foreground min-[390px]:text-[10px]">
             <span className="flex items-center justify-center gap-1">
               <span className="h-2 w-2 rounded-full border border-sky-100 bg-blue-500" />
               ミルク
@@ -216,11 +221,15 @@ export function WeeklyTimelineModal({
               <span className="h-2 w-2 rounded-full border border-amber-100 bg-amber-400" />
               うんち
             </span>
+            <span className="flex items-center justify-center gap-1">
+              <Moon className="h-2.5 w-2.5 text-indigo-300" />
+              睡眠
+            </span>
           </div>
         </div>
 
         <div
-          className="grid min-h-0 flex-1 grid-cols-[28px_minmax(0,1fr)] grid-rows-[34px_minmax(0,1fr)] px-1 pb-2 pt-1 sm:grid-cols-[34px_minmax(0,1fr)] sm:px-3"
+          className="grid min-h-0 flex-1 grid-cols-[28px_minmax(0,1fr)] grid-rows-[34px_minmax(0,1fr)_24px] px-1 pb-2 pt-1 sm:grid-cols-[34px_minmax(0,1fr)] sm:px-3"
           role="group"
           aria-label="7日間24時間タイムライングリッド"
           data-day-count="7"
@@ -289,6 +298,25 @@ export function WeeklyTimelineModal({
                   }`}
                   aria-label={`${day.key}の記録`}
                 >
+                  {sleepDays[dayIndex].segments.map((segment, segmentIndex) => {
+                    const startPercent = (getMinutesFromMidnight(segment.start) / (24 * 60)) * 100;
+                    const endDate = new Date(segment.end);
+                    const endsAtNextDay =
+                      endDate.getHours() === 0 && endDate.getMinutes() === 0 && segment.end > segment.start;
+                    const endPercent = endsAtNextDay
+                      ? 100
+                      : (getMinutesFromMidnight(segment.end) / (24 * 60)) * 100;
+                    return (
+                      <span
+                        key={`${segment.start}-${segmentIndex}`}
+                        aria-label={`${profiles[selectedBabyId].displayName}の睡眠時間帯`}
+                        className={`pointer-events-none absolute inset-x-0 z-0 bg-indigo-950/70 ${
+                          segment.complete ? "" : "border-y border-dashed border-indigo-300/50"
+                        }`}
+                        style={{ top: `${startPercent}%`, height: `${Math.max(0.3, endPercent - startPercent)}%` }}
+                      />
+                    );
+                  })}
                   <span
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-border/25"
@@ -306,7 +334,7 @@ export function WeeklyTimelineModal({
                         aria-label={`${profile.displayName}の${presentation.label} ${time}`}
                         title={`${profile.displayName} ${presentation.label} ${presentation.detail} ${time}`}
                         data-selected={selected}
-                        className={`absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border shadow-sm min-[390px]:h-3 min-[390px]:w-3 ${
+                        className={`absolute z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border shadow-sm min-[390px]:h-3 min-[390px]:w-3 ${
                           selected
                             ? presentation.selectedClass
                             : "rounded-[2px] border-slate-300/40 bg-slate-400 opacity-25 grayscale"
@@ -318,6 +346,18 @@ export function WeeklyTimelineModal({
                 </div>
               ))}
             </div>
+          </div>
+          <div aria-hidden="true" />
+          <div className="grid grid-cols-7 border-l border-r border-border/70">
+            {sleepDays.map((summary, index) => (
+              <div
+                key={days[index].key}
+                className="truncate border-l border-border/50 px-0.5 pt-1 text-center text-[8px] font-semibold text-indigo-200 min-[390px]:text-[9px]"
+                aria-label={`${days[index].key}の睡眠合計 ${formatSleepDuration(summary.totalMinutes)}`}
+              >
+                {summary.totalMinutes > 0 ? formatSleepDuration(summary.totalMinutes) : "—"}
+              </div>
+            ))}
           </div>
         </div>
       </DialogContent>

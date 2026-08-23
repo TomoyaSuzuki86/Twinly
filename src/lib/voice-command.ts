@@ -29,6 +29,13 @@ export type VoiceCommand =
     }
   | {
       kind: "event";
+      babyId: VoiceCommandTarget;
+      type: "sleepStart" | "wake";
+      timestamp: number;
+      note: string;
+    }
+  | {
+      kind: "event";
       babyId: BabyId;
       type: "daily";
       dailyNote: string;
@@ -285,6 +292,8 @@ export const parseVoiceCommand = (
     "pee",
     "poop",
   ]);
+  const isWake = includesAny(normalizedText, ["起床", "起きました", "起きた", "覚醒", "おはよう"]);
+  const isSleepStart = includesAny(normalizedText, ["入眠", "寝ました", "寝た", "お休み", "おやすみ"]);
 
   if (isDailyNote) {
     if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
@@ -350,6 +359,19 @@ export const parseVoiceCommand = (
         babyId,
         type: "height",
         height,
+        timestamp,
+        note: `voice: ${text}`,
+      },
+    };
+  }
+
+  if (isWake || isSleepStart) {
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId: targetBabyId,
+        type: isWake ? "wake" : "sleepStart",
         timestamp,
         note: `voice: ${text}`,
       },
@@ -460,6 +482,15 @@ export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): O
     return {
       babyId: command.babyId,
       type: "solidFood",
+      timestamp: command.timestamp,
+      note: command.note,
+    };
+  }
+
+  if (command.type === "sleepStart" || command.type === "wake") {
+    return {
+      babyId: command.babyId,
+      type: command.type,
       timestamp: command.timestamp,
       note: command.note,
     };

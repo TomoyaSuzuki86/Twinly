@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { iconGradients } from "@/lib/utils";
+import { buildMilkGauge } from "@/lib/care-gauges";
 
 type SettingsModalProps = {
   open: boolean;
@@ -142,6 +143,13 @@ export function SettingsModal({
             <div className="grid gap-6 md:grid-cols-2">
               {(Object.keys(localProfiles) as BabyId[]).map((babyId) => {
                 const profile = localProfiles[babyId];
+                const calculatedMilkTarget = buildMilkGauge({
+                  events: app.events,
+                  babyId,
+                  now: new Date(),
+                  windowHours: profile.milkGaugeWindowHours ?? 3,
+                  targetMilkMlOverride: null,
+                })?.targetMilkMl;
                 return (
                   <div key={babyId} className="space-y-4 rounded-lg border p-4">
                     <h3 className="font-semibold">赤ちゃん {babyId}</h3>
@@ -196,6 +204,67 @@ export function SettingsModal({
                         value={profile.birthDate}
                         onChange={(e) => handleProfileChange(babyId, "birthDate", e.target.value)}
                       />
+                    </div>
+                    <div className="space-y-2 rounded-lg border bg-background/40 p-3">
+                      <Label htmlFor={`milk-window-${babyId}`}>ミルクゲージが空になる時間</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`milk-window-${babyId}`}
+                          type="number"
+                          min="0.5"
+                          max="12"
+                          step="0.5"
+                          value={profile.milkGaugeWindowHours ?? 3}
+                          onChange={(event) =>
+                            handleProfileChange(
+                              babyId,
+                              "milkGaugeWindowHours",
+                              Math.max(0.5, Math.min(12, Number(event.target.value) || 3))
+                            )
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">時間</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">初期値は3時間です。</p>
+                    </div>
+                    <div className="space-y-2 rounded-lg border bg-background/40 p-3">
+                      <Label htmlFor={`milk-target-${babyId}`}>1回のミルク目安量</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`milk-target-${babyId}`}
+                          type="number"
+                          min="1"
+                          max="999"
+                          value={profile.milkTargetMlOverride ?? ""}
+                          placeholder={calculatedMilkTarget ? `自動: ${Math.round(calculatedMilkTarget)}` : "自動計算"}
+                          onChange={(event) =>
+                            handleProfileChange(
+                              babyId,
+                              "milkTargetMlOverride",
+                              event.target.value === ""
+                                ? null
+                                : Math.max(1, Math.min(999, Number(event.target.value)))
+                            )
+                          }
+                        />
+                        <span className="text-sm text-muted-foreground">ml</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {profile.milkTargetMlOverride == null
+                            ? `自動計算${calculatedMilkTarget ? `: ${Math.round(calculatedMilkTarget)}ml` : "中"}`
+                            : "手入力の値を使用中"}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={profile.milkTargetMlOverride == null}
+                          onClick={() => handleProfileChange(babyId, "milkTargetMlOverride", null)}
+                        >
+                          自動計算に戻す
+                        </Button>
+                      </div>
                     </div>
                     {localDiaperStockManagementEnabled ? (
                     <div className="space-y-2">

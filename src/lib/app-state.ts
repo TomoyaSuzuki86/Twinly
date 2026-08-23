@@ -39,6 +39,8 @@ const createBaseProfiles = (now: Date) =>
       iconEmoji: "A",
       iconGradient: "from-violet-500 to-fuchsia-500",
       voiceAliases: [],
+      milkGaugeWindowHours: 3,
+      milkTargetMlOverride: null,
     },
     B: {
       babyId: "B",
@@ -50,6 +52,8 @@ const createBaseProfiles = (now: Date) =>
       iconEmoji: "B",
       iconGradient: "from-sky-500 to-cyan-400",
       voiceAliases: [],
+      milkGaugeWindowHours: 3,
+      milkTargetMlOverride: null,
     },
   }) as AppState["profiles"];
 
@@ -71,6 +75,16 @@ export const toSharedAppState = (app: AppState): SharedAppState => ({
 
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
+  profiles: Object.fromEntries(
+    (Object.entries(shared.profiles) as [BabyId, AppState["profiles"][BabyId]][]).map(([babyId, profile]) => [
+      babyId,
+      {
+        ...profile,
+        milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
+        milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+      },
+    ])
+  ) as AppState["profiles"],
   diaperStockManagementEnabled: shared.diaperStockManagementEnabled ?? true,
   ui,
 });
@@ -79,7 +93,14 @@ export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
   const profiles = Object.fromEntries(
     (Object.entries(app.profiles) as [BabyId, LegacyProfile][]).map(([babyId, profile]) => {
       const { calendarId: _calendarId, calendarName: _calendarName, ...rest } = profile;
-      return [babyId, rest];
+      return [
+        babyId,
+        {
+          ...rest,
+          milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
+          milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
+        },
+      ];
     })
   ) as AppState["profiles"];
 
