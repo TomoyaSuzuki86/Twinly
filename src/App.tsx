@@ -27,6 +27,12 @@ import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-dr
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { buildCareGauges } from "./lib/care-gauges";
+import {
+  loadPendingEvents,
+  mergePendingEvents,
+  removePendingEvents,
+  storePendingEvents,
+} from "./lib/pending-events";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
@@ -169,9 +175,10 @@ export default function App() {
   const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
+  const syncingPendingEventIdsRef = useRef(new Set<string>());
 
   const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
-    if (!db || !authUser) return;
+    if (!db || !authUser) return false;
     try {
       const appRef = doc(db, "users", authUser.uid, "app", "state");
       await runTransaction(db, async (transaction) => {
@@ -192,8 +199,10 @@ export default function App() {
           { merge: true }
         );
       });
+      return true;
     } catch (error) {
       console.error("syncAppToFirestore failed", error);
+      return false;
     }
   };
 
@@ -220,6 +229,19 @@ export default function App() {
     if (syncRemote) {
       void syncAppToFirestore(updater);
     }
+  };
+
+  const updateAppWithPendingEvents = (events: LogEvent[], updater: (prevApp: AppState) => AppState) => {
+    if (!authUser) return;
+    const eventIds = events.map((event) => event.id);
+    storePendingEvents(authUser.uid, events);
+    eventIds.forEach((eventId) => syncingPendingEventIdsRef.current.add(eventId));
+    setApp((prevApp) => updater(prevApp));
+    setNow(new Date());
+    void syncAppToFirestore(updater).then((synced) => {
+      if (synced) removePendingEvents(authUser.uid, eventIds);
+      eventIds.forEach((eventId) => syncingPendingEventIdsRef.current.delete(eventId));
+    });
   };
 
   const ensureNotificationSettingsDocument = async (user: User) => {
@@ -381,22 +403,36 @@ export default function App() {
     const appRef = doc(db, "users", authUser.uid, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
       setNow(new Date());
-      if (!snap.exists()) {
-        const nextState = createEmptyState();
-        setApp(nextState);
-        setAppLoading(false);
-        return;
+      const data = snap.exists() ? snap.data() : null;
+      const remoteState = data?.app
+        ? stripLegacyCalendarFields(data.app as Parameters<typeof stripLegacyCalendarFields>[0])
+        : createEmptyState();
+      const pendingEvents = loadPendingEvents(authUser.uid);
+      const remoteEventIds = new Set(remoteState.events.map((event) => event.id));
+      const confirmedEventIds = pendingEvents
+        .filter((event) => remoteEventIds.has(event.id))
+        .map((event) => event.id);
+      if (confirmedEventIds.length) removePendingEvents(authUser.uid, confirmedEventIds);
+
+      const eventsToReplay = pendingEvents.filter(
+        (event) => !remoteEventIds.has(event.id) && !syncingPendingEventIdsRef.current.has(event.id)
+      );
+      if (eventsToReplay.length) {
+        const replayIds = eventsToReplay.map((event) => event.id);
+        replayIds.forEach((eventId) => syncingPendingEventIdsRef.current.add(eventId));
+        void syncAppToFirestore((currentState) => ({
+          ...currentState,
+          events: mergePendingEvents(currentState.events, eventsToReplay),
+        })).then((synced) => {
+          if (synced) removePendingEvents(authUser.uid, replayIds);
+          replayIds.forEach((eventId) => syncingPendingEventIdsRef.current.delete(eventId));
+        });
       }
 
-      const data = snap.data();
-      if (!data.app) {
-        const nextState = createEmptyState();
-        setApp(nextState);
-        setAppLoading(false);
-        return;
-      }
-
-      const nextState = stripLegacyCalendarFields(data.app as Parameters<typeof stripLegacyCalendarFields>[0]);
+      const nextState = {
+        ...remoteState,
+        events: mergePendingEvents(remoteState.events, pendingEvents),
+      };
       setApp((prev) => mergeSharedAppState(toSharedAppState(nextState), prev.ui));
       setAppLoading(false);
     });
@@ -477,7 +513,10 @@ export default function App() {
       }
     }
 
-    updateApp((prevApp) => ({ ...prevApp, events: [...createdEvents, ...prevApp.events] }));
+    updateAppWithPendingEvents(createdEvents, (prevApp) => ({
+      ...prevApp,
+      events: mergePendingEvents(prevApp.events, createdEvents),
+    }));
 
     scheduleUndo(createdEvents);
   };
@@ -647,7 +686,7 @@ export default function App() {
       eventsWithAutoWake.push(event);
     });
 
-    updateApp((prevApp) => {
+    updateAppWithPendingEvents(eventsWithAutoWake, (prevApp) => {
       const nextProfiles = { ...prevApp.profiles };
 
       createdEvents
@@ -669,7 +708,11 @@ export default function App() {
           });
         });
 
-      return { ...prevApp, profiles: nextProfiles, events: [...eventsWithAutoWake, ...prevApp.events] };
+      return {
+        ...prevApp,
+        profiles: nextProfiles,
+        events: mergePendingEvents(prevApp.events, eventsWithAutoWake),
+      };
     });
 
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
@@ -677,6 +720,10 @@ export default function App() {
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
+    if (authUser) {
+      const pendingEvent = loadPendingEvents(authUser.uid).find((event) => event.id === eventId);
+      if (pendingEvent) storePendingEvents(authUser.uid, [{ ...pendingEvent, ...payload }]);
+    }
     updateApp((prevApp) => {
       const originalEvent = prevApp.events.find((event) => event.id === eventId);
       if (!originalEvent) return prevApp;
@@ -693,6 +740,7 @@ export default function App() {
 
   const removeEvent = (eventId: string) => {
     if (!authUser || !db) return;
+    removePendingEvents(authUser.uid, [eventId]);
     updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => event.id !== eventId) }));
   };
 
@@ -700,6 +748,7 @@ export default function App() {
     if (!authUser || !db || !undo.events?.length) return;
 
     const undoIds = new Set(undo.events.map((event) => event.id));
+    removePendingEvents(authUser.uid, undoIds);
     updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => !undoIds.has(event.id)) }));
 
     setUndo({ open: false });

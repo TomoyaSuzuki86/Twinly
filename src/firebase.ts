@@ -1,7 +1,7 @@
 import { FirebaseApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -39,7 +39,11 @@ const app: FirebaseApp | null = isFirebaseConfigured
   : null;
 
 export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+export const db = app
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  : null;
 export const webPushPublicKey =
   (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
   "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
