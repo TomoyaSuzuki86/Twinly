@@ -316,7 +316,7 @@ export function BabyPanel({
         </div>
 
         <Button
-          className="mt-3 h-16 w-full border-[#897897] bg-[#a493b2] px-4 text-black shadow-sm hover:bg-[#b19fc0]"
+          className="mt-3 h-16 w-full border-[#7862b3] bg-[#8f75d1] px-4 text-black shadow-sm hover:bg-[#9c84dc]"
           onClick={() =>
             onAddEvent({
               babyId,
