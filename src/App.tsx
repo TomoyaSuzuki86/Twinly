@@ -232,7 +232,11 @@ export default function App() {
           enabled: true,
           intervalMinutes: 150,
           mergeWindowMinutes: 15,
-          lastSentByBaby: {},
+        },
+        careReminder: {
+          enabled: true,
+          mergeWindowMinutes: 15,
+          diaperGaugeWindowMinutes: 120,
         },
         updatedAt: serverTimestamp(),
       },

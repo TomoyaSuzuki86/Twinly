@@ -12,9 +12,10 @@ setGlobalOptions({ region: "asia-northeast1", maxInstances: 1 });
 const db = admin.firestore();
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const intervalMinutes = 150;
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
+const defaultMilkGaugeWindowHours = 3;
+const diaperGaugeWindowMinutes = 120;
 
 const webPushPrivateKey = defineSecret("TWINLY_WEB_PUSH_PRIVATE_KEY");
 const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
@@ -421,25 +422,45 @@ const getDefaultMilkMlByBaby = (events) => {
   return result;
 };
 
-const buildLatestMilkCandidate = ({ appState, babyId, lastSentByBaby, nowMs }) => {
+const clampMilkGaugeWindowHours = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return defaultMilkGaugeWindowHours;
+  return Math.max(0.5, Math.min(12, parsed));
+};
+
+const buildLatestCareCandidate = ({ appState, babyId, kind, lastSentByKey, legacyLastSentByBaby, nowMs }) => {
   const events = Array.isArray(appState?.events) ? appState.events : [];
   const profiles = appState?.profiles ?? {};
-  const latestMilkEvent = events
-    .filter((event) => event.babyId === babyId && event.type === "milk")
+  const eventType = kind === "milk" ? "milk" : "diaper";
+  const latestEvent = events
+    .filter(
+      (event) =>
+        event.babyId === babyId &&
+        event.type === eventType &&
+        typeof event.timestamp === "number" &&
+        event.timestamp <= nowMs
+    )
     .sort((left, right) => right.timestamp - left.timestamp)[0];
 
-  if (!latestMilkEvent) return null;
+  if (!latestEvent) return null;
 
-  const lastSent = lastSentByBaby?.[babyId];
-  if (lastSent?.eventId === latestMilkEvent.id) return null;
+  const reminderKey = `${babyId}:${kind}`;
+  const lastSent = lastSentByKey?.[reminderKey] ?? (kind === "milk" ? legacyLastSentByBaby?.[babyId] : null);
+  if (lastSent?.eventId === latestEvent.id) return null;
 
-  const dueAt = latestMilkEvent.timestamp + intervalMinutes * 60 * 1000;
+  const intervalMs =
+    kind === "milk"
+      ? clampMilkGaugeWindowHours(profiles[babyId]?.milkGaugeWindowHours) * 60 * 60 * 1000
+      : diaperGaugeWindowMinutes * 60 * 1000;
+  const dueAt = latestEvent.timestamp + intervalMs;
 
   return {
     babyId,
+    kind,
+    reminderKey,
     displayName: profiles[babyId]?.displayName ?? `赤ちゃん${babyId}`,
-    eventId: latestMilkEvent.id,
-    milkAt: latestMilkEvent.timestamp,
+    eventId: latestEvent.id,
+    occurredAt: latestEvent.timestamp,
     dueAt,
     dueNow: dueAt <= nowMs,
   };
@@ -485,8 +506,7 @@ const groupCandidatesForNotification = (candidates, nowMs) => {
   if (!dueCandidates.length) return null;
 
   const primary = dueCandidates[0];
-  const grouped = candidates
-    .filter((candidate) => candidate)
+  const grouped = dueCandidates
     .filter((candidate) => candidate.dueAt - primary.dueAt <= mergeWindowMs && candidate.dueAt >= primary.dueAt);
 
   return grouped.length ? grouped : [primary];
@@ -495,27 +515,29 @@ const groupCandidatesForNotification = (candidates, nowMs) => {
 const buildNotificationPayload = (group) => {
   if (group.length === 1) {
     const candidate = group[0];
-    const time = formatReminderTime(candidate.milkAt);
+    const time = formatReminderTime(candidate.occurredAt);
+    const label = candidate.kind === "milk" ? "ミルク" : "おむつ";
 
     return {
-      title: `${candidate.displayName}のミルク確認タイミングです`,
-      body: `前回は ${time} です`,
-      tag: `milk-reminder-${candidate.babyId}-${candidate.eventId}`,
+      title: `${candidate.displayName}の${label}ゲージが空になりました`,
+      body: `前回の${label}${candidate.kind === "diaper" ? "交換" : ""}は ${time} です`,
+      tag: `care-reminder-${candidate.babyId}-${candidate.kind}-${candidate.eventId}`,
       url: "/",
     };
   }
 
   const body = group
     .map((candidate) => {
-      const time = formatReminderTime(candidate.milkAt);
-      return `${candidate.displayName}: 前回 ${time}`;
+      const time = formatReminderTime(candidate.occurredAt);
+      const label = candidate.kind === "milk" ? "ミルク" : "おむつ";
+      return `${candidate.displayName}: ${label}（前回 ${time}）`;
     })
     .join("\n");
 
   return {
-    title: "ミルクの確認タイミングです",
+    title: "ケアゲージが空になりました",
     body,
-    tag: `milk-reminder-${group.map((candidate) => candidate.babyId).join("-")}`,
+    tag: `care-reminder-${group.map((candidate) => `${candidate.babyId}-${candidate.kind}`).join("-")}`,
     url: "/",
   };
 };
@@ -559,15 +581,28 @@ exports.sendMilkReminderNotifications = onSchedule(
 
     const settings = settingsSnap.exists ? settingsSnap.data() : {};
     const milkReminder = settings?.milkReminder ?? {};
-    if (milkReminder.enabled === false) continue;
+    const careReminder = settings?.careReminder ?? {};
+    if (careReminder.enabled === false || milkReminder.enabled === false) continue;
 
     const appState = appSnap.data()?.app;
     if (!appState) continue;
 
-    const lastSentByBaby = milkReminder.lastSentByBaby ?? {};
-    const candidates = ["A", "B"]
-      .map((babyId) => buildLatestMilkCandidate({ appState, babyId, lastSentByBaby, nowMs }))
-      .filter(Boolean);
+    const lastSentByKey = careReminder.lastSentByKey ?? {};
+    const legacyLastSentByBaby = milkReminder.lastSentByBaby ?? {};
+    const candidates = ["A", "B"].flatMap((babyId) =>
+      ["milk", "diaper"]
+        .map((kind) =>
+          buildLatestCareCandidate({
+            appState,
+            babyId,
+            kind,
+            lastSentByKey,
+            legacyLastSentByBaby,
+            nowMs,
+          })
+        )
+        .filter(Boolean)
+    );
 
     const notificationGroup = groupCandidatesForNotification(candidates, nowMs);
     if (!notificationGroup) continue;
@@ -583,9 +618,9 @@ exports.sendMilkReminderNotifications = onSchedule(
 
     if (!sent) continue;
 
-    const nextLastSentByBaby = { ...lastSentByBaby };
+    const nextLastSentByKey = { ...lastSentByKey };
     for (const candidate of notificationGroup) {
-      nextLastSentByBaby[candidate.babyId] = {
+      nextLastSentByKey[candidate.reminderKey] = {
         eventId: candidate.eventId,
         sentAt: admin.firestore.Timestamp.fromMillis(nowMs),
       };
@@ -598,11 +633,11 @@ exports.sendMilkReminderNotifications = onSchedule(
       .doc("notifications")
       .set(
         {
-          milkReminder: {
+          careReminder: {
             enabled: true,
-            intervalMinutes,
             mergeWindowMinutes,
-            lastSentByBaby: nextLastSentByBaby,
+            diaperGaugeWindowMinutes,
+            lastSentByKey: nextLastSentByKey,
           },
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },

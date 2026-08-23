@@ -52,6 +52,12 @@ type ResetRequest = {
   label: string;
 };
 
+export const shouldDisablePushEnable = (
+  pushBusy: boolean,
+  pushSubscribed: boolean,
+  webPushConfigured: boolean
+) => pushBusy || pushSubscribed || !webPushConfigured;
+
 export function SettingsModal({
   open,
   onOpenChange,
@@ -407,7 +413,7 @@ export function SettingsModal({
                     ) : (
                       <>
                         <p className="text-sm text-muted-foreground">
-                          ミルクから2時間30分経過すると通知します。A/B の通知時刻が15分以内ならまとめて1通にします。
+                          ミルク・おむつのゲージが空になると通知します。通知時刻が15分以内ならまとめて1通にします。
                         </p>
                         <p className="text-sm text-muted-foreground">
                           状態:{" "}
@@ -420,7 +426,7 @@ export function SettingsModal({
                         <div className="flex gap-3">
                           <Button
                             onClick={onEnablePushNotifications}
-                            disabled={pushBusy || pushPermission === "granted" || !webPushConfigured}
+                            disabled={shouldDisablePushEnable(pushBusy, pushSubscribed, webPushConfigured)}
                           >
                             通知を有効化
                           </Button>

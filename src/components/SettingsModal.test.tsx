@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SettingsModal } from "./SettingsModal";
+import { SettingsModal, shouldDisablePushEnable } from "./SettingsModal";
 import { createInitialAppState } from "@/lib/app-state";
 
 describe("SettingsModal", () => {
@@ -101,5 +101,12 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "オン" }));
     expect(screen.getByRole("button", { name: "オフ" })).toBeTruthy();
     expect(screen.queryByLabelText("1日の睡眠目標")).toBeNull();
+  });
+
+  it("allows retrying push subscription when permission is already granted", () => {
+    expect(shouldDisablePushEnable(false, false, true)).toBe(false);
+    expect(shouldDisablePushEnable(false, true, true)).toBe(true);
+    expect(shouldDisablePushEnable(true, false, true)).toBe(true);
+    expect(shouldDisablePushEnable(false, false, false)).toBe(true);
   });
 });
