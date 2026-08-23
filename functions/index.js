@@ -16,7 +16,7 @@ const intervalMinutes = 150;
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
 
-const webPushPrivateKey = defineSecret("WEB_PUSH_PRIVATE_KEY");
+const webPushPrivateKey = defineSecret("TWINLY_WEB_PUSH_PRIVATE_KEY");
 const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
 const subject = "mailto:no-reply@twinly.local";
 const tokyoTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
