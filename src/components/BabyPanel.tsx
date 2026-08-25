@@ -28,10 +28,10 @@ import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
 import {
   analyzeSleepEvents,
+  buildActivityGauge,
   buildSleepDaySummary,
-  buildSleepGauge,
   formatSleepDuration,
-  getDefaultSleepTargetHours,
+  getDefaultActivityLimitMinutes,
 } from "@/lib/sleep";
 
 type BabyPanelProps = {
@@ -225,9 +225,9 @@ export function BabyPanel({
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
   const todaySleepSummary = buildSleepDaySummary(sleepAnalysis, now, now);
   const todaySleepTotal = formatSleepDuration(todaySleepSummary.totalMinutes);
-  const sleepTargetHours =
-    profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
-  const sleepGauge = buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours);
+  const activityLimitMinutes =
+    profile.activityLimitMinutesOverride ?? getDefaultActivityLimitMinutes(profile.birthDate, now);
+  const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -241,7 +241,7 @@ export function BabyPanel({
       )}`
     : `活動時間 ${
         latestCompletedSleep
-          ? formatSleepDuration((now.getTime() - latestCompletedSleep.end) / (60 * 1000))
+          ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
           : "未記録"
       }`;
   const sleepDurationByWakeId = new Map(
@@ -381,13 +381,13 @@ export function BabyPanel({
               note: sleeping ? "手動: 起床" : "手動: 入眠",
             });
           }}
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・睡眠目標残り${sleepGauge.remainingPercent}%`}
+          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・活動可能時間残り${activityGauge.remainingPercent}%`}
         >
           <span
             aria-hidden="true"
             className="absolute inset-y-0 left-0 bg-[#8f75d1] transition-[width] duration-500"
             data-testid="sleep-gauge-fill"
-            style={{ width: `${sleepGauge.remainingPercent}%` }}
+            style={{ width: `${activityGauge.remainingPercent}%` }}
           />
           <span className="relative z-10 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4">
             <span className="flex min-w-0 items-center justify-start gap-2 text-left text-xl font-bold">
@@ -397,7 +397,7 @@ export function BabyPanel({
             <span className="border-l border-black/25 pl-3 text-right text-sm font-medium leading-snug text-black/75">
               <span className="block">{activityOrSleepElapsed}</span>
               <span className="block">前回睡眠 {previousSleepDuration}</span>
-              <span className="block">今日 {todaySleepTotal} / {sleepGauge.targetHours}時間</span>
+              <span className="block">今日の睡眠 {todaySleepTotal}</span>
             </span>
           </span>
         </Button>

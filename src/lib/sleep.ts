@@ -19,9 +19,9 @@ export type SleepDaySummary = {
   totalMinutes: number;
 };
 
-export type SleepGauge = {
-  targetHours: number;
-  totalMinutes: number;
+export type ActivityGauge = {
+  limitMinutes: number;
+  elapsedMinutes: number;
   remainingMinutes: number;
   remainingPercent: number;
 };
@@ -33,17 +33,23 @@ const parseLocalDate = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-export const getDefaultSleepTargetHours = (birthDate: string, now: Date) => {
+export const getDefaultActivityLimitMinutes = (birthDate: string, now: Date) => {
   const birth = parseLocalDate(birthDate);
-  if (!birth || birth.getTime() > now.getTime()) return 13;
+  if (!birth || birth.getTime() > now.getTime()) return 180;
 
   let completedMonths =
     (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
   if (now.getDate() < birth.getDate()) completedMonths -= 1;
 
-  if (completedMonths < 4) return 15;
-  if (completedMonths < 12) return 13;
-  return 12;
+  if (completedMonths < 1) return 60;
+  if (completedMonths < 2) return 90;
+  if (completedMonths < 3) return 120;
+  if (completedMonths < 5) return 150;
+  if (completedMonths < 6) return 180;
+  if (completedMonths < 9) return 240;
+  if (completedMonths < 10) return 270;
+  if (completedMonths < 15) return 300;
+  return 360;
 };
 
 export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAnalysis => {
@@ -166,22 +172,27 @@ export const buildSleepDaySummary = (
   };
 };
 
-export const buildSleepGauge = (
+export const buildActivityGauge = (
   analysis: SleepAnalysis,
-  date: Date,
   now: Date,
-  targetHours: number
-): SleepGauge => {
-  const normalizedTargetHours = Math.max(1, Math.min(24, targetHours));
-  const totalMinutes = buildSleepDaySummary(analysis, date, now).totalMinutes;
-  const targetMinutes = normalizedTargetHours * 60;
-  const remainingMinutes = Math.max(0, targetMinutes - totalMinutes);
+  limitMinutes: number
+): ActivityGauge => {
+  const normalizedLimitMinutes = Math.max(30, Math.min(12 * 60, limitMinutes));
+  const latestWakeAt = analysis.intervals.reduce<number | null>(
+    (latest, interval) => (latest === null || interval.end > latest ? interval.end : latest),
+    null
+  );
+  const elapsedMinutes =
+    analysis.currentSleepStart || latestWakeAt === null
+      ? 0
+      : Math.max(0, (now.getTime() - latestWakeAt) / (60 * 1000));
+  const remainingMinutes = Math.max(0, normalizedLimitMinutes - elapsedMinutes);
 
   return {
-    targetHours: normalizedTargetHours,
-    totalMinutes,
+    limitMinutes: normalizedLimitMinutes,
+    elapsedMinutes,
     remainingMinutes,
-    remainingPercent: Math.round((remainingMinutes / targetMinutes) * 100),
+    remainingPercent: Math.round((remainingMinutes / normalizedLimitMinutes) * 100),
   };
 };
 

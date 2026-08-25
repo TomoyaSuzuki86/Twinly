@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { iconGradients } from "@/lib/utils";
 import { buildMilkGauge } from "@/lib/care-gauges";
-import { getDefaultSleepTargetHours } from "@/lib/sleep";
+import { formatSleepDuration, getDefaultActivityLimitMinutes } from "@/lib/sleep";
 import { RotateCcw } from "lucide-react";
 
 type SettingsModalProps = {
@@ -48,7 +48,7 @@ const parseVoiceAliases = (value: string) =>
 
 type ResetRequest = {
   babyId: BabyId;
-  kind: "milkWindow" | "milkTarget" | "sleepTarget";
+  kind: "milkWindow" | "milkTarget" | "activityLimit";
   label: string;
 };
 
@@ -152,7 +152,7 @@ export function SettingsModal({
     } else if (resetRequest.kind === "milkTarget") {
       handleProfileChange(resetRequest.babyId, "milkTargetMlOverride", null);
     } else {
-      handleProfileChange(resetRequest.babyId, "sleepTargetHoursOverride", null);
+      handleProfileChange(resetRequest.babyId, "activityLimitMinutesOverride", null);
     }
     setResetRequest(null);
   };
@@ -197,7 +197,7 @@ export function SettingsModal({
                   windowHours: profile.milkGaugeWindowHours ?? 3,
                   targetMilkMlOverride: null,
                 })?.targetMilkMl;
-                const defaultSleepTargetHours = getDefaultSleepTargetHours(profile.birthDate, new Date());
+                const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(profile.birthDate, new Date());
                 return (
                   <div key={babyId} className="space-y-4 rounded-lg border p-4">
                     <h3 className="font-semibold">赤ちゃん {babyId}</h3>
@@ -327,42 +327,42 @@ export function SettingsModal({
                     </div>
                     {localSleepManagementEnabled ? (
                     <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-                      <Label htmlFor={`sleep-target-${babyId}`}>1日の睡眠目標</Label>
+                      <Label htmlFor={`activity-limit-${babyId}`}>活動可能時間</Label>
                       <div className="flex items-center gap-2">
                         <Input
-                          id={`sleep-target-${babyId}`}
+                          id={`activity-limit-${babyId}`}
                           type="number"
-                          min="1"
-                          max="24"
-                          step="0.5"
-                          value={profile.sleepTargetHoursOverride ?? ""}
-                          placeholder={`月齢目安: ${defaultSleepTargetHours}`}
+                          min="30"
+                          max="720"
+                          step="10"
+                          value={profile.activityLimitMinutesOverride ?? ""}
+                          placeholder={`月齢目安: ${defaultActivityLimitMinutes}`}
                           onChange={(event) =>
                             handleProfileChange(
                               babyId,
-                              "sleepTargetHoursOverride",
+                              "activityLimitMinutesOverride",
                               event.target.value === ""
                                 ? null
-                                : Math.max(1, Math.min(24, Number(event.target.value)))
+                                : Math.max(30, Math.min(720, Number(event.target.value)))
                             )
                           }
                         />
-                        <span className="text-sm text-muted-foreground">時間</span>
+                        <span className="text-sm text-muted-foreground">分</span>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
                           className="h-9 w-9 flex-shrink-0"
-                          disabled={profile.sleepTargetHoursOverride == null}
-                          onClick={() => setResetRequest({ babyId, kind: "sleepTarget", label: "睡眠目標" })}
-                          aria-label="睡眠目標を初期値に戻す"
+                          disabled={profile.activityLimitMinutesOverride == null}
+                          onClick={() => setResetRequest({ babyId, kind: "activityLimit", label: "活動可能時間" })}
+                          aria-label="活動可能時間を初期値に戻す"
                         >
                           <RotateCcw className="h-4 w-4" />
                         </Button>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {profile.sleepTargetHoursOverride == null
-                          ? `月齢の目安を使用中: ${defaultSleepTargetHours}時間`
+                        {profile.activityLimitMinutesOverride == null
+                          ? `月齢の目安を使用中: ${formatSleepDuration(defaultActivityLimitMinutes)}`
                           : "手入力の値を使用中"}
                       </p>
                     </div>

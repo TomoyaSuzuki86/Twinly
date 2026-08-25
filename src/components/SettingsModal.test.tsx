@@ -34,9 +34,9 @@ describe("SettingsModal", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(4);
   });
 
-  it("allows sleep targets to be overridden and restored to the age default", () => {
+  it("allows activity limits to be overridden and restored to the age default", () => {
     const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
-    app.profiles.A.sleepTargetHoursOverride = 10;
+    app.profiles.A.activityLimitMinutesOverride = 120;
 
     render(
       <SettingsModal
@@ -62,18 +62,18 @@ describe("SettingsModal", () => {
       />
     );
 
-    const sleepTargetInputs = screen.getAllByLabelText("1日の睡眠目標") as HTMLInputElement[];
-    expect(sleepTargetInputs[0].value).toBe("10");
+    const activityLimitInputs = screen.getAllByLabelText("活動可能時間") as HTMLInputElement[];
+    expect(activityLimitInputs[0].value).toBe("120");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "睡眠目標を初期値に戻す" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "活動可能時間を初期値に戻す" })[0]);
     expect(screen.getByText("初期値に戻しますか？")).toBeTruthy();
-    expect(sleepTargetInputs[0].value).toBe("10");
+    expect(activityLimitInputs[0].value).toBe("120");
 
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(sleepTargetInputs[0].value).toBe("");
+    expect(activityLimitInputs[0].value).toBe("");
   });
 
-  it("can disable sleep management and hides sleep target settings", () => {
+  it("can disable sleep management and hides activity limit settings", () => {
     render(
       <SettingsModal
         open
@@ -100,7 +100,7 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "オン" }));
     expect(screen.getByRole("button", { name: "オフ" })).toBeTruthy();
-    expect(screen.queryByLabelText("1日の睡眠目標")).toBeNull();
+    expect(screen.queryByLabelText("活動可能時間")).toBeNull();
   });
 
   it("allows retrying push subscription when permission is already granted", () => {

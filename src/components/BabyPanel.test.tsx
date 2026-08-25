@@ -191,7 +191,7 @@ describe("BabyPanel", () => {
     expect(screen.getByText("入眠")).toBeTruthy();
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
-    expect(screen.getByText("今日 0分 / 15時間")).toBeTruthy();
+    expect(screen.getByText("今日の睡眠 0分")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
@@ -242,8 +242,8 @@ describe("BabyPanel", () => {
     );
     expect(screen.getByText("睡眠中 10分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
-    expect(screen.getByText("今日 1時間30分 / 15時間")).toBeTruthy();
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("90%");
+    expect(screen.getByText("今日の睡眠 1時間30分")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     fireEvent.click(screen.getByRole("button", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
@@ -289,7 +289,8 @@ describe("BabyPanel", () => {
 
     renderPanel({ events, latestEvents: events });
 
-    expect(screen.getByText("活動時間 50分")).toBeTruthy();
+    expect(screen.getByText("活動時間 50分 / 2時間30分")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("67%");
     expect(screen.queryByText(/前回入眠/)).toBeNull();
   });
 

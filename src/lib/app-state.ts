@@ -1,4 +1,4 @@
-import { AppState, BabyId, LogEvent } from "@/types";
+import { AppState, BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate } from "./utils";
 
 export type SharedAppState = Pick<AppState, "profiles" | "events"> & {
@@ -11,7 +11,11 @@ type LegacyLogEvent = LogEvent & {
   calendarEventId?: string;
 };
 
-type LegacyProfile = AppState["profiles"][BabyId] & {
+type StoredProfile = BabyProfile & {
+  sleepTargetHoursOverride?: number | null;
+};
+
+type LegacyProfile = StoredProfile & {
   calendarName?: string;
   calendarId?: string;
 };
@@ -43,7 +47,7 @@ const createBaseProfiles = (now: Date) =>
       voiceAliases: [],
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
-      sleepTargetHoursOverride: null,
+      activityLimitMinutesOverride: null,
     },
     B: {
       babyId: "B",
@@ -57,7 +61,7 @@ const createBaseProfiles = (now: Date) =>
       voiceAliases: [],
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
-      sleepTargetHoursOverride: null,
+      activityLimitMinutesOverride: null,
     },
   }) as AppState["profiles"];
 
@@ -79,17 +83,22 @@ export const toSharedAppState = (app: AppState): SharedAppState => ({
   sleepManagementEnabled: app.sleepManagementEnabled,
 });
 
+const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => {
+  const { sleepTargetHoursOverride: _legacySleepTargetHours, ...rest } = profile;
+  return {
+    ...rest,
+    milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
+    milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
+    activityLimitMinutesOverride: rest.activityLimitMinutesOverride ?? null,
+  };
+};
+
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
   profiles: Object.fromEntries(
-    (Object.entries(shared.profiles) as [BabyId, AppState["profiles"][BabyId]][]).map(([babyId, profile]) => [
+    (Object.entries(shared.profiles) as [BabyId, StoredProfile][]).map(([babyId, profile]) => [
       babyId,
-      {
-        ...profile,
-        milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
-        milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-        sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
-      },
+      normalizeStoredProfile(profile),
     ])
   ) as AppState["profiles"],
   diaperStockManagementEnabled: shared.diaperStockManagementEnabled ?? true,
@@ -100,14 +109,19 @@ export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]):
 export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
   const profiles = Object.fromEntries(
     (Object.entries(app.profiles) as [BabyId, LegacyProfile][]).map(([babyId, profile]) => {
-      const { calendarId: _calendarId, calendarName: _calendarName, ...rest } = profile;
+      const {
+        calendarId: _calendarId,
+        calendarName: _calendarName,
+        sleepTargetHoursOverride: _legacySleepTargetHours,
+        ...rest
+      } = profile;
       return [
         babyId,
         {
           ...rest,
           milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
           milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
-          sleepTargetHoursOverride: rest.sleepTargetHoursOverride ?? null,
+          activityLimitMinutesOverride: rest.activityLimitMinutesOverride ?? null,
         },
       ];
     })

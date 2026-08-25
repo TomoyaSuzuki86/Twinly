@@ -14,6 +14,7 @@ describe("stripLegacyCalendarFields", () => {
           diaperPurchaseUrl: "https://example.com/a",
           calendarName: "育児記録-A",
           calendarId: "calendar-a",
+          sleepTargetHoursOverride: 15,
         },
         B: {
           babyId: "B",
@@ -57,7 +58,8 @@ describe("stripLegacyCalendarFields", () => {
     expect(migrated.events[0]).not.toHaveProperty("calendarStatus");
     expect(migrated.events[0]).not.toHaveProperty("calendarEventId");
     expect(migrated.events[1]).not.toHaveProperty("calendarStatus");
-    expect(migrated.profiles.A.sleepTargetHoursOverride).toBeNull();
+    expect(migrated.profiles.A.activityLimitMinutesOverride).toBeNull();
+    expect(migrated.profiles.A).not.toHaveProperty("sleepTargetHoursOverride");
     expect(migrated.sleepManagementEnabled).toBe(true);
   });
 });
@@ -71,7 +73,7 @@ describe("createInitialAppState", () => {
     expect(app.profiles.B).not.toHaveProperty("calendarName");
     expect(app.profiles.B).not.toHaveProperty("calendarId");
     expect(app.events).toEqual([]);
-    expect(app.profiles.A.sleepTargetHoursOverride).toBeNull();
+    expect(app.profiles.A.activityLimitMinutesOverride).toBeNull();
     expect(app.sleepManagementEnabled).toBe(true);
   });
 });
@@ -107,5 +109,24 @@ describe("shared app state helpers", () => {
     expect(merged.ui.lastViewedDate).toBe("2026-04-20");
     expect(merged.events).toHaveLength(1);
     expect(merged.events[0].id).toBe("event-1");
+  });
+
+  it("drops the legacy sleep target when loading remote data", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    const legacyProfiles = {
+      ...app.profiles,
+      A: {
+        ...app.profiles.A,
+        sleepTargetHoursOverride: 15,
+      },
+    };
+
+    const merged = mergeSharedAppState(
+      { profiles: legacyProfiles, events: [] } as Parameters<typeof mergeSharedAppState>[0],
+      app.ui
+    );
+
+    expect(merged.profiles.A).not.toHaveProperty("sleepTargetHoursOverride");
+    expect(merged.profiles.A.activityLimitMinutesOverride).toBeNull();
   });
 });

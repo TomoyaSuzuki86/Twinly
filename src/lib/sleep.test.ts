@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeSleepEvents,
+  buildActivityGauge,
   buildSleepDaySummary,
-  buildSleepGauge,
   createAutoWakeTimestamp,
-  getDefaultSleepTargetHours,
+  getDefaultActivityLimitMinutes,
   getAutoWakeTimestampForActivity,
 } from "./sleep";
 import { LogEvent } from "@/types";
@@ -102,36 +102,49 @@ describe("sleep helpers", () => {
     expect(summary.segments).toHaveLength(2);
   });
 
-  it("uses age-based default sleep targets", () => {
+  it("uses the upper end of each age-based activity-time range", () => {
     const birthDate = "2026-04-02";
-    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-08-01T12:00:00+09:00"))).toBe(15);
-    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-08-02T12:00:00+09:00"))).toBe(13);
-    expect(getDefaultSleepTargetHours(birthDate, new Date("2027-04-02T12:00:00+09:00"))).toBe(12);
+    const cases: Array<[string, number]> = [
+      ["2026-04-15T12:00:00+09:00", 60],
+      ["2026-05-02T12:00:00+09:00", 90],
+      ["2026-06-02T12:00:00+09:00", 120],
+      ["2026-07-02T12:00:00+09:00", 150],
+      ["2026-08-02T12:00:00+09:00", 150],
+      ["2026-09-02T12:00:00+09:00", 180],
+      ["2026-10-02T12:00:00+09:00", 240],
+      ["2027-01-02T12:00:00+09:00", 270],
+      ["2027-02-02T12:00:00+09:00", 300],
+      ["2027-07-02T12:00:00+09:00", 360],
+    ];
+
+    cases.forEach(([now, expected]) => {
+      expect(getDefaultActivityLimitMinutes(birthDate, new Date(now))).toBe(expected);
+    });
   });
 
-  it("empties the daily sleep gauge from the target and resets at midnight", () => {
-    const firstStart = new Date("2026-08-23T00:30:00+09:00").getTime();
-    const firstWake = new Date("2026-08-23T03:30:00+09:00").getTime();
+  it("empties the activity gauge from the latest wake without resetting at midnight", () => {
+    const firstStart = new Date("2026-08-23T22:00:00+09:00").getTime();
+    const firstWake = new Date("2026-08-23T23:30:00+09:00").getTime();
     const analysis = analyzeSleepEvents(
       [event("start", "sleepStart", firstStart), event("wake", "wake", firstWake)],
       "A"
     );
 
-    expect(
-      buildSleepGauge(
-        analysis,
-        new Date("2026-08-23T12:00:00+09:00"),
-        new Date("2026-08-23T12:00:00+09:00"),
-        15
-      ).remainingPercent
-    ).toBe(80);
-    expect(
-      buildSleepGauge(
-        analysis,
-        new Date("2026-08-24T00:05:00+09:00"),
-        new Date("2026-08-24T00:05:00+09:00"),
-        15
-      ).remainingPercent
-    ).toBe(100);
+    const gauge = buildActivityGauge(analysis, new Date("2026-08-24T00:30:00+09:00"), 150);
+    expect(gauge.elapsedMinutes).toBe(60);
+    expect(gauge.remainingPercent).toBe(60);
+  });
+
+  it("resets the activity gauge while the baby is sleeping", () => {
+    const analysis = analyzeSleepEvents(
+      [
+        event("start", "sleepStart", 100),
+        event("wake", "wake", 200),
+        event("sleep-again", "sleepStart", 300),
+      ],
+      "A"
+    );
+
+    expect(buildActivityGauge(analysis, new Date(10_000), 150).remainingPercent).toBe(100);
   });
 });
