@@ -23,7 +23,7 @@ export type ActivityGauge = {
   limitMinutes: number;
   elapsedMinutes: number;
   remainingMinutes: number;
-  remainingPercent: number;
+  elapsedPercent: number;
 };
 
 const parseLocalDate = (value: string) => {
@@ -192,7 +192,7 @@ export const buildActivityGauge = (
     limitMinutes: normalizedLimitMinutes,
     elapsedMinutes,
     remainingMinutes,
-    remainingPercent: Math.round((remainingMinutes / normalizedLimitMinutes) * 100),
+    elapsedPercent: Math.min(100, Math.round((elapsedMinutes / normalizedLimitMinutes) * 100)),
   };
 };
 

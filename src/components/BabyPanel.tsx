@@ -381,13 +381,13 @@ export function BabyPanel({
               note: sleeping ? "手動: 起床" : "手動: 入眠",
             });
           }}
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・活動可能時間残り${activityGauge.remainingPercent}%`}
+          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・活動時間経過${activityGauge.elapsedPercent}%`}
         >
           <span
             aria-hidden="true"
             className="absolute inset-y-0 left-0 bg-[#8f75d1] transition-[width] duration-500"
             data-testid="sleep-gauge-fill"
-            style={{ width: `${activityGauge.remainingPercent}%` }}
+            style={{ width: `${activityGauge.elapsedPercent}%` }}
           />
           <span className="relative z-10 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4">
             <span className="flex min-w-0 items-center justify-start gap-2 text-left text-xl font-bold">

@@ -132,7 +132,8 @@ describe("sleep helpers", () => {
 
     const gauge = buildActivityGauge(analysis, new Date("2026-08-24T00:30:00+09:00"), 150);
     expect(gauge.elapsedMinutes).toBe(60);
-    expect(gauge.remainingPercent).toBe(60);
+    expect(gauge.elapsedPercent).toBe(40);
+    expect(buildActivityGauge(analysis, new Date("2026-08-24T03:00:00+09:00"), 150).elapsedPercent).toBe(100);
   });
 
   it("resets the activity gauge while the baby is sleeping", () => {
@@ -145,6 +146,6 @@ describe("sleep helpers", () => {
       "A"
     );
 
-    expect(buildActivityGauge(analysis, new Date(10_000), 150).remainingPercent).toBe(100);
+    expect(buildActivityGauge(analysis, new Date(10_000), 150).elapsedPercent).toBe(0);
   });
 });
