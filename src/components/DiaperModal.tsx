@@ -20,8 +20,9 @@ type DiaperModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   displayName: string;
+  isSleeping?: boolean;
   initialDraft: DiaperDraft;
-  onSave: (payload: { diaperKind: DiaperKind; note: string; selectedDiaperSize: string; timestamp: number }) => void;
+  onSave: (payload: { diaperKind: DiaperKind; note: string; selectedDiaperSize: string; timestamp: number; autoWake: boolean }) => void;
   diaperStockManagementEnabled: boolean;
   diaperStockBySize: Record<string, number>;
   onUpdateDiaperStock: (size: string, stock: number) => void;
@@ -37,6 +38,7 @@ export function DiaperModal({
   open,
   onOpenChange,
   displayName,
+  isSleeping = false,
   initialDraft,
   onSave,
   diaperStockManagementEnabled,
@@ -48,6 +50,7 @@ export function DiaperModal({
   const [selectedDiaperSize, setSelectedDiaperSize] = useState(initialDraft.selectedDiaperSize);
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
   const [currentDiaperStock, setCurrentDiaperStock] = useState<number>(0);
+  const [autoWake, setAutoWake] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -56,6 +59,7 @@ export function DiaperModal({
     setSelectedDiaperSize(initialDraft.selectedDiaperSize);
     setTimestamp(initialDraft.timestamp);
     setCurrentDiaperStock(diaperStockBySize[initialDraft.selectedDiaperSize] || 0);
+    setAutoWake(true);
   }, [open, initialDraft, diaperStockBySize]);
 
   useEffect(() => {
@@ -69,6 +73,7 @@ export function DiaperModal({
       note,
       selectedDiaperSize,
       timestamp,
+      autoWake,
     });
     onOpenChange(false);
   };
@@ -158,6 +163,25 @@ export function DiaperModal({
           ) : null}
 
           <DateTimeAdjuster id="diaper-datetime" value={timestamp} onChange={setTimestamp} />
+
+          {isSleeping ? (
+            <label
+              htmlFor="diaper-auto-wake"
+              className="flex cursor-pointer items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5"
+            >
+              <input
+                id="diaper-auto-wake"
+                type="checkbox"
+                checked={autoWake}
+                onChange={(event) => setAutoWake(event.target.checked)}
+                className="h-5 w-5 accent-violet-500"
+              />
+              <span>
+                <span className="block text-sm font-semibold">自動的に起床する</span>
+                <span className="block text-xs text-muted-foreground">おむつ記録の1分前に起床を追加します</span>
+              </span>
+            </label>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="diaper-note" className="text-xs text-muted-foreground">

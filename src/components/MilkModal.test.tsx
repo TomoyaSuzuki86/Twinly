@@ -26,10 +26,12 @@ describe("MilkModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
+    expect(screen.queryByRole("checkbox", { name: /自動的に起床する/ })).toBeNull();
     expect(onSave).toHaveBeenCalledWith({
       milkMl: 50,
       note: "",
       timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+      autoWake: true,
     });
   });
 
@@ -107,6 +109,33 @@ describe("MilkModal", () => {
     expect(onSaveSolidFood).toHaveBeenCalledWith({
       note: "10倍がゆ 小さじ2、にんじん 少し",
       timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+      autoWake: true,
     });
+  });
+
+  it("shows auto wake only while sleeping and allows it to be disabled", () => {
+    const onSave = vi.fn();
+
+    render(
+      <MilkModal
+        open
+        onOpenChange={vi.fn()}
+        displayName="赤ちゃんA"
+        isSleeping
+        initialDraft={{
+          milkMl: 50,
+          note: "",
+          timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+        }}
+        onSave={onSave}
+      />
+    );
+
+    const checkbox = screen.getByRole("checkbox", { name: /自動的に起床する/ });
+    expect((checkbox as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ autoWake: false }));
   });
 });

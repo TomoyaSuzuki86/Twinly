@@ -498,12 +498,17 @@ export default function App() {
     };
   };
 
-  const addEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>) => {
+  const addEvent = (
+    babyId: BabyId,
+    type: EventType,
+    payload?: Partial<LogEvent>,
+    options: { autoWake?: boolean } = {}
+  ) => {
     if (!authUser || !db) return;
     const event = createEvent(babyId, type, payload);
     const createdEvents = [event];
 
-    if (type === "milk" || type === "solidFood" || type === "diaper") {
+    if (options.autoWake !== false && (type === "milk" || type === "solidFood" || type === "diaper")) {
       const autoWakeTimestamp = getAutoWakeTimestampForActivity(app.events, babyId, event.timestamp, type);
       if (autoWakeTimestamp !== null) {
         createdEvents.push(
@@ -523,14 +528,16 @@ export default function App() {
     scheduleUndo(createdEvents);
   };
 
-  const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number }) => {
+  const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
     if (!modal || modal.kind !== "milk") return;
-    addEvent(modal.babyId, "milk", payload);
+    const { autoWake, ...eventPayload } = payload;
+    addEvent(modal.babyId, "milk", eventPayload, { autoWake });
   };
 
-  const onSaveSolidFood = (payload: { note: string; timestamp: number }) => {
+  const onSaveSolidFood = (payload: { note: string; timestamp: number; autoWake: boolean }) => {
     if (!modal || modal.kind !== "milk") return;
-    addEvent(modal.babyId, "solidFood", payload);
+    const { autoWake, ...eventPayload } = payload;
+    addEvent(modal.babyId, "solidFood", eventPayload, { autoWake });
   };
 
   const onSaveDiaper = (payload: {
@@ -538,12 +545,13 @@ export default function App() {
     note: string;
     selectedDiaperSize: string;
     timestamp: number;
+    autoWake: boolean;
   }) => {
     if (!modal || modal.kind !== "diaper") return;
 
     const babyId = modal.babyId;
-    const { diaperKind, note, selectedDiaperSize, timestamp } = payload;
-    addEvent(babyId, "diaper", { diaperKind, note, timestamp });
+    const { diaperKind, note, selectedDiaperSize, timestamp, autoWake } = payload;
+    addEvent(babyId, "diaper", { diaperKind, note, timestamp }, { autoWake });
 
     if (!app.diaperStockManagementEnabled) return;
 
@@ -1334,6 +1342,7 @@ export default function App() {
         open={modal?.kind === "milk"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "milk" ? app.profiles[modal.babyId].displayName : ""}
+        isSleeping={modal?.kind === "milk" ? sleepingByBaby[modal.babyId] : false}
         initialDraft={milkDraft}
         onSave={onSaveMilk}
         onSaveSolidFood={onSaveSolidFood}
@@ -1342,6 +1351,7 @@ export default function App() {
         open={modal?.kind === "diaper"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
+        isSleeping={modal?.kind === "diaper" ? sleepingByBaby[modal.babyId] : false}
         initialDraft={diaperDraft}
         onSave={onSaveDiaper}
         diaperStockManagementEnabled={app.diaperStockManagementEnabled}

@@ -10,11 +10,11 @@ describe("DateTimeAdjuster", () => {
     const onChange = vi.fn();
     const { rerender } = render(<DateTimeAdjuster id="datetime" value={value} onChange={onChange} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "−30分" }));
+    fireEvent.click(screen.getByRole("button", { name: "30分戻す" }));
     expect(onChange).toHaveBeenLastCalledWith(value - 30 * 60 * 1000);
 
     rerender(<DateTimeAdjuster id="datetime" value={value} onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "＋10分" }));
+    fireEvent.click(screen.getByRole("button", { name: "10分進める" }));
     expect(onChange).toHaveBeenLastCalledWith(value + 10 * 60 * 1000);
   });
 });

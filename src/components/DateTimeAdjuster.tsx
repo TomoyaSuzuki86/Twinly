@@ -19,11 +19,23 @@ export function DateTimeAdjuster({ id, label = "日時", value, onChange }: Date
     <div className="space-y-2">
       <Label htmlFor={id} className="text-xs text-muted-foreground">{label}</Label>
       <div className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1">
-        <Button type="button" variant="outline" className="h-9 px-2 text-xs" onClick={() => shiftMinutes(-30)}>
-          −30分
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 select-none px-2 text-sm"
+          aria-label="30分戻す"
+          onClick={() => shiftMinutes(-30)}
+        >
+          &lt;&lt;
         </Button>
-        <Button type="button" variant="outline" className="h-9 px-2 text-xs" onClick={() => shiftMinutes(-10)}>
-          −10分
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 select-none px-2 text-sm"
+          aria-label="10分戻す"
+          onClick={() => shiftMinutes(-10)}
+        >
+          &lt;
         </Button>
         <Input
           id={id}
@@ -35,11 +47,23 @@ export function DateTimeAdjuster({ id, label = "日時", value, onChange }: Date
             if (Number.isFinite(nextTimestamp)) onChange(nextTimestamp);
           }}
         />
-        <Button type="button" variant="outline" className="h-9 px-2 text-xs" onClick={() => shiftMinutes(10)}>
-          ＋10分
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 select-none px-2 text-sm"
+          aria-label="10分進める"
+          onClick={() => shiftMinutes(10)}
+        >
+          &gt;
         </Button>
-        <Button type="button" variant="outline" className="h-9 px-2 text-xs" onClick={() => shiftMinutes(30)}>
-          ＋30分
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 select-none px-2 text-sm"
+          aria-label="30分進める"
+          onClick={() => shiftMinutes(30)}
+        >
+          &gt;&gt;
         </Button>
       </div>
     </div>

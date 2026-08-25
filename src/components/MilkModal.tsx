@@ -19,15 +19,17 @@ type MilkModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   displayName: string;
+  isSleeping?: boolean;
   initialDraft: MilkDraft;
-  onSave: (payload: { milkMl: number; note: string; timestamp: number }) => void;
-  onSaveSolidFood?: (payload: { note: string; timestamp: number }) => void;
+  onSave: (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => void;
+  onSaveSolidFood?: (payload: { note: string; timestamp: number; autoWake: boolean }) => void;
 };
 
 export function MilkModal({
   open,
   onOpenChange,
   displayName,
+  isSleeping = false,
   initialDraft,
   onSave,
   onSaveSolidFood,
@@ -37,6 +39,7 @@ export function MilkModal({
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
+  const [autoWake, setAutoWake] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -45,6 +48,7 @@ export function MilkModal({
     setNote(initialDraft.note);
     setSolidFoodNote("");
     setTimestamp(initialDraft.timestamp);
+    setAutoWake(true);
   }, [open, initialDraft]);
 
   const handleMilkAmountChange = (nextValue: number) => {
@@ -53,7 +57,7 @@ export function MilkModal({
 
   const handleSave = () => {
     if (recordType === "solidFood") {
-      onSaveSolidFood?.({ note: solidFoodNote.trim(), timestamp });
+      onSaveSolidFood?.({ note: solidFoodNote.trim(), timestamp, autoWake });
       onOpenChange(false);
       return;
     }
@@ -62,6 +66,7 @@ export function MilkModal({
       milkMl,
       note,
       timestamp,
+      autoWake,
     });
     onOpenChange(false);
   };
@@ -139,6 +144,24 @@ export function MilkModal({
           )}
 
           <DateTimeAdjuster id="feeding-datetime" value={timestamp} onChange={setTimestamp} />
+          {isSleeping ? (
+            <label
+              htmlFor="feeding-auto-wake"
+              className="flex cursor-pointer items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2.5"
+            >
+              <input
+                id="feeding-auto-wake"
+                type="checkbox"
+                checked={autoWake}
+                onChange={(event) => setAutoWake(event.target.checked)}
+                className="h-5 w-5 accent-violet-500"
+              />
+              <span>
+                <span className="block text-sm font-semibold">自動的に起床する</span>
+                <span className="block text-xs text-muted-foreground">食事記録の15分前に起床を追加します</span>
+              </span>
+            </label>
+          ) : null}
           {recordType === "milk" ? (
             <div className="space-y-2">
               <Label htmlFor="milk-note" className="text-xs text-muted-foreground">
