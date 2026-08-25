@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { MilkDraft, formatDateTimeLocalValue, parseDateTimeLocalValue, stepMilkAmount } from "@/lib/entry-drafts";
+import { MilkDraft, stepMilkAmount } from "@/lib/entry-drafts";
+import { DateTimeAdjuster } from "./DateTimeAdjuster";
 
 type MilkModalProps = {
   open: boolean;
@@ -35,7 +36,7 @@ export function MilkModal({
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
-  const [dateTimeValue, setDateTimeValue] = useState(formatDateTimeLocalValue(initialDraft.timestamp));
+  const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +44,7 @@ export function MilkModal({
     setMilkMl(initialDraft.milkMl);
     setNote(initialDraft.note);
     setSolidFoodNote("");
-    setDateTimeValue(formatDateTimeLocalValue(initialDraft.timestamp));
+    setTimestamp(initialDraft.timestamp);
   }, [open, initialDraft]);
 
   const handleMilkAmountChange = (nextValue: number) => {
@@ -51,7 +52,6 @@ export function MilkModal({
   };
 
   const handleSave = () => {
-    const timestamp = parseDateTimeLocalValue(dateTimeValue);
     if (recordType === "solidFood") {
       onSaveSolidFood?.({ note: solidFoodNote.trim(), timestamp });
       onOpenChange(false);
@@ -138,17 +138,7 @@ export function MilkModal({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="feeding-datetime" className="text-xs text-muted-foreground">
-              日時
-            </Label>
-            <Input
-              id="feeding-datetime"
-              type="datetime-local"
-              value={dateTimeValue}
-              onChange={(e) => setDateTimeValue(e.target.value)}
-            />
-          </div>
+          <DateTimeAdjuster id="feeding-datetime" value={timestamp} onChange={setTimestamp} />
           {recordType === "milk" ? (
             <div className="space-y-2">
               <Label htmlFor="milk-note" className="text-xs text-muted-foreground">

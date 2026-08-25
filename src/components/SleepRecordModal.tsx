@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { formatDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/entry-drafts";
 import type { EventType } from "@/types";
+import { DateTimeAdjuster } from "./DateTimeAdjuster";
 
 type SleepRecordType = Extract<EventType, "sleepStart" | "wake">;
 
@@ -37,16 +35,12 @@ export function SleepRecordModal({
           <DialogTitle>{displayName}: {label}時刻</DialogTitle>
           <DialogDescription>実際の{label}時刻に変更して記録できます。</DialogDescription>
         </DialogHeader>
-        <div className="space-y-2 py-3">
-          <Label htmlFor="sleep-record-datetime">{label}日時</Label>
-          <Input
+        <div className="py-3">
+          <DateTimeAdjuster
             id="sleep-record-datetime"
-            type="datetime-local"
-            value={formatDateTimeLocalValue(timestamp)}
-            onChange={(event) => {
-              const nextTimestamp = parseDateTimeLocalValue(event.target.value);
-              if (Number.isFinite(nextTimestamp)) setTimestamp(nextTimestamp);
-            }}
+            label={`${label}日時`}
+            value={timestamp}
+            onChange={setTimestamp}
           />
         </div>
         <DialogFooter className="flex-row justify-end gap-2 space-x-0">

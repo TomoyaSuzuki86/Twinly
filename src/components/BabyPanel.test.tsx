@@ -167,9 +167,14 @@ describe("BabyPanel", () => {
 
     renderPanel({ onOpenModal });
 
-    fireEvent.click(screen.getByRole("button", { name: /食事を記録/ }));
+    const mealButton = screen.getByRole("button", { name: /食事を記録/ });
+    const diaperButton = screen.getByRole("button", { name: /おむつを記録/ });
+    expect(mealButton.className).toContain("select-none");
+    expect(diaperButton.className).toContain("select-none");
+
+    fireEvent.click(mealButton);
     expect(screen.getByText("食事")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /おむつを記録/ })).toBeTruthy();
+    expect(diaperButton).toBeTruthy();
     expect(screen.queryByRole("button", { name: /離乳食を記録/ })).toBeNull();
     expect(onOpenModal).toHaveBeenCalledWith("milk", { babyId: "A" });
   });
@@ -180,6 +185,7 @@ describe("BabyPanel", () => {
 
     const sleepButton = screen.getByRole("button", { name: /入眠を記録/ });
     expect(sleepButton.className).toContain("w-full");
+    expect(sleepButton.className).toContain("select-none");
     expect(sleepButton.className).toContain("bg-[#8f75d1]");
     expect(sleepButton.className).toContain("text-black");
     expect(screen.getByText("入眠")).toBeTruthy();

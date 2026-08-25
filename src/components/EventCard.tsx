@@ -116,7 +116,11 @@ export function EventCard({
           <div className="min-w-0 flex-1 py-0.5">
             <p className="font-semibold">{title}</p>
             {invalidSleepMarker ? (
-              <p className="mt-1 break-words text-sm text-muted-foreground">対応する入眠記録がないため集計対象外</p>
+              <p className="mt-1 break-words text-sm text-muted-foreground">
+                {event.type === "sleepStart"
+                  ? "直前の入眠が継続中のため集計対象外"
+                  : "対応する入眠記録がないため集計対象外"}
+              </p>
             ) : event.note ? (
               <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{event.note}</p>
             ) : null}

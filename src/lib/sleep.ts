@@ -11,6 +11,7 @@ export type SleepAnalysis = {
   intervals: SleepInterval[];
   currentSleepStart: LogEvent | null;
   invalidWakeIds: Set<string>;
+  invalidSleepStartIds: Set<string>;
 };
 
 export type SleepDaySummary = {
@@ -55,11 +56,16 @@ export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAna
 
   const intervals: SleepInterval[] = [];
   const invalidWakeIds = new Set<string>();
+  const invalidSleepStartIds = new Set<string>();
   let currentSleepStart: LogEvent | null = null;
 
   for (const marker of markers) {
     if (marker.type === "sleepStart") {
-      if (!currentSleepStart) currentSleepStart = marker;
+      if (!currentSleepStart) {
+        currentSleepStart = marker;
+      } else {
+        invalidSleepStartIds.add(marker.id);
+      }
       continue;
     }
 
@@ -77,7 +83,7 @@ export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAna
     currentSleepStart = null;
   }
 
-  return { intervals, currentSleepStart, invalidWakeIds };
+  return { intervals, currentSleepStart, invalidWakeIds, invalidSleepStartIds };
 };
 
 export const isBabySleeping = (events: LogEvent[], babyId: BabyId) =>

@@ -303,8 +303,9 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-28 overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30"
+            className="relative h-28 select-none overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30 [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
+            onContextMenu={(event) => event.preventDefault()}
             aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
           >
             <span
@@ -333,8 +334,9 @@ export function BabyPanel({
           </Button>
           <Button
             size="lg"
-            className="relative h-28 overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30"
+            className="relative h-28 select-none overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30 [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
+            onContextMenu={(event) => event.preventDefault()}
             aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
             <span
@@ -362,7 +364,7 @@ export function BabyPanel({
 
         {sleepManagementEnabled ? (
         <Button
-          className="relative mt-3 h-20 w-full overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40"
+          className="relative mt-3 h-20 w-full select-none overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40 [-webkit-touch-callout:none]"
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
           onPointerLeave={clearSleepLongPressTimer}
@@ -646,7 +648,10 @@ export function BabyPanel({
                 key={event.id}
                 event={event}
                 onEdit={() => onOpenModal("edit", { eventId: event.id })}
-                invalidSleepMarker={event.type === "wake" && sleepAnalysis.invalidWakeIds.has(event.id)}
+                invalidSleepMarker={
+                  (event.type === "wake" && sleepAnalysis.invalidWakeIds.has(event.id)) ||
+                  (event.type === "sleepStart" && sleepAnalysis.invalidSleepStartIds.has(event.id))
+                }
                 sleepDurationMinutes={event.type === "wake" ? sleepDurationByWakeId.get(event.id) : undefined}
               />
             ))

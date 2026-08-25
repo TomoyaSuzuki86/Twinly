@@ -14,7 +14,7 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { clamp } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
-import { formatDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/entry-drafts";
+import { DateTimeAdjuster } from "./DateTimeAdjuster";
 
 type EditModalProps = {
   open: boolean;
@@ -117,18 +117,7 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
               <p className="mt-1 text-sm text-muted-foreground">食べたものや量、様子はメモで編集できます。</p>
             </div>
           ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="edit-event-datetime">日時</Label>
-            <Input
-              id="edit-event-datetime"
-              type="datetime-local"
-              value={formatDateTimeLocalValue(timestamp)}
-              onChange={(e) => {
-                const nextTimestamp = parseDateTimeLocalValue(e.target.value);
-                if (Number.isFinite(nextTimestamp)) setTimestamp(nextTimestamp);
-              }}
-            />
-          </div>
+          <DateTimeAdjuster id="edit-event-datetime" value={timestamp} onChange={setTimestamp} />
           <div className="space-y-2">
             <Label>メモ</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} />

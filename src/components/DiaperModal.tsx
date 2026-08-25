@@ -13,7 +13,8 @@ import { DiaperKind, BabyProfile } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DiaperDraft, formatDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/entry-drafts";
+import { DiaperDraft } from "@/lib/entry-drafts";
+import { DateTimeAdjuster } from "./DateTimeAdjuster";
 
 type DiaperModalProps = {
   open: boolean;
@@ -45,7 +46,7 @@ export function DiaperModal({
   const [diaperKind, setDiaperKind] = useState<DiaperKind>(initialDraft.diaperKind);
   const [note, setNote] = useState(initialDraft.note);
   const [selectedDiaperSize, setSelectedDiaperSize] = useState(initialDraft.selectedDiaperSize);
-  const [dateTimeValue, setDateTimeValue] = useState(formatDateTimeLocalValue(initialDraft.timestamp));
+  const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
   const [currentDiaperStock, setCurrentDiaperStock] = useState<number>(0);
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export function DiaperModal({
     setDiaperKind(initialDraft.diaperKind);
     setNote(initialDraft.note);
     setSelectedDiaperSize(initialDraft.selectedDiaperSize);
-    setDateTimeValue(formatDateTimeLocalValue(initialDraft.timestamp));
+    setTimestamp(initialDraft.timestamp);
     setCurrentDiaperStock(diaperStockBySize[initialDraft.selectedDiaperSize] || 0);
   }, [open, initialDraft, diaperStockBySize]);
 
@@ -67,7 +68,7 @@ export function DiaperModal({
       diaperKind,
       note,
       selectedDiaperSize,
-      timestamp: parseDateTimeLocalValue(dateTimeValue),
+      timestamp,
     });
     onOpenChange(false);
   };
@@ -156,17 +157,7 @@ export function DiaperModal({
           </div>
           ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="diaper-datetime" className="text-xs text-muted-foreground">
-              日時
-            </Label>
-            <Input
-              id="diaper-datetime"
-              type="datetime-local"
-              value={dateTimeValue}
-              onChange={(e) => setDateTimeValue(e.target.value)}
-            />
-          </div>
+          <DateTimeAdjuster id="diaper-datetime" value={timestamp} onChange={setTimestamp} />
 
           <div className="space-y-2">
             <Label htmlFor="diaper-note" className="text-xs text-muted-foreground">

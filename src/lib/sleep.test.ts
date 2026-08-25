@@ -35,6 +35,24 @@ describe("sleep helpers", () => {
     expect(analysis.intervals).toHaveLength(0);
   });
 
+  it("pairs the next wake across other records and invalidates a duplicate sleep start", () => {
+    const analysis = analyzeSleepEvents(
+      [
+        event("sleep-1", "sleepStart", 100),
+        { id: "milk", babyId: "A", type: "milk", timestamp: 120, milkMl: 140 },
+        event("sleep-2", "sleepStart", 130),
+        { id: "diaper", babyId: "A", type: "diaper", timestamp: 150, diaperKind: "pee" },
+        event("wake", "wake", 200),
+      ],
+      "A"
+    );
+
+    expect(analysis.intervals).toEqual([
+      { start: 100, end: 200, startEventId: "sleep-1", wakeEventId: "wake" },
+    ]);
+    expect(analysis.invalidSleepStartIds.has("sleep-2")).toBe(true);
+  });
+
   it("places an automatic wake at the requested lead time without preceding sleep start", () => {
     expect(createAutoWakeTimestamp(100_000, 200_000, 1)).toBe(140_000);
     expect(createAutoWakeTimestamp(190_000, 200_000, 15)).toBe(191_000);
