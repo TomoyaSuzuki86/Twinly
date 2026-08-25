@@ -16,7 +16,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "./ui/input";
@@ -52,6 +52,10 @@ type BabyPanelProps = {
     payload: { babyId: BabyId } | { eventId: string }
   ) => void;
   onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
+  onOpenSleepTimeEditor: (payload: {
+    babyId: BabyId;
+    type: "sleepStart" | "wake";
+  }) => void;
   onOpenDailyReport: () => void;
   onOpenHealthChart: () => void;
   onOpenTimeline: () => void;
@@ -132,6 +136,7 @@ export function BabyPanel({
   onOpenHistory,
   onOpenModal,
   onAddEvent,
+  onOpenSleepTimeEditor,
   onOpenDailyReport,
   onOpenHealthChart,
   onOpenTimeline,
@@ -218,16 +223,6 @@ export function BabyPanel({
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
-  const latestSleepStart = latestEvents
-    .filter(
-      (event) =>
-        event.babyId === babyId && event.type === "sleepStart" && event.timestamp <= now.getTime()
-    )
-    .reduce<LogEvent | null>(
-      (latest, event) => (!latest || event.timestamp > latest.timestamp ? event : latest),
-      null
-    );
-  const lastSleepElapsed = formatElapsed(latestSleepStart?.timestamp ?? null);
   const todaySleepSummary = buildSleepDaySummary(sleepAnalysis, now, now);
   const todaySleepTotal = formatSleepDuration(todaySleepSummary.totalMinutes);
   const sleepTargetHours =
@@ -240,6 +235,15 @@ export function BabyPanel({
   const previousSleepDuration = latestCompletedSleep
     ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
     : "未記録";
+  const activityOrSleepElapsed = sleeping
+    ? `睡眠中 ${formatSleepDuration(
+        (now.getTime() - (sleepAnalysis.currentSleepStart?.timestamp ?? now.getTime())) / (60 * 1000)
+      )}`
+    : `活動時間 ${
+        latestCompletedSleep
+          ? formatSleepDuration((now.getTime() - latestCompletedSleep.end) / (60 * 1000))
+          : "未記録"
+      }`;
   const sleepDurationByWakeId = new Map(
     sleepAnalysis.intervals.map((interval) => [
       interval.wakeEventId,
@@ -268,6 +272,26 @@ export function BabyPanel({
   const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
   const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
   const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
+  const sleepLongPressTimerRef = useRef<number | null>(null);
+  const sleepLongPressTriggeredRef = useRef(false);
+
+  const clearSleepLongPressTimer = () => {
+    if (sleepLongPressTimerRef.current !== null) {
+      window.clearTimeout(sleepLongPressTimerRef.current);
+      sleepLongPressTimerRef.current = null;
+    }
+  };
+
+  const startSleepLongPress = () => {
+    clearSleepLongPressTimer();
+    sleepLongPressTriggeredRef.current = false;
+    sleepLongPressTimerRef.current = window.setTimeout(() => {
+      sleepLongPressTriggeredRef.current = true;
+      onOpenSleepTimeEditor({ babyId, type: sleeping ? "wake" : "sleepStart" });
+    }, 550);
+  };
+
+  useEffect(() => () => clearSleepLongPressTimer(), []);
 
   return (
     <Card
@@ -339,14 +363,23 @@ export function BabyPanel({
         {sleepManagementEnabled ? (
         <Button
           className="relative mt-3 h-20 w-full overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40"
-          onClick={() =>
+          onPointerDown={startSleepLongPress}
+          onPointerUp={clearSleepLongPressTimer}
+          onPointerLeave={clearSleepLongPressTimer}
+          onPointerCancel={clearSleepLongPressTimer}
+          onContextMenu={(event) => event.preventDefault()}
+          onClick={() => {
+            if (sleepLongPressTriggeredRef.current) {
+              sleepLongPressTriggeredRef.current = false;
+              return;
+            }
             onAddEvent({
               babyId,
               type: sleeping ? "wake" : "sleepStart",
               note: sleeping ? "手動: 起床" : "手動: 入眠",
-            })
-          }
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・睡眠目標残り${sleepGauge.remainingPercent}%`}
+            });
+          }}
+          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・睡眠目標残り${sleepGauge.remainingPercent}%`}
         >
           <span
             aria-hidden="true"
@@ -360,7 +393,7 @@ export function BabyPanel({
               <span>{sleeping ? "起床" : "入眠"}</span>
             </span>
             <span className="border-l border-black/25 pl-3 text-right text-sm font-medium leading-snug text-black/75">
-              <span className="block">前回入眠 {lastSleepElapsed}</span>
+              <span className="block">{activityOrSleepElapsed}</span>
               <span className="block">前回睡眠 {previousSleepDuration}</span>
               <span className="block">今日 {todaySleepTotal} / {sleepGauge.targetHours}時間</span>
             </span>

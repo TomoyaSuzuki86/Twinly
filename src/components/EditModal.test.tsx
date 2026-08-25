@@ -29,6 +29,7 @@ describe("EditModal", () => {
     expect(onSave).toHaveBeenCalledWith("milk-legacy", {
       milkMl: 100,
       note: "legacy",
+      timestamp: event.timestamp,
     });
   });
 
@@ -74,6 +75,28 @@ describe("EditModal", () => {
     expect(onSave).toHaveBeenCalledWith("diaper-mix", {
       diaperKind: "pee",
       note: "legacy",
+      timestamp: event.timestamp,
+    });
+  });
+
+  it("changes the timestamp for any log type", () => {
+    const onSave = vi.fn();
+    const event: LogEvent = {
+      id: "wake-1",
+      babyId: "A",
+      type: "wake",
+      timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+      note: "起床",
+    };
+
+    render(<EditModal open onOpenChange={vi.fn()} event={event} onSave={onSave} onDelete={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("日時"), { target: { value: "2026-04-18T09:30" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(onSave).toHaveBeenCalledWith("wake-1", {
+      note: "起床",
+      timestamp: new Date("2026-04-18T09:30:00").getTime(),
     });
   });
 

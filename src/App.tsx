@@ -9,6 +9,7 @@ import { AppState, BabyId, DiaperKind, EventType, LogEvent } from "./types";
 import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
+import { SleepRecordModal } from "./components/SleepRecordModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
@@ -156,6 +157,7 @@ export default function App() {
     | { kind: "diaper"; babyId: BabyId }
     | { kind: "settings" }
     | { kind: "edit"; eventId: string }
+    | { kind: "sleepTime"; babyId: BabyId; type: "sleepStart" | "wake" }
     | null
   >(null);
   const [chartModalOpen, setChartModalOpen] = useState(false);
@@ -738,6 +740,14 @@ export default function App() {
     addEvent(babyId, type, payload);
   };
 
+  const saveSleepEventAt = (timestamp: number) => {
+    if (!modal || modal.kind !== "sleepTime") return;
+    addEvent(modal.babyId, modal.type, {
+      timestamp,
+      note: modal.type === "wake" ? "手動: 起床（時刻指定）" : "手動: 入眠（時刻指定）",
+    });
+  };
+
   const removeEvent = (eventId: string) => {
     if (!authUser || !db) return;
     removePendingEvents(authUser.uid, [eventId]);
@@ -1178,59 +1188,58 @@ export default function App() {
   return (
     <AppContainer>
       <div className="mx-auto max-w-7xl p-2 sm:p-4">
-        <header
-          className="mb-4 flex flex-col gap-3 rounded-xl border bg-card p-4"
-          onDoubleClick={() => voiceButtonRef.current?.startListening()}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
-                <Baby className="h-6 w-6 text-white" />
-              </div>
-              <h1 className="text-2xl font-extrabold tracking-tight">Twinly</h1>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <VoiceCommandButton
-                ref={voiceButtonRef}
-                babyNames={voiceCommandBabyNames}
-                defaultMilkMlByBaby={defaultVoiceMilkMlByBaby}
-                onCommand={handleVoiceCommand}
-                onMessage={showVoiceMessage}
-              />
-              <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
-                <Settings className="h-5 w-5" />
-              </Button>
-              {authUser.photoURL ? (
-                <img src={authUser.photoURL} alt="avatar" className="h-10 w-10 rounded-full" />
-              ) : (
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-muted">
-                  <CircleUser className="h-6 w-6 text-muted-foreground" />
-                </div>
-              )}
-            </div>
-          </div>
-
-        </header>
-
         <main>
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="w-full">
-            <TabsList className="grid h-auto w-full grid-cols-2">
-              <TabsTrigger value="A" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
+            <div className="sticky top-0 z-40 space-y-2 bg-background/95 pb-2 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+              <header
+                className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
+                onDoubleClick={() => voiceButtonRef.current?.startListening()}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
+                    <Baby className="h-5 w-5 text-white" />
+                  </div>
+                  <h1 className="text-xl font-extrabold tracking-tight">Twinly</h1>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <VoiceCommandButton
+                    ref={voiceButtonRef}
+                    babyNames={voiceCommandBabyNames}
+                    defaultMilkMlByBaby={defaultVoiceMilkMlByBaby}
+                    onCommand={handleVoiceCommand}
+                    onMessage={showVoiceMessage}
+                  />
+                  <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
+                    <Settings className="h-5 w-5" />
+                  </Button>
+                  {authUser.photoURL ? (
+                    <img src={authUser.photoURL} alt="avatar" className="h-8 w-8 rounded-full" />
+                  ) : (
+                    <div className="grid h-8 w-8 place-items-center rounded-full bg-muted">
+                      <CircleUser className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              </header>
+
+              <TabsList className="grid h-auto w-full grid-cols-2 p-1">
+                <TabsTrigger value="A" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   careGaugePercents={selectedBabyTab === "A" ? undefined : tabCareGaugePercents.A}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
                 />
-              </TabsTrigger>
-              <TabsTrigger value="B" className="h-auto" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
+                </TabsTrigger>
+                <TabsTrigger value="B" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   careGaugePercents={selectedBabyTab === "B" ? undefined : tabCareGaugePercents.B}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
                 />
-              </TabsTrigger>
-            </TabsList>
+                </TabsTrigger>
+              </TabsList>
+            </div>
             <div
               className="touch-pan-y"
               onTouchStart={handleBabyTabTouchStart}
@@ -1255,6 +1264,7 @@ export default function App() {
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onAddEvent={handleAddEvent}
+                onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => setTimelineModalOpen(true)}
@@ -1282,6 +1292,7 @@ export default function App() {
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onAddEvent={handleAddEvent}
+                onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => setTimelineModalOpen(true)}
@@ -1339,6 +1350,13 @@ export default function App() {
           modal?.kind === "diaper" && onUpdateDiaperStock(modal.babyId, size, stock)
         }
         babyProfile={modal?.kind === "diaper" ? app.profiles[modal.babyId] : app.profiles.A}
+      />
+      <SleepRecordModal
+        open={modal?.kind === "sleepTime"}
+        onOpenChange={(open) => !open && setModal(null)}
+        displayName={modal?.kind === "sleepTime" ? app.profiles[modal.babyId].displayName : ""}
+        type={modal?.kind === "sleepTime" ? modal.type : "sleepStart"}
+        onSave={saveSleepEventAt}
       />
       <SettingsModal
         open={modal?.kind === "settings"}

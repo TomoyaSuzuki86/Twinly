@@ -14,6 +14,7 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { clamp } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
+import { formatDateTimeLocalValue, parseDateTimeLocalValue } from "@/lib/entry-drafts";
 
 type EditModalProps = {
   open: boolean;
@@ -32,6 +33,7 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
   const [milkMl, setMilkMl] = useState(0);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
+  const [timestamp, setTimestamp] = useState(0);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
 
   useEffect(() => {
@@ -39,6 +41,7 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
       setMilkMl(event.milkMl ?? 0);
       setDiaperKind(event.diaperKind ?? "pee");
       setNote(event.note ?? "");
+      setTimestamp(event.timestamp);
       setDeleteConfirming(false);
     }
   }, [event]);
@@ -47,10 +50,10 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
     if (!event) return;
     const payload: Partial<LogEvent> =
       event.type === "milk"
-        ? { milkMl, note }
+        ? { milkMl, note, timestamp }
         : event.type === "diaper"
-        ? { diaperKind, note }
-        : { note };
+        ? { diaperKind, note, timestamp }
+        : { note, timestamp };
     onSave(event.id, payload);
     onOpenChange(false);
   };
@@ -114,6 +117,18 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
               <p className="mt-1 text-sm text-muted-foreground">食べたものや量、様子はメモで編集できます。</p>
             </div>
           ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="edit-event-datetime">日時</Label>
+            <Input
+              id="edit-event-datetime"
+              type="datetime-local"
+              value={formatDateTimeLocalValue(timestamp)}
+              onChange={(e) => {
+                const nextTimestamp = parseDateTimeLocalValue(e.target.value);
+                if (Number.isFinite(nextTimestamp)) setTimestamp(nextTimestamp);
+              }}
+            />
+          </div>
           <div className="space-y-2">
             <Label>メモ</Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} />

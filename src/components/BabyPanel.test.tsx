@@ -15,6 +15,7 @@ const renderPanel = ({
   onOpenHistory = vi.fn(),
   onOpenModal = vi.fn(),
   onAddEvent = vi.fn(),
+  onOpenSleepTimeEditor = vi.fn(),
   sleepManagementEnabled = true,
 }: {
   events?: LogEvent[];
@@ -24,6 +25,7 @@ const renderPanel = ({
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
   onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
   onAddEvent?: ComponentProps<typeof BabyPanel>["onAddEvent"];
+  onOpenSleepTimeEditor?: ComponentProps<typeof BabyPanel>["onOpenSleepTimeEditor"];
   sleepManagementEnabled?: boolean;
 } = {}) => {
   const app = createInitialAppState(baseNow);
@@ -42,6 +44,7 @@ const renderPanel = ({
       onOpenHistory={onOpenHistory}
       onOpenModal={onOpenModal}
       onAddEvent={onAddEvent}
+      onOpenSleepTimeEditor={onOpenSleepTimeEditor}
       onOpenDailyReport={vi.fn()}
       onOpenHealthChart={vi.fn()}
       onOpenTimeline={vi.fn()}
@@ -180,7 +183,7 @@ describe("BabyPanel", () => {
     expect(sleepButton.className).toContain("bg-[#8f75d1]");
     expect(sleepButton.className).toContain("text-black");
     expect(screen.getByText("入眠")).toBeTruthy();
-    expect(screen.getByText("前回入眠 未記録")).toBeTruthy();
+    expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.getByText("今日 0分 / 15時間")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
@@ -222,6 +225,7 @@ describe("BabyPanel", () => {
         onOpenHistory={vi.fn()}
         onOpenModal={vi.fn()}
         onAddEvent={onAddEvent}
+        onOpenSleepTimeEditor={vi.fn()}
         onOpenDailyReport={vi.fn()}
         onOpenHealthChart={vi.fn()}
         onOpenTimeline={vi.fn()}
@@ -230,7 +234,7 @@ describe("BabyPanel", () => {
         themeDimmedBgColor="bg-background"
       />
     );
-    expect(screen.getByText("前回入眠 10分前")).toBeTruthy();
+    expect(screen.getByText("睡眠中 10分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
     expect(screen.getByText("今日 1時間30分 / 15時間")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("90%");
@@ -238,11 +242,49 @@ describe("BabyPanel", () => {
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
 
+  it("opens the sleep time editor on long press without recording immediately", () => {
+    vi.useFakeTimers();
+    const onAddEvent = vi.fn();
+    const onOpenSleepTimeEditor = vi.fn();
+    renderPanel({ onAddEvent, onOpenSleepTimeEditor });
+
+    const sleepButton = screen.getByRole("button", { name: /入眠を記録/ });
+    fireEvent.pointerDown(sleepButton);
+    vi.advanceTimersByTime(550);
+    fireEvent.pointerUp(sleepButton);
+    fireEvent.click(sleepButton);
+
+    expect(onOpenSleepTimeEditor).toHaveBeenCalledWith({ babyId: "A", type: "sleepStart" });
+    expect(onAddEvent).not.toHaveBeenCalled();
+  });
+
   it("hides the sleep shortcut when sleep management is disabled", () => {
     renderPanel({ sleepManagementEnabled: false });
 
     expect(screen.queryByRole("button", { name: /入眠を記録/ })).toBeNull();
     expect(screen.queryByTestId("sleep-gauge-fill")).toBeNull();
+  });
+
+  it("shows activity time since the latest completed wake", () => {
+    const events: LogEvent[] = [
+      {
+        id: "sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+      },
+    ];
+
+    renderPanel({ events, latestEvents: events });
+
+    expect(screen.getByText("活動時間 50分")).toBeTruthy();
+    expect(screen.queryByText(/前回入眠/)).toBeNull();
   });
 
   it("shows the completed sleep duration on a wake log and opens editing from the whole log", () => {
