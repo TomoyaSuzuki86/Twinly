@@ -29,7 +29,7 @@ import { EventCard } from "./EventCard";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
-  buildSleepDaySummary,
+  buildSleepLogSummary,
   formatSleepDuration,
   getDefaultActivityLimitMinutes,
 } from "@/lib/sleep";
@@ -40,6 +40,7 @@ type BabyPanelProps = {
   latestEvents?: LogEvent[];
   logEvents?: LogEvent[];
   logDateControls?: ReactNode;
+  logDate?: string;
   now: Date;
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
@@ -127,6 +128,7 @@ export function BabyPanel({
   latestEvents = events,
   logEvents = events,
   logDateControls,
+  logDate,
   now,
   diaperStockManagementEnabled,
   sleepManagementEnabled,
@@ -223,8 +225,6 @@ export function BabyPanel({
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
-  const todaySleepSummary = buildSleepDaySummary(sleepAnalysis, now, now);
-  const todaySleepTotal = formatSleepDuration(todaySleepSummary.totalMinutes);
   const activityLimitMinutes =
     profile.activityLimitMinutesOverride ?? getDefaultActivityLimitMinutes(profile.birthDate, now);
   const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
@@ -240,6 +240,16 @@ export function BabyPanel({
       ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
       : "未記録"
   }`;
+  const currentSleepDuration = sleepAnalysis.currentSleepStart
+    ? formatSleepDuration((now.getTime() - sleepAnalysis.currentSleepStart.timestamp) / (60 * 1000))
+    : null;
+  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
+  const sleepLogSummary = buildSleepLogSummary(sleepAnalysis, selectedLogDate, now);
+  const sleepLogTotal = formatSleepDuration(sleepLogSummary.totalMinutes);
+  const averageActivityDuration =
+    sleepLogSummary.averageActivityMinutes === null
+      ? "未記録"
+      : formatSleepDuration(sleepLogSummary.averageActivityMinutes);
   const sleepDurationByWakeId = new Map(
     sleepAnalysis.intervals.map((interval) => [
       interval.wakeEventId,
@@ -362,7 +372,7 @@ export function BabyPanel({
         <Button
           role="switch"
           aria-checked={sleeping}
-          className="relative mt-3 h-24 w-full select-none overflow-hidden rounded-full border-[#7862b3] bg-[#8f75d1]/20 p-0 text-foreground shadow-sm hover:bg-[#8f75d1]/30 [-webkit-touch-callout:none]"
+          className="relative mt-3 h-20 w-full select-none overflow-hidden rounded-full border-[#7862b3] bg-[#8f75d1]/20 p-0 text-foreground shadow-sm hover:bg-[#8f75d1]/30 [-webkit-touch-callout:none]"
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
           onPointerLeave={clearSleepLongPressTimer}
@@ -383,11 +393,11 @@ export function BabyPanel({
         >
           <span
             aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 h-1.5 bg-slate-700"
+            className="absolute inset-x-0 bottom-0 h-[11px] bg-slate-700"
           />
           <span
             aria-hidden="true"
-            className="absolute bottom-0 left-0 h-1.5 bg-[#8f75d1] transition-[width] duration-500"
+            className="absolute bottom-0 left-0 h-[11px] bg-[#8f75d1] transition-[width] duration-500"
             data-testid="sleep-gauge-fill"
             style={{ width: `${activityGauge.elapsedPercent}%` }}
           />
@@ -412,9 +422,10 @@ export function BabyPanel({
                 sleeping ? "items-start text-left" : "items-end text-right"
               }`}
             >
-              <span className="block">{activityElapsed}</span>
+              <span className="block">
+                {sleeping ? `睡眠時間 ${currentSleepDuration ?? "0分"}` : activityElapsed}
+              </span>
               <span className="block">前回睡眠 {previousSleepDuration}</span>
-              <span className="block">今日の睡眠 {todaySleepTotal}</span>
             </span>
           </span>
         </Button>
@@ -563,7 +574,7 @@ export function BabyPanel({
         </div>
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`grid gap-4 ${sleepManagementEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
           <button
             type="button"
             className="min-w-0 text-left"
@@ -650,6 +661,36 @@ export function BabyPanel({
               </CardContent>
             </Card>
           </button>
+
+          {sleepManagementEnabled ? (
+            <button
+              type="button"
+              className="min-w-0 text-left"
+              onClick={onOpenTimeline}
+              aria-label={`${profile.displayName}の睡眠記録を開く`}
+            >
+              <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
+                <CardHeader className="p-4">
+                  <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <div className="flex min-w-0 items-baseline gap-1">
+                    <span className="truncate text-2xl font-bold text-violet-300">{sleepLogTotal}</span>
+                  </div>
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2">
+                      <span>睡眠回数</span>
+                      <span>{sleepLogSummary.sleepCount}回</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span>平均活動</span>
+                      <span>{averageActivityDuration}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </button>
+          ) : null}
         </div>
       </CardContent>
 

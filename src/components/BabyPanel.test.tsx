@@ -10,6 +10,7 @@ const baseNow = new Date("2026-04-18T10:20:00+09:00");
 const renderPanel = ({
   events = [],
   latestEvents,
+  logEvents,
   diaperEstimate = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
@@ -20,6 +21,7 @@ const renderPanel = ({
 }: {
   events?: LogEvent[];
   latestEvents?: LogEvent[];
+  logEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
@@ -35,6 +37,8 @@ const renderPanel = ({
       profile={app.profiles.A}
       events={events}
       latestEvents={latestEvents}
+      logEvents={logEvents}
+      logDate="2026-04-18"
       now={baseNow}
       diaperStockManagementEnabled={app.diaperStockManagementEnabled}
       sleepManagementEnabled={sleepManagementEnabled}
@@ -191,7 +195,7 @@ describe("BabyPanel", () => {
     expect(screen.getByText("入眠 →")).toBeTruthy();
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
-    expect(screen.getByText("今日の睡眠 0分")).toBeTruthy();
+    expect(screen.queryByText(/今日の睡眠/)).toBeNull();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("0%");
     fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
@@ -243,9 +247,9 @@ describe("BabyPanel", () => {
     expect(screen.getByText("睡眠中")).toBeTruthy();
     expect(screen.getByText("← 起床")).toBeTruthy();
     expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("活動時間 40分 / 2時間30分")).toBeTruthy();
+    expect(screen.getByText("睡眠時間 10分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
-    expect(screen.getByText("今日の睡眠 1時間30分")).toBeTruthy();
+    expect(screen.queryByText(/今日の睡眠/)).toBeNull();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("27%");
     fireEvent.click(screen.getByRole("switch", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
@@ -272,6 +276,56 @@ describe("BabyPanel", () => {
 
     expect(screen.queryByRole("switch", { name: /入眠を記録/ })).toBeNull();
     expect(screen.queryByTestId("sleep-gauge-fill")).toBeNull();
+    expect(screen.queryByText("睡眠回数")).toBeNull();
+  });
+
+  it("shows sleep totals, count, and average activity in the log summary", () => {
+    const events: LogEvent[] = [
+      {
+        id: "sleep-1",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T01:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake-1",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T02:30:00+09:00").getTime(),
+      },
+      {
+        id: "sleep-2",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T04:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake-2",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T05:00:00+09:00").getTime(),
+      },
+      {
+        id: "sleep-3",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T07:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake-3",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+      },
+    ];
+
+    renderPanel({ events, latestEvents: events, logEvents: events });
+
+    expect(screen.getByText("3時間30分")).toBeTruthy();
+    expect(screen.getByText("睡眠回数")).toBeTruthy();
+    expect(screen.getByText("3回")).toBeTruthy();
+    expect(screen.getByText("平均活動")).toBeTruthy();
+    expect(screen.getByText("1時間45分")).toBeTruthy();
   });
 
   it("shows activity time since the latest completed wake", () => {

@@ -19,6 +19,12 @@ export type SleepDaySummary = {
   totalMinutes: number;
 };
 
+export type SleepLogSummary = {
+  totalMinutes: number;
+  sleepCount: number;
+  averageActivityMinutes: number | null;
+};
+
 export type ActivityGauge = {
   limitMinutes: number;
   elapsedMinutes: number;
@@ -169,6 +175,47 @@ export const buildSleepDaySummary = (
       (sum, segment) => sum + (segment.end - segment.start) / (60 * 1000),
       0
     ),
+  };
+};
+
+export const buildSleepLogSummary = (
+  analysis: SleepAnalysis,
+  date: Date,
+  now: Date
+): SleepLogSummary => {
+  const daySummary = buildSleepDaySummary(analysis, date, now);
+  const dayStartDate = new Date(date);
+  dayStartDate.setHours(0, 0, 0, 0);
+  const dayEndDate = new Date(dayStartDate);
+  dayEndDate.setDate(dayEndDate.getDate() + 1);
+  const dayStart = dayStartDate.getTime();
+  const dayEnd = dayEndDate.getTime();
+
+  const validSleepStarts = [
+    ...analysis.intervals.map((interval) => interval.start),
+    ...(analysis.currentSleepStart ? [analysis.currentSleepStart.timestamp] : []),
+  ].sort((a, b) => a - b);
+  const completedActivityMinutes = analysis.intervals
+    .map((interval) => {
+      const nextSleepStart = validSleepStarts.find((start) => start > interval.end);
+      if (nextSleepStart === undefined || nextSleepStart < dayStart || nextSleepStart >= dayEnd) {
+        return null;
+      }
+      return (nextSleepStart - interval.end) / (60 * 1000);
+    })
+    .filter((minutes): minutes is number => minutes !== null);
+
+  return {
+    totalMinutes: daySummary.segments.reduce(
+      (sum, segment) => sum + (segment.end - segment.start) / (60 * 1000),
+      0
+    ),
+    sleepCount: daySummary.segments.length,
+    averageActivityMinutes:
+      completedActivityMinutes.length > 0
+        ? completedActivityMinutes.reduce((sum, minutes) => sum + minutes, 0) /
+          completedActivityMinutes.length
+        : null,
   };
 };
 

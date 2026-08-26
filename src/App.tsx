@@ -1274,6 +1274,7 @@ export default function App() {
                 latestEvents={latestEventsByBaby.A}
                 logEvents={logEventsByBaby.A}
                 logDateControls={renderLogDateControls()}
+                logDate={activeDate}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
@@ -1302,6 +1303,7 @@ export default function App() {
                 latestEvents={latestEventsByBaby.B}
                 logEvents={logEventsByBaby.B}
                 logDateControls={renderLogDateControls()}
+                logDate={activeDate}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
