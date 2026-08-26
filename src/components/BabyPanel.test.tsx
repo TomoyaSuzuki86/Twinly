@@ -183,12 +183,12 @@ describe("BabyPanel", () => {
     const onAddEvent = vi.fn();
     const { rerender } = renderPanel({ onAddEvent });
 
-    const sleepButton = screen.getByRole("button", { name: /入眠を記録/ });
+    const sleepButton = screen.getByRole("switch", { name: /入眠を記録/ });
     expect(sleepButton.className).toContain("w-full");
     expect(sleepButton.className).toContain("select-none");
-    expect(sleepButton.className).toContain("bg-[#8f75d1]");
-    expect(sleepButton.className).toContain("text-black");
-    expect(screen.getByText("入眠")).toBeTruthy();
+    expect(sleepButton.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("起床中")).toBeTruthy();
+    expect(screen.getByText("入眠 →")).toBeTruthy();
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.getByText("今日の睡眠 0分")).toBeTruthy();
@@ -240,11 +240,14 @@ describe("BabyPanel", () => {
         themeDimmedBgColor="bg-background"
       />
     );
-    expect(screen.getByText("睡眠中 10分")).toBeTruthy();
+    expect(screen.getByText("睡眠中")).toBeTruthy();
+    expect(screen.getByText("← 起床")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("活動時間 40分 / 2時間30分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
     expect(screen.getByText("今日の睡眠 1時間30分")).toBeTruthy();
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("0%");
-    fireEvent.click(screen.getByRole("button", { name: /起床を記録/ }));
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("27%");
+    fireEvent.click(screen.getByRole("switch", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
 
@@ -254,7 +257,7 @@ describe("BabyPanel", () => {
     const onOpenSleepTimeEditor = vi.fn();
     renderPanel({ onAddEvent, onOpenSleepTimeEditor });
 
-    const sleepButton = screen.getByRole("button", { name: /入眠を記録/ });
+    const sleepButton = screen.getByRole("switch", { name: /入眠を記録/ });
     fireEvent.pointerDown(sleepButton);
     vi.advanceTimersByTime(550);
     fireEvent.pointerUp(sleepButton);
@@ -267,7 +270,7 @@ describe("BabyPanel", () => {
   it("hides the sleep shortcut when sleep management is disabled", () => {
     renderPanel({ sleepManagementEnabled: false });
 
-    expect(screen.queryByRole("button", { name: /入眠を記録/ })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /入眠を記録/ })).toBeNull();
     expect(screen.queryByTestId("sleep-gauge-fill")).toBeNull();
   });
 

@@ -235,15 +235,11 @@ export function BabyPanel({
   const previousSleepDuration = latestCompletedSleep
     ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
     : "未記録";
-  const activityOrSleepElapsed = sleeping
-    ? `睡眠中 ${formatSleepDuration(
-        (now.getTime() - (sleepAnalysis.currentSleepStart?.timestamp ?? now.getTime())) / (60 * 1000)
-      )}`
-    : `活動時間 ${
-        latestCompletedSleep
-          ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
-          : "未記録"
-      }`;
+  const activityElapsed = `活動時間 ${
+    latestCompletedSleep
+      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
+      : "未記録"
+  }`;
   const sleepDurationByWakeId = new Map(
     sleepAnalysis.intervals.map((interval) => [
       interval.wakeEventId,
@@ -364,7 +360,9 @@ export function BabyPanel({
 
         {sleepManagementEnabled ? (
         <Button
-          className="relative mt-3 h-20 w-full select-none overflow-hidden border-[#7862b3] bg-[#8f75d1]/30 p-0 text-black shadow-sm hover:bg-[#8f75d1]/40 [-webkit-touch-callout:none]"
+          role="switch"
+          aria-checked={sleeping}
+          className="relative mt-3 h-24 w-full select-none overflow-hidden rounded-full border-[#7862b3] bg-[#8f75d1]/20 p-0 text-foreground shadow-sm hover:bg-[#8f75d1]/30 [-webkit-touch-callout:none]"
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
           onPointerLeave={clearSleepLongPressTimer}
@@ -385,17 +383,36 @@ export function BabyPanel({
         >
           <span
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 bg-[#8f75d1] transition-[width] duration-500"
+            className="absolute inset-x-0 bottom-0 h-1.5 bg-slate-700"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 left-0 h-1.5 bg-[#8f75d1] transition-[width] duration-500"
             data-testid="sleep-gauge-fill"
             style={{ width: `${activityGauge.elapsedPercent}%` }}
           />
-          <span className="relative z-10 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4">
-            <span className="flex min-w-0 items-center justify-start gap-2 text-left text-xl font-bold">
-              {sleeping ? <Sun className="h-5 w-5 shrink-0" /> : <Moon className="h-5 w-5 shrink-0" />}
-              <span>{sleeping ? "起床" : "入眠"}</span>
+          <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
+            <span
+              className={`m-1.5 flex w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
+                sleeping
+                  ? "border-violet-400/70 bg-violet-600/55"
+                  : "border-amber-300/70 bg-amber-400/25"
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-base font-bold">
+                {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
+                <span>{sleeping ? "睡眠中" : "起床中"}</span>
+              </span>
+              <span className="mt-0.5 text-xs font-semibold opacity-80">
+                {sleeping ? "← 起床" : "入眠 →"}
+              </span>
             </span>
-            <span className="border-l border-black/25 pl-3 text-right text-sm font-medium leading-snug text-black/75">
-              <span className="block">{activityOrSleepElapsed}</span>
+            <span
+              className={`flex min-w-0 flex-1 flex-col justify-center px-3 text-sm font-medium leading-relaxed text-foreground/80 ${
+                sleeping ? "items-start text-left" : "items-end text-right"
+              }`}
+            >
+              <span className="block">{activityElapsed}</span>
               <span className="block">前回睡眠 {previousSleepDuration}</span>
               <span className="block">今日の睡眠 {todaySleepTotal}</span>
             </span>

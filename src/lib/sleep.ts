@@ -182,10 +182,11 @@ export const buildActivityGauge = (
     (latest, interval) => (latest === null || interval.end > latest ? interval.end : latest),
     null
   );
+  const activityEndedAt = analysis.currentSleepStart?.timestamp ?? now.getTime();
   const elapsedMinutes =
-    analysis.currentSleepStart || latestWakeAt === null
+    latestWakeAt === null
       ? 0
-      : Math.max(0, (now.getTime() - latestWakeAt) / (60 * 1000));
+      : Math.max(0, (activityEndedAt - latestWakeAt) / (60 * 1000));
   const remainingMinutes = Math.max(0, normalizedLimitMinutes - elapsedMinutes);
 
   return {

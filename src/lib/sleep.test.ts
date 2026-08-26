@@ -136,16 +136,19 @@ describe("sleep helpers", () => {
     expect(buildActivityGauge(analysis, new Date("2026-08-24T03:00:00+09:00"), 150).elapsedPercent).toBe(100);
   });
 
-  it("resets the activity gauge while the baby is sleeping", () => {
+  it("freezes the activity gauge at sleep start while the baby is sleeping", () => {
+    const minute = 60 * 1000;
     const analysis = analyzeSleepEvents(
       [
-        event("start", "sleepStart", 100),
-        event("wake", "wake", 200),
-        event("sleep-again", "sleepStart", 300),
+        event("start", "sleepStart", 0),
+        event("wake", "wake", 90 * minute),
+        event("sleep-again", "sleepStart", 147 * minute),
       ],
       "A"
     );
 
-    expect(buildActivityGauge(analysis, new Date(10_000), 150).elapsedPercent).toBe(0);
+    const gauge = buildActivityGauge(analysis, new Date(300 * minute), 120);
+    expect(gauge.elapsedMinutes).toBe(57);
+    expect(gauge.elapsedPercent).toBe(48);
   });
 });

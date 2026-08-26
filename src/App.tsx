@@ -38,7 +38,14 @@ import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
-import { AutoWakeActivityType, getAutoWakeTimestampForActivity, isBabySleeping } from "./lib/sleep";
+import {
+  analyzeSleepEvents,
+  AutoWakeActivityType,
+  buildActivityGauge,
+  getAutoWakeTimestampForActivity,
+  getDefaultActivityLimitMinutes,
+  isBabySleeping,
+} from "./lib/sleep";
 import {
   getDeviceId,
   getExistingPushSubscription,
@@ -1072,10 +1079,10 @@ export default function App() {
     [app.events]
   );
 
-  const tabCareGaugePercents = useMemo(() => {
-    const result: Record<BabyId, { milk: number; diaper: number }> = {
-      A: { milk: 0, diaper: 0 },
-      B: { milk: 0, diaper: 0 },
+  const tabGaugePercents = useMemo(() => {
+    const result: Record<BabyId, { milk: number; diaper: number; sleep: number }> = {
+      A: { milk: 0, diaper: 0, sleep: 0 },
+      B: { milk: 0, diaper: 0, sleep: 0 },
     };
 
     (["A", "B"] as BabyId[]).forEach((babyId) => {
@@ -1089,9 +1096,13 @@ export default function App() {
         milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
       });
       const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
+      const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
+      const activityLimitMinutes =
+        profile.activityLimitMinutesOverride ?? getDefaultActivityLimitMinutes(profile.birthDate, now);
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
         diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
+        sleep: buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
       };
     });
 
@@ -1235,14 +1246,14 @@ export default function App() {
                 <TabsTrigger value="A" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
                 <BabyTabTrigger
                   profile={app.profiles.A}
-                  careGaugePercents={selectedBabyTab === "A" ? undefined : tabCareGaugePercents.A}
+                  gaugePercents={tabGaugePercents.A}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
                 />
                 </TabsTrigger>
                 <TabsTrigger value="B" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger
                   profile={app.profiles.B}
-                  careGaugePercents={selectedBabyTab === "B" ? undefined : tabCareGaugePercents.B}
+                  gaugePercents={tabGaugePercents.B}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
                 />
                 </TabsTrigger>

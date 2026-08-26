@@ -1,33 +1,63 @@
 import { BabyProfile } from "@/types";
 import { daysSince } from "@/lib/utils";
-import { Baby, Moon } from "lucide-react";
+import { Baby, Droplets, Milk, Moon } from "lucide-react";
 
 type BabyTabTriggerProps = {
   profile: BabyProfile;
-  careGaugePercents?: {
+  gaugePercents: {
     milk: number;
     diaper: number;
+    sleep: number;
   };
   sleeping?: boolean;
 };
 
-export function BabyTabTrigger({ profile, careGaugePercents, sleeping = false }: BabyTabTriggerProps) {
+const MiniGauge = ({
+  percent,
+  color,
+  testId,
+  children,
+}: {
+  percent: number;
+  color: string;
+  testId: string;
+  children: React.ReactNode;
+}) => {
+  const normalizedPercent = Math.max(0, Math.min(100, percent));
+
+  return (
+    <span
+      className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full"
+      data-testid={testId}
+      data-percent={normalizedPercent}
+      style={{
+        background: `conic-gradient(${color} ${normalizedPercent * 3.6}deg, rgb(71 85 105 / 0.45) 0deg)`,
+      }}
+      aria-hidden="true"
+    >
+      <span className="absolute inset-[3px] rounded-full bg-background" />
+      <span className="relative text-foreground/80">{children}</span>
+    </span>
+  );
+};
+
+export function BabyTabTrigger({ profile, gaugePercents, sleeping = false }: BabyTabTriggerProps) {
   const p = profile;
   const ageDays = daysSince(p.birthDate);
 
   return (
-    <div className="flex w-full min-w-0 flex-col px-1 py-0.5">
-      <div className="flex items-center gap-2">
+    <div className="flex w-full min-w-0 items-center gap-1.5 px-0.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <div className="relative flex-shrink-0">
           <div
-            className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br ${
+            className={`grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br ${
             p.iconGradient ?? "from-violet-500 to-fuchsia-500"
           }`}
           >
             {p.iconEmoji ? (
-              <span className="text-2xl">{p.iconEmoji}</span>
+              <span className="text-xl">{p.iconEmoji}</span>
             ) : (
-              <Baby className="h-5 w-5 text-white" />
+              <Baby className="h-4 w-4 text-white" />
             )}
           </div>
           {sleeping ? (
@@ -42,32 +72,23 @@ export function BabyTabTrigger({ profile, careGaugePercents, sleeping = false }:
         </div>
         <div className="min-w-0 text-left">
           <p className="truncate font-semibold leading-none tracking-tight">{p.displayName}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">生後{ageDays}日</p>
+          <p className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground">生後{ageDays}日</p>
         </div>
       </div>
-      {careGaugePercents ? (
-        <div
-          className="mt-1 grid grid-cols-2 gap-1.5"
-          aria-label={`${p.displayName}のミルク必要度${careGaugePercents.milk}%・おむつ交換必要度${careGaugePercents.diaper}%`}
-        >
-          <span className="h-1.5 overflow-hidden rounded-full bg-sky-950/60" aria-hidden="true">
-            <span
-              className="block h-full rounded-full bg-sky-500 transition-[width] duration-500"
-              data-testid={`baby-${p.babyId}-milk-mini-gauge`}
-              style={{ width: `${careGaugePercents.milk}%` }}
-            />
-          </span>
-          <span className="h-1.5 overflow-hidden rounded-full bg-amber-950/60" aria-hidden="true">
-            <span
-              className="block h-full rounded-full bg-amber-500 transition-[width] duration-500"
-              data-testid={`baby-${p.babyId}-diaper-mini-gauge`}
-              style={{ width: `${careGaugePercents.diaper}%` }}
-            />
-          </span>
-        </div>
-      ) : (
-        <div className="mt-1 h-1.5" aria-hidden="true" />
-      )}
+      <div
+        className="flex shrink-0 items-center gap-1"
+        aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%・活動時間経過${gaugePercents.sleep}%`}
+      >
+        <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
+          <Milk className="h-3 w-3" />
+        </MiniGauge>
+        <MiniGauge percent={gaugePercents.diaper} color="#f59e0b" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
+          <Droplets className="h-3 w-3" />
+        </MiniGauge>
+        <MiniGauge percent={gaugePercents.sleep} color="#8b5cf6" testId={`baby-${p.babyId}-sleep-mini-gauge`}>
+          <Moon className="h-3 w-3" />
+        </MiniGauge>
+      </div>
     </div>
   );
 }
