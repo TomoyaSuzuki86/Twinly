@@ -31,6 +31,7 @@ import {
   buildActivityGauge,
   buildSleepLogSummary,
   formatSleepDuration,
+  getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
 } from "@/lib/sleep";
 
@@ -225,8 +226,17 @@ export function BabyPanel({
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
+  const averageGaugeActivityMinutes = getAverageActivityMinutes(sleepAnalysis, now);
   const activityLimitMinutes =
-    profile.activityLimitMinutesOverride ?? getDefaultActivityLimitMinutes(profile.birthDate, now);
+    profile.activityLimitMinutesOverride ??
+    averageGaugeActivityMinutes ??
+    getDefaultActivityLimitMinutes(profile.birthDate, now);
+  const activityLimitSource =
+    profile.activityLimitMinutesOverride !== null && profile.activityLimitMinutesOverride !== undefined
+      ? "設定"
+      : averageGaugeActivityMinutes !== null
+        ? "平均"
+        : "目安";
   const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
@@ -237,7 +247,7 @@ export function BabyPanel({
     : "未記録";
   const activityElapsed = `活動時間 ${
     latestCompletedSleep
-      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
+      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${activityLimitSource}${formatSleepDuration(activityGauge.limitMinutes)}`
       : "未記録"
   }`;
   const currentSleepDuration = sleepAnalysis.currentSleepStart
@@ -372,7 +382,11 @@ export function BabyPanel({
         <Button
           role="switch"
           aria-checked={sleeping}
-          className="relative mt-3 h-20 w-full select-none overflow-hidden rounded-full border-[#7862b3] bg-[#8f75d1]/20 p-0 text-foreground shadow-sm hover:bg-[#8f75d1]/30 [-webkit-touch-callout:none]"
+          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-full p-0 shadow-sm [-webkit-touch-callout:none] ${
+            sleeping
+              ? "border-violet-500/70 bg-violet-500/20 text-foreground hover:bg-violet-500/25"
+              : "border-amber-400/70 bg-amber-400/15 text-foreground hover:bg-amber-400/20"
+          }`}
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
           onPointerLeave={clearSleepLongPressTimer}
@@ -397,16 +411,18 @@ export function BabyPanel({
           />
           <span
             aria-hidden="true"
-            className="absolute bottom-0 left-0 h-[11px] bg-[#8f75d1] transition-[width] duration-500"
+            className={`absolute bottom-0 left-0 h-[11px] transition-[width] duration-500 ${
+              sleeping ? "bg-violet-600" : "bg-amber-400"
+            }`}
             data-testid="sleep-gauge-fill"
             style={{ width: `${activityGauge.elapsedPercent}%` }}
           />
           <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
             <span
-              className={`m-1.5 flex w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
+              className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
-                  ? "border-violet-400/70 bg-violet-600/55"
-                  : "border-amber-300/70 bg-amber-400/25"
+                  ? "border-violet-400 bg-violet-600 text-white"
+                  : "border-amber-300 bg-amber-400 text-slate-950"
               }`}
             >
               <span className="flex items-center gap-1.5 text-base font-bold">
@@ -573,8 +589,15 @@ export function BabyPanel({
           </Button>
         </div>
         {logDateControls}
-      <CardContent className="w-full flex-grow space-y-4">
-        <div className={`grid gap-4 ${sleepManagementEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
+      <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
+        <div className="-mx-1 overflow-x-auto px-1 pb-2">
+          <div
+            className={`grid w-max min-w-full gap-3 ${
+              sleepManagementEnabled
+                ? "grid-cols-[repeat(3,minmax(190px,1fr))]"
+                : "grid-cols-[repeat(2,minmax(190px,1fr))]"
+            }`}
+          >
           <button
             type="button"
             className="min-w-0 text-left"
@@ -582,17 +605,17 @@ export function BabyPanel({
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
-              <CardHeader className="p-4">
+              <CardHeader className="p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">食事合計</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-0">
+              <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
                     <span className="font-semibold text-muted-foreground">ml</span>
                   </div>
                   {milkProgressSummary ? (
-                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[420px]:block">
+                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[900px]:block">
                       <p className="truncate text-xs font-semibold leading-tight text-sky-100">
                         {milkProgressSummary.title}
                       </p>
@@ -623,17 +646,17 @@ export function BabyPanel({
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
-              <CardHeader className="p-4">
+              <CardHeader className="p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-0">
+              <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
                     <span className="font-semibold text-muted-foreground">回</span>
                   </div>
                   {diaperEstimateSummary ? (
-                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right min-[420px]:block">
+                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right min-[900px]:block">
                       <p className="truncate text-xs font-semibold leading-tight text-amber-100">
                         {diaperEstimateSummary.title}
                       </p>
@@ -670,12 +693,12 @@ export function BabyPanel({
               aria-label={`${profile.displayName}の睡眠記録を開く`}
             >
               <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
-                <CardHeader className="p-4">
+                <CardHeader className="p-3">
                   <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 pt-0">
+                <CardContent className="p-3 pt-0">
                   <div className="flex min-w-0 items-baseline gap-1">
-                    <span className="truncate text-2xl font-bold text-violet-300">{sleepLogTotal}</span>
+                    <span className="whitespace-nowrap text-2xl font-bold text-violet-300">{sleepLogTotal}</span>
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between gap-2">
@@ -691,6 +714,7 @@ export function BabyPanel({
               </Card>
             </button>
           ) : null}
+          </div>
         </div>
       </CardContent>
 

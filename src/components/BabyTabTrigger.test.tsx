@@ -6,7 +6,7 @@ import { BabyTabTrigger } from "./BabyTabTrigger";
 describe("BabyTabTrigger", () => {
   afterEach(cleanup);
 
-  it("shows milk, diaper, and sleep gauges on the right side of every tab", () => {
+  it("shows gauges only on the unselected tab", () => {
     const profile = createInitialAppState(new Date("2026-08-11T08:00:00+09:00")).profiles.A;
     const { rerender } = render(
       <BabyTabTrigger profile={profile} gaugePercents={{ milk: 35, diaper: 70, sleep: 42 }} />
@@ -19,7 +19,18 @@ describe("BabyTabTrigger", () => {
       screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%・活動時間経過42%`)
     ).toBeTruthy();
 
-    rerender(<BabyTabTrigger profile={profile} gaugePercents={{ milk: 35, diaper: 70, sleep: 42 }} sleeping />);
-    expect(screen.getByLabelText(`${profile.displayName}は睡眠中`)).toBeTruthy();
+    rerender(
+      <BabyTabTrigger
+        profile={profile}
+        gaugePercents={{ milk: 35, diaper: 70, sleep: 42 }}
+        sleeping
+        selected
+      />
+    );
+    expect(screen.queryByLabelText(`${profile.displayName}は睡眠中`)).toBeNull();
+    expect(screen.queryByTestId("baby-A-milk-mini-gauge")).toBeNull();
+    expect(screen.queryByTestId("baby-A-diaper-mini-gauge")).toBeNull();
+    expect(screen.queryByTestId("baby-A-sleep-mini-gauge")).toBeNull();
+    expect(screen.queryByText(/生後/)).toBeNull();
   });
 });

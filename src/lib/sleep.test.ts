@@ -4,6 +4,7 @@ import {
   buildActivityGauge,
   buildSleepDaySummary,
   createAutoWakeTimestamp,
+  getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
   getAutoWakeTimestampForActivity,
 } from "./sleep";
@@ -150,5 +151,22 @@ describe("sleep helpers", () => {
     const gauge = buildActivityGauge(analysis, new Date(300 * minute), 120);
     expect(gauge.elapsedMinutes).toBe(57);
     expect(gauge.elapsedPercent).toBe(48);
+  });
+
+  it("calculates the recent average from completed activity periods", () => {
+    const minute = 60 * 1000;
+    const analysis = analyzeSleepEvents(
+      [
+        event("sleep-1", "sleepStart", 0),
+        event("wake-1", "wake", 60 * minute),
+        event("sleep-2", "sleepStart", 180 * minute),
+        event("wake-2", "wake", 240 * minute),
+        event("sleep-3", "sleepStart", 420 * minute),
+        event("wake-3", "wake", 480 * minute),
+      ],
+      "A"
+    );
+
+    expect(getAverageActivityMinutes(analysis, new Date(500 * minute))).toBe(150);
   });
 });

@@ -42,6 +42,7 @@ import {
   analyzeSleepEvents,
   AutoWakeActivityType,
   buildActivityGauge,
+  getAverageActivityMinutes,
   getAutoWakeTimestampForActivity,
   getDefaultActivityLimitMinutes,
   isBabySleeping,
@@ -1098,7 +1099,9 @@ export default function App() {
       const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
       const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
       const activityLimitMinutes =
-        profile.activityLimitMinutesOverride ?? getDefaultActivityLimitMinutes(profile.birthDate, now);
+        profile.activityLimitMinutesOverride ??
+        getAverageActivityMinutes(sleepAnalysis, now) ??
+        getDefaultActivityLimitMinutes(profile.birthDate, now);
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
         diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
@@ -1242,19 +1245,27 @@ export default function App() {
                 </div>
               </header>
 
-              <TabsList className="grid h-auto w-full grid-cols-2 p-1">
-                <TabsTrigger value="A" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
+              <TabsList
+                className={`grid h-auto w-full gap-1 p-1 ${
+                  selectedBabyTab === "A"
+                    ? "grid-cols-[minmax(110px,0.7fr)_minmax(210px,1.3fr)]"
+                    : "grid-cols-[minmax(210px,1.3fr)_minmax(110px,0.7fr)]"
+                }`}
+              >
+                <TabsTrigger value="A" className="h-auto px-2 py-1.5" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   gaugePercents={tabGaugePercents.A}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
+                  selected={selectedBabyTab === "A"}
                 />
                 </TabsTrigger>
-                <TabsTrigger value="B" className="h-auto px-2 py-1" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
+                <TabsTrigger value="B" className="h-auto px-2 py-1.5" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   gaugePercents={tabGaugePercents.B}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
+                  selected={selectedBabyTab === "B"}
                 />
                 </TabsTrigger>
               </TabsList>

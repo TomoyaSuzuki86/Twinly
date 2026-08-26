@@ -32,6 +32,11 @@ export type ActivityGauge = {
   elapsedPercent: number;
 };
 
+type CompletedActivity = {
+  endedAt: number;
+  minutes: number;
+};
+
 const parseLocalDate = (value: string) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -191,19 +196,9 @@ export const buildSleepLogSummary = (
   const dayStart = dayStartDate.getTime();
   const dayEnd = dayEndDate.getTime();
 
-  const validSleepStarts = [
-    ...analysis.intervals.map((interval) => interval.start),
-    ...(analysis.currentSleepStart ? [analysis.currentSleepStart.timestamp] : []),
-  ].sort((a, b) => a - b);
-  const completedActivityMinutes = analysis.intervals
-    .map((interval) => {
-      const nextSleepStart = validSleepStarts.find((start) => start > interval.end);
-      if (nextSleepStart === undefined || nextSleepStart < dayStart || nextSleepStart >= dayEnd) {
-        return null;
-      }
-      return (nextSleepStart - interval.end) / (60 * 1000);
-    })
-    .filter((minutes): minutes is number => minutes !== null);
+  const completedActivityMinutes = getCompletedActivities(analysis)
+    .filter((activity) => activity.endedAt >= dayStart && activity.endedAt < dayEnd)
+    .map((activity) => activity.minutes);
 
   return {
     totalMinutes: daySummary.segments.reduce(
@@ -217,6 +212,35 @@ export const buildSleepLogSummary = (
           completedActivityMinutes.length
         : null,
   };
+};
+
+const getCompletedActivities = (analysis: SleepAnalysis): CompletedActivity[] => {
+  const validSleepStarts = [
+    ...analysis.intervals.map((interval) => interval.start),
+    ...(analysis.currentSleepStart ? [analysis.currentSleepStart.timestamp] : []),
+  ].sort((a, b) => a - b);
+
+  return analysis.intervals.flatMap((interval) => {
+    const nextSleepStart = validSleepStarts.find((start) => start > interval.end);
+    return nextSleepStart === undefined
+      ? []
+      : [{ endedAt: nextSleepStart, minutes: (nextSleepStart - interval.end) / (60 * 1000) }];
+  });
+};
+
+export const getAverageActivityMinutes = (
+  analysis: SleepAnalysis,
+  now: Date,
+  lookbackDays = 7
+): number | null => {
+  const cutoff = now.getTime() - Math.max(1, lookbackDays) * 24 * 60 * 60 * 1000;
+  const durations = getCompletedActivities(analysis)
+    .filter((activity) => activity.endedAt >= cutoff && activity.endedAt <= now.getTime())
+    .map((activity) => activity.minutes);
+
+  return durations.length > 0
+    ? durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length
+    : null;
 };
 
 export const buildActivityGauge = (
