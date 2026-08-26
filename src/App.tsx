@@ -21,6 +21,7 @@ import { HealthChartModal } from "./components/HealthChartModal";
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
+import { SleepHistoryModal } from "./components/SleepHistoryModal";
 import { WeeklyTimelineModal } from "./components/WeeklyTimelineModal";
 import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
@@ -41,10 +42,9 @@ import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
 import {
   analyzeSleepEvents,
   AutoWakeActivityType,
-  buildActivityGauge,
-  getAverageActivityMinutes,
+  buildSleepGauge,
   getAutoWakeTimestampForActivity,
-  getDefaultActivityLimitMinutes,
+  getDefaultSleepTargetHours,
   isBabySleeping,
 } from "./lib/sleep";
 import {
@@ -171,7 +171,10 @@ export default function App() {
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [timelineModalOpen, setTimelineModalOpen] = useState(false);
-  const [historyModal, setHistoryModal] = useState<{ babyId: BabyId; type: "milk" | "diaper" } | null>(null);
+  const [historyModal, setHistoryModal] = useState<{
+    babyId: BabyId;
+    type: "milk" | "diaper" | "sleep";
+  } | null>(null);
   const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
   const [undo, setUndo] = useState<{
     open: boolean;
@@ -183,6 +186,7 @@ export default function App() {
   const undoTimerRef = useRef<number | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
   const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
+  const voiceLongPressTimerRef = useRef<number | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
   const syncingPendingEventIdsRef = useRef(new Set<string>());
@@ -794,6 +798,33 @@ export default function App() {
     window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);
   };
 
+  const clearVoiceLongPress = () => {
+    if (voiceLongPressTimerRef.current === null) return;
+    window.clearTimeout(voiceLongPressTimerRef.current);
+    voiceLongPressTimerRef.current = null;
+  };
+
+  const beginVoiceLongPress = (babyId?: BabyId) => {
+    clearVoiceLongPress();
+    voiceLongPressTimerRef.current = window.setTimeout(() => {
+      voiceLongPressTimerRef.current = null;
+      if (babyId) {
+        startVoiceInputForBabyTab(babyId);
+      } else {
+        voiceButtonRef.current?.startListening();
+      }
+    }, 550);
+  };
+
+  useEffect(
+    () => () => {
+      if (voiceLongPressTimerRef.current !== null) {
+        window.clearTimeout(voiceLongPressTimerRef.current);
+      }
+    },
+    []
+  );
+
   const editTarget = useMemo(() => {
     if (!modal || modal.kind !== "edit") return null;
     return app.events.find((event) => event.id === modal.eventId) ?? null;
@@ -1098,14 +1129,12 @@ export default function App() {
       });
       const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
       const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
-      const activityLimitMinutes =
-        profile.activityLimitMinutesOverride ??
-        getAverageActivityMinutes(sleepAnalysis, now) ??
-        getDefaultActivityLimitMinutes(profile.birthDate, now);
+      const sleepTargetHours =
+        profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
         diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
-        sleep: buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
+        sleep: buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours).remainingPercent,
       };
     });
 
@@ -1216,6 +1245,11 @@ export default function App() {
               <header
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
+                onPointerDown={() => beginVoiceLongPress()}
+                onPointerUp={clearVoiceLongPress}
+                onPointerLeave={clearVoiceLongPress}
+                onPointerCancel={clearVoiceLongPress}
+                onContextMenu={(event) => event.preventDefault()}
               >
                 <div className="flex items-center gap-2.5">
                   <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
@@ -1252,7 +1286,16 @@ export default function App() {
                     : "grid-cols-[minmax(180px,1.15fr)_minmax(140px,0.85fr)]"
                 }`}
               >
-                <TabsTrigger value="A" className="h-auto px-2 py-1.5" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
+                <TabsTrigger
+                  value="A"
+                  className="h-auto px-2 py-1.5"
+                  onDoubleClick={() => startVoiceInputForBabyTab("A")}
+                  onPointerDown={() => beginVoiceLongPress("A")}
+                  onPointerUp={clearVoiceLongPress}
+                  onPointerLeave={clearVoiceLongPress}
+                  onPointerCancel={clearVoiceLongPress}
+                  onContextMenu={(event) => event.preventDefault()}
+                >
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   gaugePercents={tabGaugePercents.A}
@@ -1260,7 +1303,16 @@ export default function App() {
                   selected={selectedBabyTab === "A"}
                 />
                 </TabsTrigger>
-                <TabsTrigger value="B" className="h-auto px-2 py-1.5" onDoubleClick={() => startVoiceInputForBabyTab("B")}>
+                <TabsTrigger
+                  value="B"
+                  className="h-auto px-2 py-1.5"
+                  onDoubleClick={() => startVoiceInputForBabyTab("B")}
+                  onPointerDown={() => beginVoiceLongPress("B")}
+                  onPointerUp={clearVoiceLongPress}
+                  onPointerLeave={clearVoiceLongPress}
+                  onPointerCancel={clearVoiceLongPress}
+                  onContextMenu={(event) => event.preventDefault()}
+                >
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   gaugePercents={tabGaugePercents.B}
@@ -1269,6 +1321,9 @@ export default function App() {
                 />
                 </TabsTrigger>
               </TabsList>
+              <p className="text-center text-[10px] leading-none text-muted-foreground">
+                ダブルクリック／長押しで音声入力
+              </p>
             </div>
             <div
               className="touch-auto"
@@ -1436,9 +1491,17 @@ export default function App() {
         initialBabyId={selectedBabyTab}
         now={now}
       />
-      {historyModal ? (
+      {historyModal?.type === "sleep" ? (
+        <SleepHistoryModal
+          open
+          onOpenChange={(open) => !open && setHistoryModal(null)}
+          events={app.events}
+          profile={app.profiles[historyModal.babyId]}
+          now={now}
+        />
+      ) : historyModal ? (
         <EventHistoryModal
-          open={Boolean(historyModal)}
+          open
           onOpenChange={(open) => !open && setHistoryModal(null)}
           historyType={historyModal.type}
           events={app.events}

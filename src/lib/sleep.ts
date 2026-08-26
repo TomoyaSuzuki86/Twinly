@@ -25,6 +25,13 @@ export type SleepLogSummary = {
   averageActivityMinutes: number | null;
 };
 
+export type SleepGauge = {
+  targetHours: number;
+  totalMinutes: number;
+  remainingMinutes: number;
+  remainingPercent: number;
+};
+
 export type ActivityGauge = {
   limitMinutes: number;
   elapsedMinutes: number;
@@ -61,6 +68,19 @@ export const getDefaultActivityLimitMinutes = (birthDate: string, now: Date) => 
   if (completedMonths < 10) return 270;
   if (completedMonths < 15) return 300;
   return 360;
+};
+
+export const getDefaultSleepTargetHours = (birthDate: string, now: Date) => {
+  const birth = parseLocalDate(birthDate);
+  if (!birth || birth.getTime() > now.getTime()) return 13;
+
+  let completedMonths =
+    (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
+  if (now.getDate() < birth.getDate()) completedMonths -= 1;
+
+  if (completedMonths < 4) return 15;
+  if (completedMonths < 12) return 13;
+  return 12;
 };
 
 export const analyzeSleepEvents = (events: LogEvent[], babyId: BabyId): SleepAnalysis => {
@@ -211,6 +231,28 @@ export const buildSleepLogSummary = (
         ? completedActivityMinutes.reduce((sum, minutes) => sum + minutes, 0) /
           completedActivityMinutes.length
         : null,
+  };
+};
+
+export const buildSleepGauge = (
+  analysis: SleepAnalysis,
+  date: Date,
+  now: Date,
+  targetHours: number
+): SleepGauge => {
+  const normalizedTargetHours = Math.max(1, Math.min(24, targetHours));
+  const totalMinutes = buildSleepDaySummary(analysis, date, now).segments.reduce(
+    (sum, segment) => sum + (segment.end - segment.start) / (60 * 1000),
+    0
+  );
+  const targetMinutes = normalizedTargetHours * 60;
+  const remainingMinutes = Math.max(0, targetMinutes - totalMinutes);
+
+  return {
+    targetHours: normalizedTargetHours,
+    totalMinutes,
+    remainingMinutes,
+    remainingPercent: Math.round((remainingMinutes / targetMinutes) * 100),
   };
 };
 

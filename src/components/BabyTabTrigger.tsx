@@ -86,7 +86,7 @@ export function BabyTabTrigger({
       {!selected ? (
         <div
           className="flex shrink-0 items-center gap-1"
-          aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%・活動時間経過${gaugePercents.sleep}%`}
+          aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%・必要睡眠時間の残り${gaugePercents.sleep}%`}
         >
           <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
             <Milk className="h-4 w-4" />

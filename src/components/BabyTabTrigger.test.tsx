@@ -16,7 +16,7 @@ describe("BabyTabTrigger", () => {
     expect(screen.getByTestId("baby-A-diaper-mini-gauge").dataset.percent).toBe("70");
     expect(screen.getByTestId("baby-A-sleep-mini-gauge").dataset.percent).toBe("42");
     expect(
-      screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%・活動時間経過42%`)
+      screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%・必要睡眠時間の残り42%`)
     ).toBeTruthy();
 
     rerender(

@@ -39,6 +39,7 @@ export type BabyProfile = {
   milkGaugeWindowHours?: number;
   milkTargetMlOverride?: number | null;
   activityLimitMinutesOverride?: number | null;
+  sleepTargetHoursOverride?: number | null;
 };
 
 export type AppState = {

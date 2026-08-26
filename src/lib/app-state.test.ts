@@ -59,7 +59,7 @@ describe("stripLegacyCalendarFields", () => {
     expect(migrated.events[0]).not.toHaveProperty("calendarEventId");
     expect(migrated.events[1]).not.toHaveProperty("calendarStatus");
     expect(migrated.profiles.A.activityLimitMinutesOverride).toBeNull();
-    expect(migrated.profiles.A).not.toHaveProperty("sleepTargetHoursOverride");
+    expect(migrated.profiles.A.sleepTargetHoursOverride).toBe(15);
     expect(migrated.sleepManagementEnabled).toBe(true);
   });
 });
@@ -74,6 +74,7 @@ describe("createInitialAppState", () => {
     expect(app.profiles.B).not.toHaveProperty("calendarId");
     expect(app.events).toEqual([]);
     expect(app.profiles.A.activityLimitMinutesOverride).toBeNull();
+    expect(app.profiles.A.sleepTargetHoursOverride).toBeNull();
     expect(app.sleepManagementEnabled).toBe(true);
   });
 });
@@ -111,7 +112,7 @@ describe("shared app state helpers", () => {
     expect(merged.events[0].id).toBe("event-1");
   });
 
-  it("drops the legacy sleep target when loading remote data", () => {
+  it("preserves a stored sleep target when loading remote data", () => {
     const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
     const legacyProfiles = {
       ...app.profiles,
@@ -126,7 +127,7 @@ describe("shared app state helpers", () => {
       app.ui
     );
 
-    expect(merged.profiles.A).not.toHaveProperty("sleepTargetHoursOverride");
+    expect(merged.profiles.A.sleepTargetHoursOverride).toBe(15);
     expect(merged.profiles.A.activityLimitMinutesOverride).toBeNull();
   });
 });

@@ -3,9 +3,11 @@ import {
   analyzeSleepEvents,
   buildActivityGauge,
   buildSleepDaySummary,
+  buildSleepGauge,
   createAutoWakeTimestamp,
   getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
+  getDefaultSleepTargetHours,
   getAutoWakeTimestampForActivity,
 } from "./sleep";
 import { LogEvent } from "@/types";
@@ -121,6 +123,30 @@ describe("sleep helpers", () => {
     cases.forEach(([now, expected]) => {
       expect(getDefaultActivityLimitMinutes(birthDate, new Date(now))).toBe(expected);
     });
+  });
+
+  it("uses age-based daily sleep targets", () => {
+    const birthDate = "2026-04-02";
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-07-31T12:00:00+09:00"))).toBe(15);
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2026-08-02T12:00:00+09:00"))).toBe(13);
+    expect(getDefaultSleepTargetHours(birthDate, new Date("2027-04-02T12:00:00+09:00"))).toBe(12);
+  });
+
+  it("empties the daily sleep gauge and includes an active sleep", () => {
+    const analysis = analyzeSleepEvents(
+      [
+        event("sleep-1", "sleepStart", new Date("2026-08-23T01:00:00+09:00").getTime()),
+        event("wake-1", "wake", new Date("2026-08-23T03:00:00+09:00").getTime()),
+        event("sleep-2", "sleepStart", new Date("2026-08-23T10:00:00+09:00").getTime()),
+      ],
+      "A"
+    );
+    const now = new Date("2026-08-23T11:00:00+09:00");
+    const gauge = buildSleepGauge(analysis, now, now, 6);
+
+    expect(gauge.totalMinutes).toBe(180);
+    expect(gauge.remainingMinutes).toBe(180);
+    expect(gauge.remainingPercent).toBe(50);
   });
 
   it("empties the activity gauge from the latest wake without resetting at midnight", () => {

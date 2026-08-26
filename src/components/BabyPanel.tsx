@@ -29,10 +29,12 @@ import { EventCard } from "./EventCard";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
+  buildSleepGauge,
   buildSleepLogSummary,
   formatSleepDuration,
   getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
+  getDefaultSleepTargetHours,
 } from "@/lib/sleep";
 
 type BabyPanelProps = {
@@ -48,7 +50,7 @@ type BabyPanelProps = {
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
   milkProgress: MilkProgressComparison | null;
-  onOpenHistory: (type: "milk" | "diaper", babyId: BabyId) => void;
+  onOpenHistory: (type: "milk" | "diaper" | "sleep", babyId: BabyId) => void;
   onOpenModal: (
     kind: "milk" | "diaper" | "edit",
     payload: { babyId: BabyId } | { eventId: string }
@@ -238,6 +240,12 @@ export function BabyPanel({
         ? "平均"
         : "目安";
   const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
+  const sleepTargetHours =
+    profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
+  const sleepGauge = buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours);
+  const sleepButtonGaugePercent = sleeping
+    ? sleepGauge.remainingPercent
+    : activityGauge.elapsedPercent;
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -403,7 +411,11 @@ export function BabyPanel({
               note: sleeping ? "手動: 起床" : "手動: 入眠",
             });
           }}
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・活動時間経過${activityGauge.elapsedPercent}%`}
+          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
+            sleeping
+              ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
+              : `活動時間経過${activityGauge.elapsedPercent}%`
+          }`}
         >
           <span
             aria-hidden="true"
@@ -415,14 +427,14 @@ export function BabyPanel({
               sleeping ? "bg-violet-600" : "bg-amber-400"
             }`}
             data-testid="sleep-gauge-fill"
-            style={{ width: `${activityGauge.elapsedPercent}%` }}
+            style={{ width: `${sleepButtonGaugePercent}%` }}
           />
           <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
             <span
               className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
-                  ? "border-violet-400/70 bg-[#6848a6] text-white"
-                  : "border-amber-300/70 bg-[#80652d] text-white"
+                  ? "border-violet-400/70 bg-[#6848a6] text-slate-950"
+                  : "border-amber-300/70 bg-[#80652d] text-slate-950"
               }`}
             >
               <span className="flex items-center gap-1.5 text-base font-bold">
@@ -430,7 +442,7 @@ export function BabyPanel({
                 <span>{sleeping ? "睡眠中" : "起床中"}</span>
               </span>
               <span className="mt-0.5 text-xs font-semibold opacity-80">
-                {sleeping ? "← 起床" : "入眠 →"}
+                長押しで時刻変更
               </span>
             </span>
             <span
@@ -600,8 +612,8 @@ export function BabyPanel({
           <div
             className={`grid w-max min-w-full gap-3 ${
               sleepManagementEnabled
-                ? "grid-cols-[repeat(3,minmax(176px,1fr))]"
-                : "grid-cols-[repeat(2,minmax(176px,1fr))]"
+                ? "grid-cols-[repeat(3,minmax(160px,1fr))]"
+                : "grid-cols-[repeat(2,minmax(160px,1fr))]"
             }`}
           >
           <button
@@ -612,7 +624,7 @@ export function BabyPanel({
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-3">
-                <CardTitle className="text-base font-medium text-muted-foreground">食事合計</CardTitle>
+                <CardTitle className="text-base font-medium text-muted-foreground">食事</CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -695,8 +707,8 @@ export function BabyPanel({
             <button
               type="button"
               className="min-w-0 text-left"
-              onClick={onOpenTimeline}
-              aria-label={`${profile.displayName}の睡眠記録を開く`}
+              onClick={() => onOpenHistory("sleep", babyId)}
+              aria-label={`${profile.displayName}の睡眠履歴を開く`}
             >
               <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
                 <CardHeader className="p-3">

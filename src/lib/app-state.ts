@@ -11,9 +11,7 @@ type LegacyLogEvent = LogEvent & {
   calendarEventId?: string;
 };
 
-type StoredProfile = BabyProfile & {
-  sleepTargetHoursOverride?: number | null;
-};
+type StoredProfile = BabyProfile;
 
 type LegacyProfile = StoredProfile & {
   calendarName?: string;
@@ -48,6 +46,7 @@ const createBaseProfiles = (now: Date) =>
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
       activityLimitMinutesOverride: null,
+      sleepTargetHoursOverride: null,
     },
     B: {
       babyId: "B",
@@ -62,6 +61,7 @@ const createBaseProfiles = (now: Date) =>
       milkGaugeWindowHours: 3,
       milkTargetMlOverride: null,
       activityLimitMinutesOverride: null,
+      sleepTargetHoursOverride: null,
     },
   }) as AppState["profiles"];
 
@@ -83,15 +83,13 @@ export const toSharedAppState = (app: AppState): SharedAppState => ({
   sleepManagementEnabled: app.sleepManagementEnabled,
 });
 
-const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => {
-  const { sleepTargetHoursOverride: _legacySleepTargetHours, ...rest } = profile;
-  return {
-    ...rest,
-    milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
-    milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
-    activityLimitMinutesOverride: rest.activityLimitMinutesOverride ?? null,
-  };
-};
+const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => ({
+  ...profile,
+  milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
+  milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+  activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
+  sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
+});
 
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
@@ -112,7 +110,6 @@ export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
       const {
         calendarId: _calendarId,
         calendarName: _calendarName,
-        sleepTargetHoursOverride: _legacySleepTargetHours,
         ...rest
       } = profile;
       return [
@@ -122,6 +119,7 @@ export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
           milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
           milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
           activityLimitMinutesOverride: rest.activityLimitMinutesOverride ?? null,
+          sleepTargetHoursOverride: rest.sleepTargetHoursOverride ?? null,
         },
       ];
     })
