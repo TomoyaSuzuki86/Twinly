@@ -28,7 +28,7 @@ const MiniGauge = ({
 
   return (
     <span
-      className="relative grid h-7 w-7 shrink-0 place-items-center rounded-full"
+      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full"
       data-testid={testId}
       data-percent={normalizedPercent}
       style={{
@@ -52,7 +52,7 @@ export function BabyTabTrigger({
   const ageDays = daysSince(p.birthDate);
 
   return (
-    <div className="flex min-h-11 w-full min-w-0 items-center gap-2 px-0.5">
+    <div className="flex min-h-12 w-full min-w-0 items-center gap-2 px-0.5">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <div className="relative flex-shrink-0">
           <div
@@ -89,13 +89,13 @@ export function BabyTabTrigger({
           aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%・活動時間経過${gaugePercents.sleep}%`}
         >
           <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
-            <Milk className="h-3 w-3" />
+            <Milk className="h-4 w-4" />
           </MiniGauge>
           <MiniGauge percent={gaugePercents.diaper} color="#f59e0b" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
-            <Droplets className="h-3 w-3" />
+            <Droplets className="h-4 w-4" />
           </MiniGauge>
           <MiniGauge percent={gaugePercents.sleep} color="#8b5cf6" testId={`baby-${p.babyId}-sleep-mini-gauge`}>
-            <Moon className="h-3 w-3" />
+            <Moon className="h-4 w-4" />
           </MiniGauge>
         </div>
       ) : null}

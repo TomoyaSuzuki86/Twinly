@@ -1248,8 +1248,8 @@ export default function App() {
               <TabsList
                 className={`grid h-auto w-full gap-1 p-1 ${
                   selectedBabyTab === "A"
-                    ? "grid-cols-[minmax(110px,0.7fr)_minmax(210px,1.3fr)]"
-                    : "grid-cols-[minmax(210px,1.3fr)_minmax(110px,0.7fr)]"
+                    ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
+                    : "grid-cols-[minmax(180px,1.15fr)_minmax(140px,0.85fr)]"
                 }`}
               >
                 <TabsTrigger value="A" className="h-auto px-2 py-1.5" onDoubleClick={() => startVoiceInputForBabyTab("A")}>
@@ -1271,7 +1271,7 @@ export default function App() {
               </TabsList>
             </div>
             <div
-              className="touch-pan-y"
+              className="touch-auto"
               onTouchStart={handleBabyTabTouchStart}
               onTouchEnd={handleBabyTabTouchEnd}
               onTouchCancel={() => {

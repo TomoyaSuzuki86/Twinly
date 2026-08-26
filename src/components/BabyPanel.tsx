@@ -421,8 +421,8 @@ export function BabyPanel({
             <span
               className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
-                  ? "border-violet-400 bg-violet-600 text-white"
-                  : "border-amber-300 bg-amber-400 text-slate-950"
+                  ? "border-violet-400/70 bg-[#6848a6] text-white"
+                  : "border-amber-300/70 bg-[#80652d] text-white"
               }`}
             >
               <span className="flex items-center gap-1.5 text-base font-bold">
@@ -590,12 +590,18 @@ export function BabyPanel({
         </div>
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
-        <div className="-mx-1 overflow-x-auto px-1 pb-2">
+        <div
+          className="-mx-1 overflow-x-auto px-1 pb-2"
+          data-horizontal-scroll="true"
+          onTouchStart={(event) => event.stopPropagation()}
+          onTouchEnd={(event) => event.stopPropagation()}
+          onTouchCancel={(event) => event.stopPropagation()}
+        >
           <div
             className={`grid w-max min-w-full gap-3 ${
               sleepManagementEnabled
-                ? "grid-cols-[repeat(3,minmax(190px,1fr))]"
-                : "grid-cols-[repeat(2,minmax(190px,1fr))]"
+                ? "grid-cols-[repeat(3,minmax(176px,1fr))]"
+                : "grid-cols-[repeat(2,minmax(176px,1fr))]"
             }`}
           >
           <button
