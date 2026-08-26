@@ -193,7 +193,8 @@ describe("BabyPanel", () => {
     expect(sleepButton.getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("起床中")).toBeTruthy();
     expect(screen.getByText("長押しで時刻変更")).toBeTruthy();
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("bg-[#80652d]");
+    expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
+    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("bg-[#92783d]");
     expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("text-slate-950");
     expect(screen.getByText("起床中").parentElement?.parentElement?.className).not.toContain("m-1.5");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-amber-400");
@@ -249,7 +250,8 @@ describe("BabyPanel", () => {
       />
     );
     expect(screen.getByText("睡眠中")).toBeTruthy();
-    expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("bg-[#6848a6]");
+    expect(screen.getByText("睡眠中").parentElement?.className).toContain("text-lg");
+    expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("bg-[#7658b2]");
     expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("text-slate-950");
     expect(screen.getAllByText("長押しで時刻変更").length).toBeGreaterThan(0);
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-violet-600");

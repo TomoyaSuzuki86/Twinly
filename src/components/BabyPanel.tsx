@@ -433,11 +433,11 @@ export function BabyPanel({
             <span
               className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
-                  ? "border-violet-400/70 bg-[#6848a6] text-slate-950"
-                  : "border-amber-300/70 bg-[#80652d] text-slate-950"
+                  ? "border-violet-400/70 bg-[#7658b2] text-slate-950"
+                  : "border-amber-300/70 bg-[#92783d] text-slate-950"
               }`}
             >
-              <span className="flex items-center gap-1.5 text-base font-bold">
+              <span className="flex items-center gap-1.5 text-lg font-bold">
                 {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
                 <span>{sleeping ? "睡眠中" : "起床中"}</span>
               </span>
