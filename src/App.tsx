@@ -1279,6 +1279,10 @@ export default function App() {
                 </div>
               </header>
 
+              <p className="text-center text-[10px] leading-none text-muted-foreground">
+                ダブルクリック／長押しで音声入力
+              </p>
+
               <TabsList
                 className={`grid h-auto w-full gap-1 p-1 ${
                   selectedBabyTab === "A"
@@ -1321,9 +1325,6 @@ export default function App() {
                 />
                 </TabsTrigger>
               </TabsList>
-              <p className="text-center text-[10px] leading-none text-muted-foreground">
-                ダブルクリック／長押しで音声入力
-              </p>
             </div>
             <div
               className="touch-auto"

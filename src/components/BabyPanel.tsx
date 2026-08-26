@@ -246,6 +246,7 @@ export function BabyPanel({
   const sleepButtonGaugePercent = sleeping
     ? sleepGauge.remainingPercent
     : activityGauge.elapsedPercent;
+  const visibleSleepGaugeWidthPercent = Math.round(sleepButtonGaugePercent * 62) / 100;
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -419,15 +420,18 @@ export function BabyPanel({
         >
           <span
             aria-hidden="true"
-            className="absolute inset-x-0 bottom-0 h-[11px] bg-slate-700"
+            className={`absolute bottom-0 h-[11px] bg-slate-700 ${
+              sleeping ? "left-0 right-[38%]" : "left-[38%] right-0"
+            }`}
           />
           <span
             aria-hidden="true"
-            className={`absolute bottom-0 left-0 h-[11px] transition-[width] duration-500 ${
-              sleeping ? "bg-violet-600" : "bg-amber-400"
+            className={`absolute bottom-0 h-[11px] transition-[width] duration-500 ${
+              sleeping ? "left-0 bg-violet-600" : "left-[38%] bg-amber-400"
             }`}
             data-testid="sleep-gauge-fill"
-            style={{ width: `${sleepButtonGaugePercent}%` }}
+            data-percent={sleepButtonGaugePercent}
+            style={{ width: `${visibleSleepGaugeWidthPercent}%` }}
           />
           <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
             <span
