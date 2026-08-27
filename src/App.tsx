@@ -1297,7 +1297,7 @@ export default function App() {
               >
                 <TabsTrigger
                   value="A"
-                  className="h-auto px-2 py-1.5"
+                  className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("A")}
                   onPointerDown={() => beginVoiceLongPress("A")}
                   onPointerUp={clearVoiceLongPress}
@@ -1315,7 +1315,7 @@ export default function App() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="B"
-                  className="h-auto px-2 py-1.5"
+                  className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("B")}
                   onPointerDown={() => beginVoiceLongPress("B")}
                   onPointerUp={clearVoiceLongPress}

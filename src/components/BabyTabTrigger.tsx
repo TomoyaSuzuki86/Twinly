@@ -29,7 +29,7 @@ const MiniGauge = ({
 
   return (
     <span
-      className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full"
+      className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
       data-testid={testId}
       data-percent={normalizedPercent}
       style={{
@@ -54,8 +54,8 @@ export function BabyTabTrigger({
   const ageDays = daysSince(p.birthDate);
 
   return (
-    <div className="flex min-h-12 w-full min-w-0 items-center gap-2 px-0.5">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+    <div className="flex min-h-14 w-full min-w-0 items-center gap-1 px-0">
+      <div className="flex min-w-0 flex-1 items-center gap-1">
         <div className="relative flex-shrink-0">
           <div
             className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br ${
@@ -87,16 +87,16 @@ export function BabyTabTrigger({
       </div>
       {!selected ? (
         <div
-          className="flex shrink-0 items-center gap-1"
+          className="flex shrink-0 items-center gap-0.5"
           aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%${
             activityGaugeEnabled ? `・活動時間経過${gaugePercents.activity}%` : ""
           }`}
         >
           <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
-            <Milk className="h-[18px] w-[18px]" />
+            <Milk className="h-5 w-5" />
           </MiniGauge>
           <MiniGauge percent={gaugePercents.diaper} color="#f59e0b" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
-            <Droplets className="h-[18px] w-[18px]" />
+            <Droplets className="h-5 w-5" />
           </MiniGauge>
           {activityGaugeEnabled ? (
             <MiniGauge
@@ -104,7 +104,7 @@ export function BabyTabTrigger({
               color="#22c55e"
               testId={`baby-${p.babyId}-activity-mini-gauge`}
             >
-              <Sun className="h-[18px] w-[18px]" />
+              <Sun className="h-5 w-5" />
             </MiniGauge>
           ) : null}
         </div>

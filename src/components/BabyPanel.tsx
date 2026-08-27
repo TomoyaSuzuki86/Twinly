@@ -233,12 +233,6 @@ export function BabyPanel({
     profile.activityLimitMinutesOverride ??
     averageGaugeActivityMinutes ??
     getDefaultActivityLimitMinutes(profile.birthDate, now);
-  const activityLimitSource =
-    profile.activityLimitMinutesOverride !== null && profile.activityLimitMinutesOverride !== undefined
-      ? "設定"
-      : averageGaugeActivityMinutes !== null
-        ? "平均"
-        : "目安";
   const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
   const sleepTargetHours =
     profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
@@ -253,9 +247,9 @@ export function BabyPanel({
   const previousSleepDuration = latestCompletedSleep
     ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
     : "未記録";
-  const activityElapsed = `活動時間 ${
+  const activityElapsed = `活動 ${
     latestCompletedSleep
-      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${activityLimitSource}${formatSleepDuration(activityGauge.limitMinutes)}`
+      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
       : "未記録"
   }`;
   const currentSleepDuration = sleepAnalysis.currentSleepStart

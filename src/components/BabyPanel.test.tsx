@@ -209,7 +209,7 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-detail").className).toContain("text-[15px]");
     expect(screen.getByTestId("sleep-detail").className).toContain("font-bold");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#61A77F]");
-    expect(screen.getByText("活動時間 未記録")).toBeTruthy();
+    expect(screen.getByText("活動 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("0%");
@@ -350,7 +350,7 @@ describe("BabyPanel", () => {
     expect(screen.getByText("3回")).toBeTruthy();
     expect(screen.getByText("平均活動")).toBeTruthy();
     expect(screen.getByText("1時間45分")).toBeTruthy();
-    expect(screen.getByText("活動時間 2時間20分 / 平均1時間45分")).toBeTruthy();
+    expect(screen.getByText("活動 2時間20分 / 1時間45分")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("100");
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     const sleepSummaryButton = screen.getByRole("button", { name: /睡眠履歴を開く/ });
@@ -376,7 +376,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events, latestEvents: events });
 
-    expect(screen.getByText("活動時間 50分 / 目安2時間30分")).toBeTruthy();
+    expect(screen.getByText("活動 50分 / 2時間30分")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("33");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("left-0");
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("33%");
