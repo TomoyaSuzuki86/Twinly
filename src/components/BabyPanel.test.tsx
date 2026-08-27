@@ -177,8 +177,8 @@ describe("BabyPanel", () => {
     expect(diaperButton.className).toContain("select-none");
     expect(mealButton.className).toContain("bg-[#102a36]");
     expect(diaperButton.className).toContain("bg-[#352712]");
-    expect(mealButton.className).toContain("text-white");
-    expect(diaperButton.className).toContain("text-white");
+    expect(mealButton.className).toContain("text-[#d7dde8]");
+    expect(diaperButton.className).toContain("text-[#d7dde8]");
 
     fireEvent.click(mealButton);
     expect(screen.getAllByText("食事").length).toBeGreaterThan(0);
@@ -200,10 +200,10 @@ describe("BabyPanel", () => {
     expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
     expect(sleepButton.className).toContain("rounded-md");
     expect(sleepButton.className).toContain("bg-[#153122]");
-    expect(sleepButton.className).toContain("text-white");
+    expect(sleepButton.className).toContain("text-[#d7dde8]");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
-    expect(screen.getByTestId("sleep-detail").className).toContain("text-base");
+    expect(screen.getByTestId("sleep-detail").className).toContain("text-[15px]");
     expect(screen.getByTestId("sleep-detail").className).toContain("font-bold");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#5b9f72]");
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
