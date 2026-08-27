@@ -15,6 +15,7 @@ import {
   Utensils,
   Moon,
   Sun,
+  Clock,
 } from "lucide-react";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -246,7 +247,6 @@ export function BabyPanel({
   const sleepButtonGaugePercent = sleeping
     ? sleepGauge.remainingPercent
     : activityGauge.elapsedPercent;
-  const visibleSleepGaugeWidthPercent = Math.round(sleepButtonGaugePercent * 62) / 100;
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -254,14 +254,19 @@ export function BabyPanel({
   const previousSleepDuration = latestCompletedSleep
     ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
     : "未記録";
-  const activityElapsed = `活動時間 ${
+  const activityGaugeValue =
     latestCompletedSleep
       ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${activityLimitSource}${formatSleepDuration(activityGauge.limitMinutes)}`
-      : "未記録"
-  }`;
+      : "未記録";
   const currentSleepDuration = sleepAnalysis.currentSleepStart
     ? formatSleepDuration((now.getTime() - sleepAnalysis.currentSleepStart.timestamp) / (60 * 1000))
     : null;
+  const sleepPeriodStartTimestamp = sleeping
+    ? sleepAnalysis.currentSleepStart?.timestamp ?? null
+    : latestCompletedSleep?.end ?? null;
+  const sleepPeriodStartTime = sleepPeriodStartTimestamp
+    ? fmtTime(new Date(sleepPeriodStartTimestamp))
+    : "未記録";
   const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
   const sleepLogSummary = buildSleepLogSummary(sleepAnalysis, selectedLogDate, now);
   const sleepLogTotal = formatSleepDuration(sleepLogSummary.totalMinutes);
@@ -388,79 +393,93 @@ export function BabyPanel({
         </div>
 
         {sleepManagementEnabled ? (
-        <Button
-          role="switch"
-          aria-checked={sleeping}
-          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-full p-0 shadow-sm [-webkit-touch-callout:none] ${
-            sleeping
-              ? "border-violet-500/70 bg-violet-500/20 text-foreground hover:bg-violet-500/25"
-              : "border-emerald-400/70 bg-emerald-400/15 text-foreground hover:bg-emerald-400/20"
-          }`}
-          onPointerDown={startSleepLongPress}
-          onPointerUp={clearSleepLongPressTimer}
-          onPointerLeave={clearSleepLongPressTimer}
-          onPointerCancel={clearSleepLongPressTimer}
-          onContextMenu={(event) => event.preventDefault()}
-          onClick={() => {
-            if (sleepLongPressTriggeredRef.current) {
-              sleepLongPressTriggeredRef.current = false;
-              return;
-            }
-            onAddEvent({
-              babyId,
-              type: sleeping ? "wake" : "sleepStart",
-              note: sleeping ? "手動: 起床" : "手動: 入眠",
-            });
-          }}
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
-            sleeping
-              ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
-              : `活動時間経過${activityGauge.elapsedPercent}%`
-          }`}
-        >
-          <span
-            aria-hidden="true"
-            className={`absolute bottom-0 h-[11px] bg-slate-700 ${
-              sleeping ? "left-0 right-[38%]" : "left-[38%] right-0"
-            }`}
-          />
-          <span
-            aria-hidden="true"
-            className={`absolute bottom-0 h-[11px] transition-[width] duration-500 ${
-              sleeping ? "left-0 bg-violet-600" : "left-[38%] bg-emerald-400"
-            }`}
-            data-testid="sleep-gauge-fill"
-            data-percent={sleepButtonGaugePercent}
-            style={{ width: `${visibleSleepGaugeWidthPercent}%` }}
-          />
-          <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
+        <div className="mt-3 space-y-2 rounded-xl border bg-card/70 p-3 shadow-sm">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={sleeping}
+            className="grid h-14 w-full select-none grid-cols-2 rounded-full border bg-background/80 p-1 text-foreground shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [-webkit-touch-callout:none]"
+            onPointerDown={startSleepLongPress}
+            onPointerUp={clearSleepLongPressTimer}
+            onPointerLeave={clearSleepLongPressTimer}
+            onPointerCancel={clearSleepLongPressTimer}
+            onContextMenu={(event) => event.preventDefault()}
+            onClick={() => {
+              if (sleepLongPressTriggeredRef.current) {
+                sleepLongPressTriggeredRef.current = false;
+                return;
+              }
+              onAddEvent({
+                babyId,
+                type: sleeping ? "wake" : "sleepStart",
+                note: sleeping ? "手動: 起床" : "手動: 入眠",
+              });
+            }}
+            aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定`}
+          >
             <span
-              className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center border px-2 shadow-sm transition-all duration-300 ${
-                sleeping
-                  ? "rounded-l-none rounded-r-full border-l-0 border-violet-400/70 bg-[#7658b2] text-slate-950"
-                  : "rounded-l-full rounded-r-none border-r-0 border-emerald-300/70 bg-[#5b9f72] text-slate-950"
+              className={`flex items-center justify-center gap-2 rounded-full text-lg font-bold transition-colors ${
+                !sleeping ? "bg-[#5b9f72] text-slate-950 shadow-sm" : "text-foreground/65"
               }`}
+              data-testid="awake-state-segment"
             >
-              <span className="flex items-center gap-1.5 text-lg font-bold">
-                {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
-                <span>{sleeping ? "睡眠中" : "起床中"}</span>
-              </span>
-              <span className="mt-0.5 text-xs font-semibold opacity-80">
-                長押しで時刻変更
-              </span>
+              <Sun className="h-5 w-5 shrink-0" />
+              起床中
             </span>
             <span
-              className={`flex min-w-0 flex-1 flex-col justify-center px-3 text-sm font-medium leading-relaxed text-foreground/80 ${
-                sleeping ? "items-start text-left" : "items-end text-right"
+              className={`flex items-center justify-center gap-2 rounded-full text-lg font-bold transition-colors ${
+                sleeping ? "bg-[#7658b2] text-slate-950 shadow-sm" : "text-foreground/65"
               }`}
+              data-testid="sleeping-state-segment"
             >
-              <span className="block">
-                {sleeping ? `睡眠時間 ${currentSleepDuration ?? "0分"}` : activityElapsed}
-              </span>
-              <span className="block">前回睡眠 {previousSleepDuration}</span>
+              <Moon className="h-5 w-5 shrink-0" />
+              睡眠中
             </span>
-          </span>
-        </Button>
+          </button>
+
+          <p className="text-center text-[10px] leading-none text-muted-foreground">長押しで時刻変更</p>
+
+          <div className="rounded-lg border bg-background/45 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold">{sleeping ? "睡眠時間" : "活動時間"}</span>
+              <span className="text-sm font-bold" data-testid="sleep-gauge-value">
+                {sleeping ? currentSleepDuration ?? "0分" : activityGaugeValue}
+              </span>
+            </div>
+            {sleeping ? (
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>必要睡眠時間の残り</span>
+                <span>
+                  {formatSleepDuration(sleepGauge.remainingMinutes)} / {formatSleepDuration(sleepGauge.targetMinutes)}
+                </span>
+              </div>
+            ) : null}
+            <div
+              className="mt-2 h-3 overflow-hidden rounded-full bg-slate-700"
+              role="progressbar"
+              aria-label={sleeping ? "必要睡眠時間の残り" : "活動時間経過"}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={sleepButtonGaugePercent}
+            >
+              <span
+                className={`block h-full rounded-full transition-[width] duration-500 ${
+                  sleeping ? "bg-violet-500" : "bg-emerald-400"
+                }`}
+                data-testid="sleep-gauge-fill"
+                data-percent={sleepButtonGaugePercent}
+                style={{ width: `${sleepButtonGaugePercent}%` }}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                開始 {sleepPeriodStartTime}
+              </span>
+              <span>前回睡眠 {previousSleepDuration}</span>
+            </div>
+          </div>
+        </div>
         ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">

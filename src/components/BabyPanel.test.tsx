@@ -193,13 +193,11 @@ describe("BabyPanel", () => {
     expect(sleepButton.getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("起床中")).toBeTruthy();
     expect(screen.getByText("長押しで時刻変更")).toBeTruthy();
-    expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("bg-[#5b9f72]");
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("rounded-r-none");
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("text-slate-950");
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).not.toContain("m-1.5");
+    expect(screen.getByTestId("awake-state-segment").className).toContain("bg-[#5b9f72]");
+    expect(screen.getByTestId("sleeping-state-segment").className).not.toContain("bg-[#7658b2]");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-emerald-400");
-    expect(screen.getByText("活動時間 未記録")).toBeTruthy();
+    expect(screen.getByText("活動時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-value").textContent).toBe("未記録");
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("0%");
@@ -251,18 +249,17 @@ describe("BabyPanel", () => {
       />
     );
     expect(screen.getByText("睡眠中")).toBeTruthy();
-    expect(screen.getByText("睡眠中").parentElement?.className).toContain("text-lg");
-    expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("bg-[#7658b2]");
-    expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("rounded-l-none");
-    expect(screen.getByText("睡眠中").parentElement?.parentElement?.className).toContain("text-slate-950");
+    expect(screen.getByTestId("sleeping-state-segment").className).toContain("bg-[#7658b2]");
+    expect(screen.getByTestId("awake-state-segment").className).not.toContain("bg-[#5b9f72]");
     expect(screen.getAllByText("長押しで時刻変更").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-violet-600");
+    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-violet-500");
     expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("睡眠時間 10分")).toBeTruthy();
+    expect(screen.getByText("睡眠時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-value").textContent).toBe("10分");
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("89");
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("55.18%");
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("89%");
     fireEvent.click(screen.getByRole("switch", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
@@ -338,9 +335,10 @@ describe("BabyPanel", () => {
     expect(screen.getByText("3回")).toBeTruthy();
     expect(screen.getByText("平均活動")).toBeTruthy();
     expect(screen.getByText("1時間45分")).toBeTruthy();
-    expect(screen.getByText("活動時間 2時間20分 / 平均1時間45分")).toBeTruthy();
+    expect(screen.getByText("活動時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-value").textContent).toBe("2時間20分 / 平均1時間45分");
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("100");
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("62%");
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     const sleepSummaryButton = screen.getByRole("button", { name: /睡眠履歴を開く/ });
     expect(sleepSummaryButton.parentElement?.className).toContain("minmax(160px,1fr)");
     expect(sleepSummaryButton.parentElement?.parentElement?.className).toContain("overflow-x-auto");
@@ -364,10 +362,10 @@ describe("BabyPanel", () => {
 
     renderPanel({ events, latestEvents: events });
 
-    expect(screen.getByText("活動時間 50分 / 目安2時間30分")).toBeTruthy();
+    expect(screen.getByText("活動時間")).toBeTruthy();
+    expect(screen.getByTestId("sleep-gauge-value").textContent).toBe("50分 / 目安2時間30分");
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("33");
-    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("left-[38%]");
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("20.46%");
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("33%");
     expect(screen.queryByText(/前回入眠/)).toBeNull();
   });
 
