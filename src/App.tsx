@@ -1137,7 +1137,9 @@ export default function App() {
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
         diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
-        activity: buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
+        activity: sleepAnalysis.currentSleepStart
+          ? 0
+          : buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
       };
     });
 

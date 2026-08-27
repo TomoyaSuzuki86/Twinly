@@ -435,10 +435,10 @@ export function BabyPanel({
           />
           <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
             <span
-              className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
+              className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
-                  ? "border-violet-400/70 bg-[#7658b2] text-slate-950"
-                  : "border-emerald-300/70 bg-[#5b9f72] text-slate-950"
+                  ? "rounded-l-none rounded-r-full border-l-0 border-violet-400/70 bg-[#7658b2] text-slate-950"
+                  : "rounded-l-full rounded-r-none border-r-0 border-emerald-300/70 bg-[#5b9f72] text-slate-950"
               }`}
             >
               <span className="flex items-center gap-1.5 text-lg font-bold">
