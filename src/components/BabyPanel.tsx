@@ -327,7 +327,7 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#78b8ce] p-0 text-2xl font-bold text-slate-950 hover:bg-[#78b8ce] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-[#102a36] p-0 text-2xl font-bold text-white hover:bg-[#102a36] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
@@ -358,7 +358,7 @@ export function BabyPanel({
           </Button>
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#d9ae62] p-0 text-2xl font-bold text-slate-950 hover:bg-[#d9ae62] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-[#352712] p-0 text-2xl font-bold text-white hover:bg-[#352712] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
@@ -390,10 +390,10 @@ export function BabyPanel({
         <Button
           role="switch"
           aria-checked={sleeping}
-          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 text-slate-950 shadow-sm [-webkit-touch-callout:none] ${
+          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 text-white shadow-sm [-webkit-touch-callout:none] ${
             sleeping
-              ? "border-violet-500/60 bg-[#a995cf] hover:bg-[#a995cf]"
-              : "border-emerald-500/60 bg-[#8fc6a1] hover:bg-[#8fc6a1]"
+              ? "border-violet-500/60 bg-[#251a3b] hover:bg-[#251a3b]"
+              : "border-emerald-500/60 bg-[#153122] hover:bg-[#153122]"
           }`}
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
@@ -428,7 +428,7 @@ export function BabyPanel({
           />
           <span className="relative z-10 flex h-full w-full items-stretch">
             <span
-              className="flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 text-slate-950"
+              className="flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 text-white"
               data-testid="sleep-state-label"
             >
               <span className="flex items-center gap-1.5 text-lg font-bold">
@@ -440,7 +440,7 @@ export function BabyPanel({
               </span>
             </span>
             <span
-              className="flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-base font-bold leading-relaxed text-slate-950"
+              className="flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-base font-bold leading-relaxed text-white"
               data-testid="sleep-detail"
             >
               <span className="block">
