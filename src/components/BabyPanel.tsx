@@ -246,7 +246,6 @@ export function BabyPanel({
   const sleepButtonGaugePercent = sleeping
     ? sleepGauge.remainingPercent
     : activityGauge.elapsedPercent;
-  const visibleSleepGaugeWidthPercent = Math.round(sleepButtonGaugePercent * 62) / 100;
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -328,7 +327,7 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-sky-600/25 p-0 text-2xl font-bold hover:bg-sky-600/30 [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-slate-200/90 p-0 text-2xl font-bold text-slate-950 hover:bg-slate-200 [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
@@ -359,7 +358,7 @@ export function BabyPanel({
           </Button>
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-amber-600/25 p-0 text-2xl font-bold hover:bg-amber-600/30 [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-slate-200/90 p-0 text-2xl font-bold text-slate-950 hover:bg-slate-200 [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
@@ -391,11 +390,7 @@ export function BabyPanel({
         <Button
           role="switch"
           aria-checked={sleeping}
-          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-full p-0 shadow-sm [-webkit-touch-callout:none] ${
-            sleeping
-              ? "border-violet-500/70 bg-violet-500/20 text-foreground hover:bg-violet-500/25"
-              : "border-emerald-400/70 bg-emerald-400/15 text-foreground hover:bg-emerald-400/20"
-          }`}
+          className="relative mt-3 h-20 w-full select-none overflow-hidden rounded-md border-slate-400/60 bg-slate-200/90 p-0 text-slate-950 shadow-sm hover:bg-slate-200 [-webkit-touch-callout:none]"
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
           onPointerLeave={clearSleepLongPressTimer}
@@ -420,26 +415,17 @@ export function BabyPanel({
         >
           <span
             aria-hidden="true"
-            className={`absolute bottom-0 h-[11px] bg-slate-700 ${
-              sleeping ? "left-0 right-[38%]" : "left-[38%] right-0"
-            }`}
-          />
-          <span
-            aria-hidden="true"
-            className={`absolute bottom-0 h-[11px] transition-[width] duration-500 ${
-              sleeping ? "left-0 bg-violet-600" : "left-[38%] bg-emerald-400"
+            className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
+              sleeping ? "bg-[#7658b2]" : "bg-[#5b9f72]"
             }`}
             data-testid="sleep-gauge-fill"
             data-percent={sleepButtonGaugePercent}
-            style={{ width: `${visibleSleepGaugeWidthPercent}%` }}
+            style={{ width: `${sleepButtonGaugePercent}%` }}
           />
-          <span className={`relative z-10 flex h-full w-full items-stretch ${sleeping ? "flex-row-reverse" : ""}`}>
+          <span className="relative z-10 flex h-full w-full items-stretch">
             <span
-              className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center border px-2 shadow-sm transition-all duration-300 ${
-                sleeping
-                  ? "rounded-l-none rounded-r-full border-l-0 border-violet-400/70 bg-[#7658b2] text-slate-950"
-                  : "rounded-l-full rounded-r-none border-r-0 border-emerald-300/70 bg-[#5b9f72] text-slate-950"
-              }`}
+              className="flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 text-slate-950"
+              data-testid="sleep-state-label"
             >
               <span className="flex items-center gap-1.5 text-lg font-bold">
                 {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
@@ -450,9 +436,8 @@ export function BabyPanel({
               </span>
             </span>
             <span
-              className={`flex min-w-0 flex-1 flex-col justify-center px-3 text-sm font-medium leading-relaxed text-foreground/80 ${
-                sleeping ? "items-start text-left" : "items-end text-right"
-              }`}
+              className="flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-sm font-semibold leading-relaxed text-slate-950"
+              data-testid="sleep-detail"
             >
               <span className="block">
                 {sleeping ? `睡眠時間 ${currentSleepDuration ?? "0分"}` : activityElapsed}

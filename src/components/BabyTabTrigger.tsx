@@ -80,7 +80,7 @@ export function BabyTabTrigger({
         </div>
         <div className="min-w-0 text-left">
           <p className="truncate font-semibold leading-none tracking-tight">{p.displayName}</p>
-          {!selected ? (
+          {selected ? (
             <p className="mt-1 truncate text-[11px] leading-none text-muted-foreground">生後{ageDays}日</p>
           ) : null}
         </div>
