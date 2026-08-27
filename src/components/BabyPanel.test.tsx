@@ -175,10 +175,12 @@ describe("BabyPanel", () => {
     const diaperButton = screen.getByRole("button", { name: /おむつを記録/ });
     expect(mealButton.className).toContain("select-none");
     expect(diaperButton.className).toContain("select-none");
-    expect(mealButton.className).toContain("bg-[#102a36]");
-    expect(diaperButton.className).toContain("bg-[#352712]");
-    expect(mealButton.className).toContain("text-[#d7dde8]");
-    expect(diaperButton.className).toContain("text-[#d7dde8]");
+    expect(mealButton.className).toContain("bg-[#103846]");
+    expect(diaperButton.className).toContain("bg-[#493116]");
+    expect(mealButton.className).toContain("text-[#F2FAFD]");
+    expect(diaperButton.className).toContain("text-[#FFF4E5]");
+    expect(screen.getByTestId("milk-gauge-fill").className).toContain("bg-[#1596C8]");
+    expect(screen.getByTestId("diaper-gauge-fill").className).toContain("bg-[#C87512]");
 
     fireEvent.click(mealButton);
     expect(screen.getAllByText("食事").length).toBeGreaterThan(0);
@@ -199,13 +201,14 @@ describe("BabyPanel", () => {
     expect(screen.getByText("長押しで時刻変更")).toBeTruthy();
     expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
     expect(sleepButton.className).toContain("rounded-md");
-    expect(sleepButton.className).toContain("bg-[#153122]");
-    expect(sleepButton.className).toContain("text-[#d7dde8]");
+    expect(sleepButton.className).toContain("bg-[#173C2B]");
+    expect(screen.getByTestId("sleep-state-label").className).toContain("text-[#F1FAF5]");
+    expect(screen.getByTestId("sleep-detail").className).toContain("text-[#C4DDCE]");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-[15px]");
     expect(screen.getByTestId("sleep-detail").className).toContain("font-bold");
-    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#5b9f72]");
+    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#61A77F]");
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();
@@ -261,9 +264,11 @@ describe("BabyPanel", () => {
     expect(screen.getByText("睡眠中").parentElement?.className).toContain("text-lg");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
-    expect(screen.getByRole("switch", { name: /起床を記録/ }).className).toContain("bg-[#251a3b]");
+    expect(screen.getByRole("switch", { name: /起床を記録/ }).className).toContain("bg-[#29233E]");
+    expect(screen.getByTestId("sleep-state-label").className).toContain("text-[#F3F0FF]");
+    expect(screen.getByTestId("sleep-detail").className).toContain("text-[#C9C1E6]");
     expect(screen.getAllByText("長押しで時刻変更").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#7658b2]");
+    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#6755A5]");
     expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText("睡眠時間 10分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();

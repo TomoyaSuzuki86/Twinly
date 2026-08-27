@@ -327,59 +327,59 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#102a36] p-0 text-2xl font-bold text-[#d7dde8] hover:bg-[#102a36] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-[#103846] p-0 text-2xl font-bold text-[#F2FAFD] hover:bg-[#103846] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
-              className="absolute inset-y-0 left-0 bg-sky-600 transition-[width] duration-500"
+              className="absolute inset-y-0 left-0 bg-[#1596C8] transition-[width] duration-500"
               data-testid="milk-gauge-fill"
               style={{ width: `${milkGaugePercent}%` }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center">
+              <div className="flex items-center text-[#F2FAFD]">
                 <Utensils className="mr-3 h-7 w-7" />
                 食事
               </div>
               {milkNeededMl !== null && milkTargetMl !== null ? (
-                <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight">
+                <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight text-[#C2DCE5]">
                   あと {milkNeededMl} ml
-                  <span className="ml-1 font-semibold opacity-85">/ {milkTargetMl} ml</span>
+                  <span className="ml-1 font-semibold">/ {milkTargetMl} ml</span>
                 </span>
               ) : (
-                <span className="mt-0.5 text-[15px] font-bold leading-tight opacity-85">必要量を計算中</span>
+                <span className="mt-0.5 text-[15px] font-bold leading-tight text-[#C2DCE5]">必要量を計算中</span>
               )}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight opacity-85">
+              <span className="whitespace-nowrap text-[15px] font-bold leading-tight text-[#C2DCE5]">
                 前回 {lastMilkTime} / {lastMilkElapsed}
               </span>
             </div>
           </Button>
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#352712] p-0 text-2xl font-bold text-[#d7dde8] hover:bg-[#352712] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden bg-[#493116] p-0 text-2xl font-bold text-[#FFF4E5] hover:bg-[#493116] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
             <span
               aria-hidden="true"
-              className="absolute inset-y-0 left-0 bg-amber-600 transition-[width] duration-500"
+              className="absolute inset-y-0 left-0 bg-[#C87512] transition-[width] duration-500"
               data-testid="diaper-gauge-fill"
               style={{ width: `${diaperGaugePercent}%` }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center">
+              <div className="flex items-center text-[#FFF4E5]">
                 <Droplets className="mr-3 h-7 w-7" />
                 おむつ
               </div>
               {diaperStockManagementEnabled ? (
-              <span className="mt-0.5 text-[15px] font-bold leading-tight opacity-85">
+              <span className="mt-0.5 text-[15px] font-bold leading-tight text-[#E8C59A]">
                 {profile.diaperSize}・残り {remainingDiapers}
               </span>
               ) : null}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight opacity-85">
+              <span className="whitespace-nowrap text-[15px] font-bold leading-tight text-[#E8C59A]">
                 前回 {lastDiaperTime} / {lastDiaperElapsed}
               </span>
             </div>
@@ -390,10 +390,10 @@ export function BabyPanel({
         <Button
           role="switch"
           aria-checked={sleeping}
-          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 text-[#d7dde8] shadow-sm [-webkit-touch-callout:none] ${
+          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 shadow-sm [-webkit-touch-callout:none] ${
             sleeping
-              ? "border-violet-500/60 bg-[#251a3b] hover:bg-[#251a3b]"
-              : "border-emerald-500/60 bg-[#153122] hover:bg-[#153122]"
+              ? "border-violet-500/60 bg-[#29233E] hover:bg-[#29233E]"
+              : "border-emerald-500/60 bg-[#173C2B] hover:bg-[#173C2B]"
           }`}
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
@@ -420,7 +420,7 @@ export function BabyPanel({
           <span
             aria-hidden="true"
             className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
-              sleeping ? "bg-[#7658b2]" : "bg-[#5b9f72]"
+              sleeping ? "bg-[#6755A5]" : "bg-[#61A77F]"
             }`}
             data-testid="sleep-gauge-fill"
             data-percent={sleepButtonGaugePercent}
@@ -428,7 +428,9 @@ export function BabyPanel({
           />
           <span className="relative z-10 flex h-full w-full items-stretch">
             <span
-              className="flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 text-[#d7dde8]"
+              className={`flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 ${
+                sleeping ? "text-[#F3F0FF]" : "text-[#F1FAF5]"
+              }`}
               data-testid="sleep-state-label"
             >
               <span className="flex items-center gap-1.5 text-lg font-bold">
@@ -440,7 +442,9 @@ export function BabyPanel({
               </span>
             </span>
             <span
-              className="flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-[15px] font-bold leading-tight text-[#d7dde8]"
+              className={`flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-[15px] font-bold leading-tight ${
+                sleeping ? "text-[#C9C1E6]" : "text-[#C4DDCE]"
+              }`}
               data-testid="sleep-detail"
             >
               <span className="block">
