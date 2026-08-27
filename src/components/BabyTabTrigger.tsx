@@ -1,14 +1,15 @@
 import { BabyProfile } from "@/types";
 import { daysSince } from "@/lib/utils";
-import { Baby, Droplets, Milk, Moon } from "lucide-react";
+import { Baby, Droplets, Milk, Moon, Sun } from "lucide-react";
 
 type BabyTabTriggerProps = {
   profile: BabyProfile;
   gaugePercents: {
     milk: number;
     diaper: number;
-    sleep: number;
+    activity: number;
   };
+  activityGaugeEnabled?: boolean;
   sleeping?: boolean;
   selected?: boolean;
 };
@@ -28,7 +29,7 @@ const MiniGauge = ({
 
   return (
     <span
-      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full"
+      className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full"
       data-testid={testId}
       data-percent={normalizedPercent}
       style={{
@@ -45,6 +46,7 @@ const MiniGauge = ({
 export function BabyTabTrigger({
   profile,
   gaugePercents,
+  activityGaugeEnabled = true,
   sleeping = false,
   selected = false,
 }: BabyTabTriggerProps) {
@@ -86,17 +88,25 @@ export function BabyTabTrigger({
       {!selected ? (
         <div
           className="flex shrink-0 items-center gap-1"
-          aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%・必要睡眠時間の残り${gaugePercents.sleep}%`}
+          aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%${
+            activityGaugeEnabled ? `・活動時間経過${gaugePercents.activity}%` : ""
+          }`}
         >
           <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
-            <Milk className="h-4 w-4" />
+            <Milk className="h-[18px] w-[18px]" />
           </MiniGauge>
           <MiniGauge percent={gaugePercents.diaper} color="#f59e0b" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
-            <Droplets className="h-4 w-4" />
+            <Droplets className="h-[18px] w-[18px]" />
           </MiniGauge>
-          <MiniGauge percent={gaugePercents.sleep} color="#8b5cf6" testId={`baby-${p.babyId}-sleep-mini-gauge`}>
-            <Moon className="h-4 w-4" />
-          </MiniGauge>
+          {activityGaugeEnabled ? (
+            <MiniGauge
+              percent={gaugePercents.activity}
+              color="#22c55e"
+              testId={`baby-${p.babyId}-activity-mini-gauge`}
+            >
+              <Sun className="h-[18px] w-[18px]" />
+            </MiniGauge>
+          ) : null}
         </div>
       ) : null}
     </div>

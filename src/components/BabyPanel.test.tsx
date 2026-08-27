@@ -194,10 +194,10 @@ describe("BabyPanel", () => {
     expect(screen.getByText("起床中")).toBeTruthy();
     expect(screen.getByText("長押しで時刻変更")).toBeTruthy();
     expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
-    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("bg-[#92783d]");
+    expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("bg-[#5b9f72]");
     expect(screen.getByText("起床中").parentElement?.parentElement?.className).toContain("text-slate-950");
     expect(screen.getByText("起床中").parentElement?.parentElement?.className).not.toContain("m-1.5");
-    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-amber-400");
+    expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-emerald-400");
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();

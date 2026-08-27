@@ -42,9 +42,10 @@ import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
 import {
   analyzeSleepEvents,
   AutoWakeActivityType,
-  buildSleepGauge,
+  buildActivityGauge,
   getAutoWakeTimestampForActivity,
-  getDefaultSleepTargetHours,
+  getAverageActivityMinutes,
+  getDefaultActivityLimitMinutes,
   isBabySleeping,
 } from "./lib/sleep";
 import {
@@ -1112,9 +1113,9 @@ export default function App() {
   );
 
   const tabGaugePercents = useMemo(() => {
-    const result: Record<BabyId, { milk: number; diaper: number; sleep: number }> = {
-      A: { milk: 0, diaper: 0, sleep: 0 },
-      B: { milk: 0, diaper: 0, sleep: 0 },
+    const result: Record<BabyId, { milk: number; diaper: number; activity: number }> = {
+      A: { milk: 0, diaper: 0, activity: 0 },
+      B: { milk: 0, diaper: 0, activity: 0 },
     };
 
     (["A", "B"] as BabyId[]).forEach((babyId) => {
@@ -1129,12 +1130,14 @@ export default function App() {
       });
       const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
       const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
-      const sleepTargetHours =
-        profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
+      const activityLimitMinutes =
+        profile.activityLimitMinutesOverride ??
+        getAverageActivityMinutes(sleepAnalysis, now) ??
+        getDefaultActivityLimitMinutes(profile.birthDate, now);
       result[babyId] = {
         milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
         diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
-        sleep: buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours).remainingPercent,
+        activity: buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
       };
     });
 
@@ -1303,6 +1306,7 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   gaugePercents={tabGaugePercents.A}
+                  activityGaugeEnabled={app.sleepManagementEnabled}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
                   selected={selectedBabyTab === "A"}
                 />
@@ -1320,6 +1324,7 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   gaugePercents={tabGaugePercents.B}
+                  activityGaugeEnabled={app.sleepManagementEnabled}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
                   selected={selectedBabyTab === "B"}
                 />

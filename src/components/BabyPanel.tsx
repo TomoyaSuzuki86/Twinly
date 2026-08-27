@@ -394,7 +394,7 @@ export function BabyPanel({
           className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-full p-0 shadow-sm [-webkit-touch-callout:none] ${
             sleeping
               ? "border-violet-500/70 bg-violet-500/20 text-foreground hover:bg-violet-500/25"
-              : "border-amber-400/70 bg-amber-400/15 text-foreground hover:bg-amber-400/20"
+              : "border-emerald-400/70 bg-emerald-400/15 text-foreground hover:bg-emerald-400/20"
           }`}
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
@@ -427,7 +427,7 @@ export function BabyPanel({
           <span
             aria-hidden="true"
             className={`absolute bottom-0 h-[11px] transition-[width] duration-500 ${
-              sleeping ? "left-0 bg-violet-600" : "left-[38%] bg-amber-400"
+              sleeping ? "left-0 bg-violet-600" : "left-[38%] bg-emerald-400"
             }`}
             data-testid="sleep-gauge-fill"
             data-percent={sleepButtonGaugePercent}
@@ -438,7 +438,7 @@ export function BabyPanel({
               className={`relative z-20 flex h-full w-[38%] shrink-0 flex-col items-center justify-center rounded-full border px-2 shadow-sm transition-all duration-300 ${
                 sleeping
                   ? "border-violet-400/70 bg-[#7658b2] text-slate-950"
-                  : "border-amber-300/70 bg-[#92783d] text-slate-950"
+                  : "border-emerald-300/70 bg-[#5b9f72] text-slate-950"
               }`}
             >
               <span className="flex items-center gap-1.5 text-lg font-bold">
