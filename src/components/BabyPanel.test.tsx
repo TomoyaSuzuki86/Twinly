@@ -175,8 +175,8 @@ describe("BabyPanel", () => {
     const diaperButton = screen.getByRole("button", { name: /おむつを記録/ });
     expect(mealButton.className).toContain("select-none");
     expect(diaperButton.className).toContain("select-none");
-    expect(mealButton.className).toContain("bg-slate-200/90");
-    expect(diaperButton.className).toContain("bg-slate-200/90");
+    expect(mealButton.className).toContain("bg-[#78b8ce]");
+    expect(diaperButton.className).toContain("bg-[#d9ae62]");
     expect(mealButton.className).toContain("text-slate-950");
     expect(diaperButton.className).toContain("text-slate-950");
 
@@ -199,10 +199,12 @@ describe("BabyPanel", () => {
     expect(screen.getByText("長押しで時刻変更")).toBeTruthy();
     expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
     expect(sleepButton.className).toContain("rounded-md");
-    expect(sleepButton.className).toContain("bg-slate-200/90");
+    expect(sleepButton.className).toContain("bg-[#8fc6a1]");
     expect(sleepButton.className).toContain("text-slate-950");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
+    expect(screen.getByTestId("sleep-detail").className).toContain("text-base");
+    expect(screen.getByTestId("sleep-detail").className).toContain("font-bold");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#5b9f72]");
     expect(screen.getByText("活動時間 未記録")).toBeTruthy();
     expect(screen.getByText("前回睡眠 未記録")).toBeTruthy();
@@ -259,6 +261,7 @@ describe("BabyPanel", () => {
     expect(screen.getByText("睡眠中").parentElement?.className).toContain("text-lg");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
+    expect(screen.getByRole("switch", { name: /起床を記録/ }).className).toContain("bg-[#a995cf]");
     expect(screen.getAllByText("長押しで時刻変更").length).toBeGreaterThan(0);
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("bg-[#7658b2]");
     expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");
