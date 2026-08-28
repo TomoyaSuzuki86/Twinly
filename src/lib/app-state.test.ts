@@ -130,4 +130,16 @@ describe("shared app state helpers", () => {
     expect(merged.profiles.A.sleepTargetHoursOverride).toBe(15);
     expect(merged.profiles.A.activityLimitMinutesOverride).toBeNull();
   });
+
+  it("normalizes remote profile key order to A then B", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    const reversedProfiles = { B: app.profiles.B, A: app.profiles.A };
+
+    const merged = mergeSharedAppState(
+      { profiles: reversedProfiles, events: [] },
+      app.ui
+    );
+
+    expect(Object.keys(merged.profiles)).toEqual(["A", "B"]);
+  });
 });

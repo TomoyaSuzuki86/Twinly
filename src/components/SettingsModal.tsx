@@ -56,6 +56,8 @@ type ResetRequest = {
   label: string;
 };
 
+const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
+
 export const shouldDisablePushEnable = (
   pushBusy: boolean,
   pushSubscribed: boolean,
@@ -194,7 +196,7 @@ export function SettingsModal({
               </Button>
             </div>
             <div className="grid gap-6 md:grid-cols-2">
-              {(Object.keys(localProfiles) as BabyId[]).map((babyId) => {
+              {BABY_DISPLAY_ORDER.map((babyId) => {
                 const profile = localProfiles[babyId];
                 const calculatedMilkTarget = buildMilkGauge({
                   events: app.events,

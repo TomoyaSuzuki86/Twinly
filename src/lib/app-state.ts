@@ -91,10 +91,15 @@ const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => ({
   sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
 });
 
+const normalizeProfileOrder = <T extends StoredProfile>(profiles: Record<BabyId, T>) => ({
+  A: profiles.A,
+  B: profiles.B,
+});
+
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
   profiles: Object.fromEntries(
-    (Object.entries(shared.profiles) as [BabyId, StoredProfile][]).map(([babyId, profile]) => [
+    (Object.entries(normalizeProfileOrder(shared.profiles)) as [BabyId, StoredProfile][]).map(([babyId, profile]) => [
       babyId,
       normalizeStoredProfile(profile),
     ])
@@ -106,7 +111,7 @@ export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]):
 
 export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
   const profiles = Object.fromEntries(
-    (Object.entries(app.profiles) as [BabyId, LegacyProfile][]).map(([babyId, profile]) => {
+    (Object.entries(normalizeProfileOrder(app.profiles)) as [BabyId, LegacyProfile][]).map(([babyId, profile]) => {
       const {
         calendarId: _calendarId,
         calendarName: _calendarName,

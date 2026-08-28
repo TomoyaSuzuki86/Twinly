@@ -52,4 +52,23 @@ describe("BabyTabTrigger", () => {
     expect(screen.queryByTestId("baby-A-activity-mini-gauge")).toBeNull();
     expect(screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%`)).toBeTruthy();
   });
+
+  it("uses a thicker ring and fills the center when a gauge reaches 100%", () => {
+    const profile = createInitialAppState(new Date("2026-08-11T08:00:00+09:00")).profiles.A;
+    render(
+      <BabyTabTrigger profile={profile} gaugePercents={{ milk: 100, diaper: 99, activity: 0 }} />
+    );
+
+    const fullGauge = screen.getByTestId("baby-A-milk-mini-gauge");
+    const almostFullGauge = screen.getByTestId("baby-A-diaper-mini-gauge");
+    const fullGaugeCenter = fullGauge.firstElementChild as HTMLElement;
+    const almostFullGaugeCenter = almostFullGauge.firstElementChild as HTMLElement;
+
+    expect(fullGauge.dataset.full).toBe("true");
+    expect(fullGaugeCenter.className).toContain("inset-[5px]");
+    expect(fullGaugeCenter.style.backgroundColor).toBe("rgb(14, 165, 233)");
+    expect((fullGauge.lastElementChild as HTMLElement).className).toContain("text-white");
+    expect(almostFullGauge.dataset.full).toBe("false");
+    expect(almostFullGaugeCenter.style.backgroundColor).toBe("");
+  });
 });

@@ -26,19 +26,26 @@ const MiniGauge = ({
   children: React.ReactNode;
 }) => {
   const normalizedPercent = Math.max(0, Math.min(100, percent));
+  const isFull = normalizedPercent >= 100;
 
   return (
     <span
       className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
       data-testid={testId}
       data-percent={normalizedPercent}
+      data-full={isFull}
       style={{
         background: `conic-gradient(${color} ${normalizedPercent * 3.6}deg, rgb(71 85 105 / 0.45) 0deg)`,
       }}
       aria-hidden="true"
     >
-      <span className="absolute inset-[3px] rounded-full bg-background" />
-      <span className="relative text-foreground/80">{children}</span>
+      <span
+        className="absolute inset-[5px] rounded-full bg-background transition-colors"
+        style={isFull ? { backgroundColor: color } : undefined}
+      />
+      <span className={`relative transition-colors ${isFull ? "text-white" : "text-foreground/80"}`}>
+        {children}
+      </span>
     </span>
   );
 };

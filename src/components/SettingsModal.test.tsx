@@ -147,4 +147,38 @@ describe("SettingsModal", () => {
     expect(shouldDisablePushEnable(true, false, true)).toBe(true);
     expect(shouldDisablePushEnable(false, false, false)).toBe(true);
   });
+
+  it("always renders baby A before baby B even when profile keys arrive in reverse order", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    app.profiles = { B: app.profiles.B, A: app.profiles.A };
+
+    render(
+      <SettingsModal
+        open
+        onOpenChange={vi.fn()}
+        app={app}
+        setApp={vi.fn()}
+        user={null}
+        onSignIn={vi.fn()}
+        onSignOut={vi.fn()}
+        pushPermission="unsupported"
+        pushSubscribed={false}
+        pushBusy={false}
+        webPushConfigured={false}
+        onEnablePushNotifications={vi.fn()}
+        onDisablePushNotifications={vi.fn()}
+        wearPairingToken={null}
+        wearPairingBusy={false}
+        onCreateWearPairingToken={vi.fn()}
+        onExport={vi.fn()}
+        onImport={vi.fn()}
+        onResetAll={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      "赤ちゃん A",
+      "赤ちゃん B",
+    ]);
+  });
 });
