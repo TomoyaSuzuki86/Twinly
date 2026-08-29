@@ -1243,10 +1243,10 @@ export default function App() {
 
   return (
     <AppContainer>
-      <div className="mx-auto max-w-7xl p-2 sm:p-4">
+      <div className="mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
         <main>
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="w-full">
-            <div className="sticky top-2 z-40 space-y-1 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:top-4">
+            <div className="sticky top-0 z-40 space-y-1 bg-background">
               <header
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
