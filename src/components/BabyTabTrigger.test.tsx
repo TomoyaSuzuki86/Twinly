@@ -17,6 +17,7 @@ describe("BabyTabTrigger", () => {
     expect(screen.getByTestId("baby-A-activity-mini-gauge").dataset.percent).toBe("42");
     expect(screen.getByTestId("baby-A-activity-mini-gauge").getAttribute("style")).toContain("rgb(34, 197, 94)");
     expect(screen.getByTestId("baby-A-milk-mini-gauge").className).toContain("h-11");
+    expect(screen.getByText(profile.iconEmoji ?? "").parentElement?.className).toContain("brightness-50");
     expect(screen.queryByText(/生後/)).toBeNull();
     expect(
       screen.getByLabelText(`${profile.displayName}のミルク必要度35%・おむつ交換必要度70%・活動時間経過42%`)
@@ -35,6 +36,7 @@ describe("BabyTabTrigger", () => {
     expect(screen.queryByTestId("baby-A-diaper-mini-gauge")).toBeNull();
     expect(screen.queryByTestId("baby-A-activity-mini-gauge")).toBeNull();
     expect(screen.getByText(/生後\d+日/)).toBeTruthy();
+    expect(screen.getByText(profile.iconEmoji ?? "").parentElement?.className).not.toContain("brightness-50");
   });
 
   it("hides only the activity gauge when sleep management is disabled", () => {

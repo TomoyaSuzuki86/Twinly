@@ -65,9 +65,9 @@ export function BabyTabTrigger({
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <div className="relative flex-shrink-0">
           <div
-            className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br ${
+            className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br transition-[filter] ${
             p.iconGradient ?? "from-violet-500 to-fuchsia-500"
-          }`}
+          } ${selected ? "" : "brightness-50"}`}
           >
             {p.iconEmoji ? (
               <span className="text-2xl">{p.iconEmoji}</span>

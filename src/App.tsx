@@ -1289,7 +1289,7 @@ export default function App() {
               </p>
 
               <TabsList
-                className={`grid h-auto w-full gap-1 p-1 ${
+                className={`grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
                     : "grid-cols-[minmax(180px,1.15fr)_minmax(140px,0.85fr)]"
