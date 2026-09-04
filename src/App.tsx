@@ -1,11 +1,30 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, ChevronLeft, ChevronRight, CircleUser, Settings, Undo2 } from "lucide-react";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut, User } from "firebase/auth";
+import { Baby, Check, ChevronLeft, ChevronRight, Settings, Undo2 } from "lucide-react";
+import {
+  GoogleAuthProvider,
+  isSignInWithEmailLink,
+  onAuthStateChanged,
+  sendSignInLinkToEmail,
+  signInWithCredential,
+  signInWithEmailLink,
+  signInWithPopup,
+  signOut,
+  User,
+} from "firebase/auth";
 import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
-import { AppState, BabyId, DiaperKind, EventType, LogEvent } from "./types";
+import {
+  AppState,
+  BabyId,
+  DiaperKind,
+  EventType,
+  FamilyInfo,
+  FamilyMember,
+  FamilyRelationship,
+  LogEvent,
+} from "./types";
 import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
@@ -23,6 +42,9 @@ import { DailyReportModal } from "./components/DailyReportModal";
 import { EventHistoryModal } from "./components/EventHistoryModal";
 import { SleepHistoryModal } from "./components/SleepHistoryModal";
 import { WeeklyTimelineModal } from "./components/WeeklyTimelineModal";
+import { LoginScreen } from "./components/LoginScreen";
+import { ProfileSetup } from "./components/ProfileSetup";
+import { AccountModal } from "./components/AccountModal";
 import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
 import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
@@ -58,6 +80,14 @@ import {
   subscribeToPushNotifications,
   unsubscribeFromPushNotifications,
 } from "./lib/web-push";
+import {
+  completeFamilyOnboarding,
+  createFamilyInvite,
+  joinFamilyWithInvite,
+  loadFamilySession,
+  subscribeFamilyMembers,
+  updateMemberProfile,
+} from "./lib/family";
 
 declare global {
   interface Window {
@@ -70,11 +100,25 @@ declare global {
 
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 60 * 1000;
+const EMAIL_FOR_SIGN_IN_KEY = "twinly-email-for-sign-in";
+const FAMILY_INVITE_KEY = "twinly-family-invite";
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
 const autoWakeActivityLabels: Record<AutoWakeActivityType, string> = {
   milk: "ミルク",
   solidFood: "離乳食",
   diaper: "おむつ",
+};
+
+const readFamilyInvite = () => {
+  const url = new URL(window.location.href);
+  const inviteFromUrl = url.searchParams.get("invite")?.trim();
+  if (inviteFromUrl) {
+    window.localStorage.setItem(FAMILY_INVITE_KEY, inviteFromUrl);
+    url.searchParams.delete("invite");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    return inviteFromUrl;
+  }
+  return window.localStorage.getItem(FAMILY_INVITE_KEY) ?? "";
 };
 
 function AppContainer({ children }: { children: React.ReactNode }) {
@@ -149,6 +193,10 @@ export default function App() {
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const [now, setNow] = useState(() => new Date());
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [family, setFamily] = useState<FamilyInfo | null>(null);
+  const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [authReady, setAuthReady] = useState(false);
   const [appLoading, setAppLoading] = useState(() => isFirebaseConfigured && Boolean(auth));
   const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
@@ -172,6 +220,7 @@ export default function App() {
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [timelineModalOpen, setTimelineModalOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{
     babyId: BabyId;
     type: "milk" | "diaper" | "sleep";
@@ -193,9 +242,9 @@ export default function App() {
   const syncingPendingEventIdsRef = useRef(new Set<string>());
 
   const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
-    if (!db || !authUser) return false;
+    if (!db || !authUser || !family) return false;
     try {
-      const appRef = doc(db, "users", authUser.uid, "app", "state");
+      const appRef = doc(db, "families", family.id, "app", "state");
       await runTransaction(db, async (transaction) => {
         const snap = await transaction.get(appRef);
         const currentState =
@@ -310,23 +359,6 @@ export default function App() {
     await deleteDoc(doc(db, "users", user.uid, "devices", deviceId));
   };
 
-  const ensureUserDocument = async (user: User) => {
-    if (!db) return;
-    const userRef = doc(db, "users", user.uid);
-    await setDoc(
-      userRef,
-      {
-        uid: user.uid,
-        displayName: user.displayName ?? "",
-        email: user.email ?? "",
-        photoURL: user.photoURL ?? "",
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-    await ensureNotificationSettingsDocument(user);
-  };
-
   useEffect(() => {
     const refreshNow = () => setNow(new Date());
     const handleVisibilityChange = () => {
@@ -365,22 +397,58 @@ export default function App() {
     const init = async () => {
       await ensureAuthPersistence();
       if (cancelled) return;
+      if (isSignInWithEmailLink(auth, window.location.href)) {
+        const email = window.localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) || window.prompt("ログイン用メールアドレスを入力してください");
+        if (email) {
+          try {
+            await signInWithEmailLink(auth, email, window.location.href);
+            window.localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
+            window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+          } catch (error) {
+            console.error("Email link sign-in failed", error);
+            alert("メールリンクでログインできませんでした。もう一度メールを送信してください。");
+          }
+        }
+      }
+      if (cancelled) return;
       unsub = onAuthStateChanged(auth, (user) => {
         setAuthUser(user);
         if (user) {
-          // Keep the skeleton visible until this user's first Firestore
-          // snapshot has replaced the placeholder profiles.
           setAppLoading(true);
-          void ensureUserDocument(user);
+          void loadFamilySession(user)
+            .then((session) => {
+              if (cancelled) return;
+              setFamily(session?.family ?? null);
+              setFamilyMember(session?.member ?? null);
+              if (session) {
+                void ensureNotificationSettingsDocument(user);
+              } else {
+                setFamilyMembers([]);
+                setAppLoading(false);
+              }
+              setAuthReady(true);
+            })
+            .catch((error) => {
+              console.error("Failed to load family session", error);
+              if (cancelled) return;
+              setFamily(null);
+              setFamilyMember(null);
+              setFamilyMembers([]);
+              setAppLoading(false);
+              setAuthReady(true);
+            });
         } else {
           const nextState = createEmptyState();
+          setFamily(null);
+          setFamilyMember(null);
+          setFamilyMembers([]);
           setApp(nextState);
           setActiveDate(nextState.ui.lastViewedDate);
           setNow(new Date());
           lastKnownTodayRef.current = nextState.ui.lastViewedDate;
           setAppLoading(false);
+          setAuthReady(true);
         }
-        setAuthReady(true);
       });
     };
 
@@ -391,6 +459,17 @@ export default function App() {
       unsub();
     };
   }, []);
+
+  useEffect(() => {
+    if (!family) return;
+    return subscribeFamilyMembers(family.id, (members) => {
+      setFamilyMembers(members);
+      if (authUser) {
+        const currentMember = members.find((member) => member.uid === authUser.uid);
+        if (currentMember) setFamilyMember(currentMember);
+      }
+    });
+  }, [authUser, family]);
 
   useEffect(() => {
     if (!isWebPushSupported()) {
@@ -413,9 +492,9 @@ export default function App() {
   }, [authUser, pushPermission]);
 
   useEffect(() => {
-    if (!authUser || !db) return;
+    if (!authUser || !db || !family) return;
     setAppLoading(true);
-    const appRef = doc(db, "users", authUser.uid, "app", "state");
+    const appRef = doc(db, "families", family.id, "app", "state");
     const unsub = onSnapshot(appRef, (snap) => {
       setNow(new Date());
       const data = snap.exists() ? snap.data() : null;
@@ -453,7 +532,7 @@ export default function App() {
     });
 
     return () => unsub();
-  }, [authUser]);
+  }, [authUser, family]);
 
   useEffect(() => {
     updateApp((prev) => {
@@ -502,11 +581,16 @@ export default function App() {
     const timestamp =
       typeof payloadTimestamp === "number" && Number.isFinite(payloadTimestamp) ? payloadTimestamp : Date.now();
 
+    const recordedAt = Date.now();
     return {
       id: uid(),
       babyId,
       type,
       ...payload,
+      createdByUid: authUser?.uid,
+      updatedByUid: authUser?.uid,
+      createdAt: recordedAt,
+      updatedAt: recordedAt,
       timestamp,
     };
   };
@@ -743,20 +827,25 @@ export default function App() {
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
+    const auditPayload = authUser
+      ? { ...payload, updatedByUid: authUser.uid, updatedAt: Date.now() }
+      : payload;
     if (authUser) {
       const pendingEvent = loadPendingEvents(authUser.uid).find((event) => event.id === eventId);
-      if (pendingEvent) storePendingEvents(authUser.uid, [{ ...pendingEvent, ...payload }]);
+      if (pendingEvent) storePendingEvents(authUser.uid, [{ ...pendingEvent, ...auditPayload }]);
     }
     updateApp((prevApp) => {
       const originalEvent = prevApp.events.find((event) => event.id === eventId);
       if (!originalEvent) return prevApp;
-      const updatedEvent = { ...originalEvent, ...payload };
+      const updatedEvent = { ...originalEvent, ...auditPayload };
       const nextEvents = prevApp.events.map((event) => (event.id === eventId ? updatedEvent : event));
       return { ...prevApp, events: nextEvents };
     });
   };
 
-  const handleAddEvent = (eventData: Omit<LogEvent, "id" | "timestamp">) => {
+  const handleAddEvent = (
+    eventData: Omit<LogEvent, "id" | "timestamp" | "createdByUid" | "updatedByUid" | "createdAt" | "updatedAt">
+  ) => {
     const { babyId, type, ...payload } = eventData;
     addEvent(babyId, type, payload);
   };
@@ -883,8 +972,59 @@ export default function App() {
     }
   };
 
+  const handleSendEmailLink = async (email: string) => {
+    if (!auth) return;
+    const continueUrl = new URL(window.location.origin);
+    if (pendingInviteToken) continueUrl.searchParams.set("invite", pendingInviteToken);
+    await sendSignInLinkToEmail(auth, email, {
+      url: continueUrl.toString(),
+      handleCodeInApp: true,
+    });
+    window.localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, email);
+  };
+
+  const handleProfileSetup = async (profile: {
+    nickname: string;
+    relationship: FamilyRelationship;
+  }) => {
+    if (!authUser) return;
+    if (pendingInviteToken) {
+      await joinFamilyWithInvite({ token: pendingInviteToken, ...profile });
+    } else {
+      await completeFamilyOnboarding(profile);
+    }
+
+    const session = await loadFamilySession(authUser);
+    if (!session) throw new Error("Family session was not created");
+    window.localStorage.removeItem(FAMILY_INVITE_KEY);
+    setPendingInviteToken("");
+    setFamily(session.family);
+    setFamilyMember(session.member);
+    setFamilyMembers([session.member]);
+    setAppLoading(true);
+    await ensureNotificationSettingsDocument(authUser);
+  };
+
+  const handleSaveMemberProfile = async (profile: {
+    nickname: string;
+    relationship: FamilyRelationship;
+  }) => {
+    if (!authUser || !family) return;
+    await updateMemberProfile(family.id, authUser.uid, profile);
+    setFamilyMember((current) => current ? { ...current, ...profile } : current);
+  };
+
+  const handleCreateFamilyInvite = async () => {
+    if (!family) throw new Error("Family is not ready");
+    const invite = await createFamilyInvite(family.id);
+    const inviteUrl = new URL(window.location.origin);
+    inviteUrl.searchParams.set("invite", invite.token);
+    return inviteUrl.toString();
+  };
+
   const handleSignOut = async () => {
     if (!auth) return;
+    setAccountModalOpen(false);
     await removePushSubscriptionFromFirestore(authUser);
     await signOut(auth);
   };
@@ -1147,6 +1287,10 @@ export default function App() {
   }, [app.profiles, latestEventsByBaby, now]);
 
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
+  const memberNameByUid = useMemo(
+    () => Object.fromEntries(familyMembers.map((member) => [member.uid, member.nickname])),
+    [familyMembers]
+  );
   useScreenWakeLock(Boolean(authUser));
 
   const defaultVoiceMilkMlByBaby = useMemo(() => {
@@ -1226,17 +1370,20 @@ export default function App() {
   if (!authUser) {
     return (
       <AppContainer>
-        <div className="grid h-screen place-items-center p-4">
-          <div className="w-full max-w-md space-y-6 rounded-xl border bg-card p-8 text-card-foreground">
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold">Twinly</h1>
-              <p className="text-muted-foreground">Sign in with Google to start.</p>
-            </div>
-            <Button className="w-full" onClick={handleSignIn}>
-              Sign in with Google
-            </Button>
-          </div>
-        </div>
+        <LoginScreen onSendEmailLink={handleSendEmailLink} onGoogleSignIn={handleSignIn} />
+      </AppContainer>
+    );
+  }
+
+  if (!family || !familyMember) {
+    return (
+      <AppContainer>
+        <ProfileSetup
+          defaultNickname={authUser.displayName || ""}
+          joiningFamily={Boolean(pendingInviteToken)}
+          onSubmit={handleProfileSetup}
+          onSignOut={handleSignOut}
+        />
       </AppContainer>
     );
   }
@@ -1274,13 +1421,15 @@ export default function App() {
                   <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                     <Settings className="h-5 w-5" />
                   </Button>
-                  {authUser.photoURL ? (
-                    <img src={authUser.photoURL} alt="avatar" className="h-8 w-8 rounded-full" />
-                  ) : (
-                    <div className="grid h-8 w-8 place-items-center rounded-full bg-muted">
-                      <CircleUser className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    className="grid h-8 w-8 place-items-center rounded-full bg-violet-500/20 text-sm font-bold text-violet-200 transition-colors hover:bg-violet-500/30"
+                    onClick={() => setAccountModalOpen(true)}
+                    aria-label="アカウントと家族を開く"
+                    title={familyMember.nickname}
+                  >
+                    {familyMember.nickname.slice(0, 1)}
+                  </button>
                 </div>
               </header>
 
@@ -1368,6 +1517,7 @@ export default function App() {
                   iconGradients.find((gradient) => gradient.value === app.profiles.A.iconGradient)?.dimmedBgColor ??
                   "bg-background"
                 }
+                memberNameByUid={memberNameByUid}
               />
             </TabsContent>
             <TabsContent value="B" className="mt-1">
@@ -1397,6 +1547,7 @@ export default function App() {
                   iconGradients.find((gradient) => gradient.value === app.profiles.B.iconGradient)?.dimmedBgColor ??
                   "bg-background"
                 }
+                memberNameByUid={memberNameByUid}
               />
             </TabsContent>
             </div>
@@ -1481,10 +1632,22 @@ export default function App() {
         onImport={handleImport}
         onResetAll={resetAll}
       />
+      <AccountModal
+        open={accountModalOpen}
+        onOpenChange={setAccountModalOpen}
+        user={authUser}
+        family={family}
+        member={familyMember}
+        members={familyMembers}
+        onSaveProfile={handleSaveMemberProfile}
+        onCreateInvite={handleCreateFamilyInvite}
+        onSignOut={handleSignOut}
+      />
       <EditModal
         open={modal?.kind === "edit"}
         onOpenChange={(open) => !open && setModal(null)}
         event={editTarget}
+        memberNameByUid={memberNameByUid}
         onSave={onSaveEdit}
         onDelete={removeEvent}
       />

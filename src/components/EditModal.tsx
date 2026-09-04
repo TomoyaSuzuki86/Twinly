@@ -22,6 +22,7 @@ type EditModalProps = {
   event: LogEvent | null;
   onSave: (eventId: string, payload: Partial<LogEvent>) => void;
   onDelete: (eventId: string) => void;
+  memberNameByUid?: Record<string, string>;
 };
 
 const diaperKindOptions = [
@@ -29,7 +30,7 @@ const diaperKindOptions = [
   { k: "poop", label: "うんち" },
 ] as const;
 
-export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditModalProps) {
+export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberNameByUid = {} }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
@@ -76,6 +77,14 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete }: EditM
           <DialogTitle>記録の編集</DialogTitle>
           <DialogDescription>記録内容を必要に応じて修正できます。</DialogDescription>
         </DialogHeader>
+        {event.createdByUid ? (
+          <div className="text-xs text-muted-foreground">
+            記録：{memberNameByUid[event.createdByUid] ?? "家族メンバー"}
+            {event.updatedByUid && event.updatedByUid !== event.createdByUid
+              ? ` ／ 更新：${memberNameByUid[event.updatedByUid] ?? "家族メンバー"}`
+              : ""}
+          </div>
+        ) : null}
         <div className="space-y-6 py-4">
           {event.type === "milk" && (
             <div className="space-y-4 rounded-lg border p-4">

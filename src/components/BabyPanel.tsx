@@ -55,7 +55,9 @@ type BabyPanelProps = {
     kind: "milk" | "diaper" | "edit",
     payload: { babyId: BabyId } | { eventId: string }
   ) => void;
-  onAddEvent: (event: Omit<LogEvent, "id" | "timestamp">) => void;
+  onAddEvent: (
+    event: Omit<LogEvent, "id" | "timestamp" | "createdByUid" | "updatedByUid" | "createdAt" | "updatedAt">
+  ) => void;
   onOpenSleepTimeEditor: (payload: {
     babyId: BabyId;
     type: "sleepStart" | "wake";
@@ -66,6 +68,7 @@ type BabyPanelProps = {
   lastWeight: number | null;
   lastHeight: number | null;
   themeDimmedBgColor: string;
+  memberNameByUid?: Record<string, string>;
 };
 
 const adjustNumber = (current: string, amount: number, precision: number) => {
@@ -148,6 +151,7 @@ export function BabyPanel({
   lastWeight,
   lastHeight,
   themeDimmedBgColor,
+  memberNameByUid = {},
 }: BabyPanelProps) {
   const babyId = profile.babyId;
   const [temperature, setTemperature] = useState("36.0");
@@ -738,6 +742,7 @@ export function BabyPanel({
               <EventCard
                 key={event.id}
                 event={event}
+                creatorName={event.createdByUid ? memberNameByUid[event.createdByUid] : undefined}
                 onEdit={() => onOpenModal("edit", { eventId: event.id })}
                 invalidSleepMarker={
                   (event.type === "wake" && sleepAnalysis.invalidWakeIds.has(event.id)) ||

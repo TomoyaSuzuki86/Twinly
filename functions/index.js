@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const webpush = require("web-push");
 const { defineSecret } = require("firebase-functions/params");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onRequest } = require("firebase-functions/v2/https");
+const { HttpsError, onCall, onRequest } = require("firebase-functions/v2/https");
 const { logger, setGlobalOptions } = require("firebase-functions/v2");
 
 admin.initializeApp();
@@ -31,6 +31,202 @@ const formatReminderTime = (timestamp) => tokyoTimeFormatter.format(new Date(tim
 const normalizeWearToken = (token) => String(token || "").replace(/[^a-z0-9]/gi, "").toUpperCase();
 const hashWearToken = (token) => crypto.createHash("sha256").update(normalizeWearToken(token)).digest("hex");
 const createEventId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+const inviteLifetimeMs = 24 * 60 * 60 * 1000;
+const validRelationships = new Set(["father", "mother", "grandfather", "grandmother", "other"]);
+
+const requireAuthUid = (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "ログインが必要です");
+  return uid;
+};
+
+const validateFamilyProfile = (data) => {
+  const nickname = String(data?.nickname || "").trim().slice(0, 20);
+  const relationship = String(data?.relationship || "");
+  if (!nickname) throw new HttpsError("invalid-argument", "ニックネームを入力してください");
+  if (!validRelationships.has(relationship)) throw new HttpsError("invalid-argument", "続柄を選択してください");
+  return { nickname, relationship };
+};
+
+const hashFamilyInvite = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
+
+const addLegacyEventAttribution = (appState, uid) => ({
+  ...appState,
+  events: Array.isArray(appState?.events)
+    ? appState.events.map((event) => ({
+        ...event,
+        createdByUid: event.createdByUid || uid,
+        updatedByUid: event.updatedByUid || event.createdByUid || uid,
+        createdAt: event.createdAt || event.timestamp || Date.now(),
+        updatedAt: event.updatedAt || event.createdAt || event.timestamp || Date.now(),
+      }))
+    : [],
+});
+
+const getAppRefForUid = async (uid) => {
+  const userSnap = await db.collection("users").doc(uid).get();
+  const familyId = userSnap.data()?.activeFamilyId;
+  return familyId
+    ? db.collection("families").doc(familyId).collection("app").doc("state")
+    : db.collection("users").doc(uid).collection("app").doc("state");
+};
+
+exports.completeFamilyOnboarding = onCall(async (request) => {
+  const uid = requireAuthUid(request);
+  const profile = validateFamilyProfile(request.data);
+  const userRef = db.collection("users").doc(uid);
+  const legacyAppRef = userRef.collection("app").doc("state");
+
+  const familyId = await db.runTransaction(async (transaction) => {
+    const [userSnap, legacyAppSnap] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(legacyAppRef),
+    ]);
+    const existingFamilyId = userSnap.data()?.activeFamilyId;
+    const nextFamilyId = typeof existingFamilyId === "string" && existingFamilyId ? existingFamilyId : uid;
+    const familyRef = db.collection("families").doc(nextFamilyId);
+    const memberRef = familyRef.collection("members").doc(uid);
+    const familyAppRef = familyRef.collection("app").doc("state");
+    const [familySnap, memberSnap, familyAppSnap] = await Promise.all([
+      transaction.get(familyRef),
+      transaction.get(memberRef),
+      transaction.get(familyAppRef),
+    ]);
+
+    if (familySnap.exists && existingFamilyId && !memberSnap.exists) {
+      throw new HttpsError("permission-denied", "この家族のメンバーではありません");
+    }
+
+    transaction.set(
+      userRef,
+      {
+        uid,
+        activeFamilyId: nextFamilyId,
+        displayName: admin.firestore.FieldValue.delete(),
+        email: admin.firestore.FieldValue.delete(),
+        photoURL: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    if (!familySnap.exists) {
+      transaction.set(familyRef, {
+        name: "わが家",
+        ownerUid: uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    transaction.set(
+      memberRef,
+      {
+        uid,
+        ...profile,
+        role: memberSnap.data()?.role === "member" ? "member" : "owner",
+        status: "active",
+        joinedAt: memberSnap.data()?.joinedAt || admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    if (!familyAppSnap.exists && legacyAppSnap.exists && legacyAppSnap.data()?.app) {
+      transaction.set(familyAppRef, {
+        app: addLegacyEventAttribution(legacyAppSnap.data().app, uid),
+        migratedFromUid: uid,
+        migratedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: uid,
+      });
+    }
+    return nextFamilyId;
+  });
+
+  return { familyId };
+});
+
+exports.createFamilyInvite = onCall(async (request) => {
+  const uid = requireAuthUid(request);
+  const familyId = String(request.data?.familyId || "").trim();
+  if (!familyId) throw new HttpsError("invalid-argument", "家族IDが必要です");
+
+  const memberSnap = await db.collection("families").doc(familyId).collection("members").doc(uid).get();
+  if (!memberSnap.exists || memberSnap.data()?.status !== "active" || memberSnap.data()?.role !== "owner") {
+    throw new HttpsError("permission-denied", "管理者だけが家族を招待できます");
+  }
+
+  const token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = hashFamilyInvite(token);
+  const expiresAt = Date.now() + inviteLifetimeMs;
+  await db.collection("familyInvites").doc(tokenHash).set({
+    familyId,
+    createdByUid: uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: admin.firestore.Timestamp.fromMillis(expiresAt),
+    usedAt: null,
+    usedByUid: null,
+  });
+  return { token, expiresAt };
+});
+
+exports.joinFamily = onCall(async (request) => {
+  const uid = requireAuthUid(request);
+  const profile = validateFamilyProfile(request.data);
+  const token = String(request.data?.token || "").trim();
+  if (token.length < 32) throw new HttpsError("invalid-argument", "招待リンクが正しくありません");
+
+  const inviteRef = db.collection("familyInvites").doc(hashFamilyInvite(token));
+  const userRef = db.collection("users").doc(uid);
+  const familyId = await db.runTransaction(async (transaction) => {
+    const [inviteSnap, userSnap] = await Promise.all([transaction.get(inviteRef), transaction.get(userRef)]);
+    if (!inviteSnap.exists) throw new HttpsError("not-found", "招待リンクが見つかりません");
+    const invite = inviteSnap.data();
+    if (invite.usedAt) throw new HttpsError("failed-precondition", "この招待リンクは使用済みです");
+    if (!invite.expiresAt || invite.expiresAt.toMillis() < Date.now()) {
+      throw new HttpsError("deadline-exceeded", "招待リンクの期限が切れています");
+    }
+    if (userSnap.data()?.activeFamilyId && userSnap.data().activeFamilyId !== invite.familyId) {
+      throw new HttpsError("failed-precondition", "すでに別の家族へ参加しています");
+    }
+
+    const familyRef = db.collection("families").doc(invite.familyId);
+    const memberRef = familyRef.collection("members").doc(uid);
+    const [familySnap, memberSnap] = await Promise.all([
+      transaction.get(familyRef),
+      transaction.get(memberRef),
+    ]);
+    if (!familySnap.exists) throw new HttpsError("not-found", "招待先の家族が見つかりません");
+    if (memberSnap.exists && memberSnap.data()?.status === "active") {
+      throw new HttpsError("already-exists", "すでにこの家族へ参加しています");
+    }
+    transaction.set(
+      userRef,
+      {
+        uid,
+        activeFamilyId: invite.familyId,
+        displayName: admin.firestore.FieldValue.delete(),
+        email: admin.firestore.FieldValue.delete(),
+        photoURL: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    transaction.set(memberRef, {
+      uid,
+      ...profile,
+      role: "member",
+      status: "active",
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.update(inviteRef, {
+      usedAt: admin.firestore.FieldValue.serverTimestamp(),
+      usedByUid: uid,
+    });
+    return invite.familyId;
+  });
+
+  return { familyId };
+});
 
 const toAsciiDigits = (value) => String(value).replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xff10));
 const normalizeKnownSpeechText = (text) =>
@@ -287,7 +483,7 @@ const parseVoiceTextWithGemini = async ({ text, profiles, defaultMilkMlByBaby = 
 const expandParsedBabyIds = (babyId) => (babyId === "both" ? ["A", "B"] : [babyId]);
 
 const appendWearEvent = async ({ uid, transcript, parsed }) => {
-  const appRef = db.collection("users").doc(uid).collection("app").doc("state");
+  const appRef = await getAppRefForUid(uid);
   const parsedTimestamp = parsed.timestamp;
   const timestamp =
     typeof parsedTimestamp === "number" && Number.isFinite(parsedTimestamp) ? parsedTimestamp : Date.now();
@@ -298,6 +494,10 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
       type: parsed.type,
       timestamp,
       note: `wear: ${transcript}`,
+      createdByUid: uid,
+      updatedByUid: uid,
+      createdAt: timestamp,
+      updatedAt: timestamp,
     };
 
     if (parsed.type === "milk") {
@@ -354,7 +554,7 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
 };
 
 const deleteWearEvents = async ({ uid, eventIds }) => {
-  const appRef = db.collection("users").doc(uid).collection("app").doc("state");
+  const appRef = await getAppRefForUid(uid);
   const targetIds = new Set(eventIds);
 
   let deletedCount = 0;
@@ -574,8 +774,11 @@ exports.sendMilkReminderNotifications = onSchedule(
 
   for (const userDoc of usersSnapshot.docs) {
     const uid = userDoc.id;
+    const familyId = userDoc.data()?.activeFamilyId;
     const [appSnap, settingsSnap, devicesSnap] = await Promise.all([
-      db.collection("users").doc(uid).collection("app").doc("state").get(),
+      familyId
+        ? db.collection("families").doc(familyId).collection("app").doc("state").get()
+        : db.collection("users").doc(uid).collection("app").doc("state").get(),
       db.collection("users").doc(uid).collection("settings").doc("notifications").get(),
       db.collection("users").doc(uid).collection("devices").where("notificationsEnabled", "==", true).get(),
     ]);
@@ -673,7 +876,7 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
     }
 
     const uid = tokenSnap.data().uid;
-    const appRef = db.collection("users").doc(uid).collection("app").doc("state");
+    const appRef = await getAppRefForUid(uid);
     const appSnap = await appRef.get();
     const appState = appSnap.exists ? appSnap.data()?.app : null;
     const profiles = appState?.profiles || {};
@@ -761,7 +964,7 @@ exports.latestMilkElapsedFromWear = onRequest({ cors: true }, async (req, res) =
     }
 
     const uid = tokenSnap.data().uid;
-    const appSnap = await db.collection("users").doc(uid).collection("app").doc("state").get();
+    const appSnap = await (await getAppRefForUid(uid)).get();
     const appState = appSnap.exists ? appSnap.data()?.app : null;
     const elapsedByBaby = buildLatestMilkElapsedByBaby(appState);
     const text = formatWearMilkElapsedText(elapsedByBaby);

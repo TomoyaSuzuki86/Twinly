@@ -2,6 +2,7 @@ import { FirebaseApp, getApps, initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { browserLocalPersistence, getAuth, indexedDBLocalPersistence, setPersistence } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -44,6 +45,7 @@ export const db = app
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     })
   : null;
+export const functions = app ? getFunctions(app, "asia-northeast1") : null;
 export const webPushPublicKey =
   (import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined) ||
   "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";

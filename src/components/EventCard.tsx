@@ -52,11 +52,13 @@ export function EventCard({
   onEdit,
   invalidSleepMarker = false,
   sleepDurationMinutes,
+  creatorName,
 }: {
   event: LogEvent;
   onEdit: (event: LogEvent) => void;
   invalidSleepMarker?: boolean;
   sleepDurationMinutes?: number;
+  creatorName?: string;
 }) {
   const time = fmtTime(new Date(event.timestamp));
   const title =
@@ -126,7 +128,17 @@ export function EventCard({
             ) : null}
           </div>
         </div>
-        <div className="flex-shrink-0 py-0.5 text-right text-sm text-muted-foreground">{time}</div>
+        <div className="flex-shrink-0 py-0.5 text-right text-sm text-muted-foreground">
+          <div>{time}</div>
+          {creatorName ? (
+            <div className="mt-1 flex items-center justify-end gap-1 text-[11px]" title={`記録：${creatorName}`}>
+              <span className="grid h-4 w-4 place-items-center rounded-full bg-violet-500/20 text-[9px] font-bold text-violet-200">
+                {creatorName.slice(0, 1)}
+              </span>
+              <span className="max-w-16 truncate">{creatorName}</span>
+            </div>
+          ) : null}
+        </div>
       </Card>
     </button>
   );

@@ -2,16 +2,27 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isSignedIn() {
       return request.auth != null;
     }
 
+    function isFamilyMember(familyId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.status == "active";
+    }
+
+    function isFamilyOwner(familyId) {
+      return isFamilyMember(familyId)
+        && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == "owner";
+    }
+
     match /users/{uid} {
-      allow read, write: if isSignedIn() && request.auth.uid == uid;
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
 
       match /app/{docId} {
-        allow read, write: if isSignedIn() && request.auth.uid == uid;
+        allow read, write: if false;
       }
 
       match /settings/{docId} {
@@ -21,6 +32,30 @@ service cloud.firestore {
       match /devices/{deviceId} {
         allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
+    }
+
+    match /families/{familyId} {
+      allow read: if isFamilyMember(familyId);
+      allow create, delete: if false;
+      allow update: if isFamilyOwner(familyId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "updatedAt"]);
+
+      match /members/{uid} {
+        allow read: if isFamilyMember(familyId);
+        allow create, delete: if false;
+        allow update: if isFamilyMember(familyId)
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["nickname", "relationship", "updatedAt"]);
+      }
+
+      match /app/{docId} {
+        allow read, write: if isFamilyMember(familyId);
+      }
+    }
+
+    match /familyInvites/{tokenHash} {
+      allow read, write: if false;
     }
 
     match /wearPairingTokens/{tokenHash} {

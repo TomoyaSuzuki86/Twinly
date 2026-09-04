@@ -178,7 +178,7 @@ export function SettingsModal({
         <Tabs defaultValue="profile" className="py-4">
           <TabsList className="flex flex-wrap justify-between">
             <TabsTrigger value="profile">プロフィール</TabsTrigger>
-            <TabsTrigger value="cloud">クラウド連携</TabsTrigger>
+            <TabsTrigger value="cloud">通知・端末</TabsTrigger>
             <TabsTrigger value="data">データ管理</TabsTrigger>
             <TabsTrigger value="diaper-stock">おむつ在庫</TabsTrigger>
           </TabsList>
@@ -437,22 +437,12 @@ export function SettingsModal({
           </TabsContent>
           <TabsContent value="cloud">
             <div className="space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">クラウド連携</h3>
+              <h3 className="font-semibold">通知・端末連携</h3>
               <p className="text-sm text-muted-foreground">
-                Google アカウントでログインすると、複数端末でも同じ記録を共有できます。
+                この端末の通知とPixel Watch連携を管理します。アカウントと家族の設定は右上のアイコンから変更できます。
               </p>
               {user ? (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    {user.photoURL ? <img src={user.photoURL} alt="avatar" className="h-10 w-10 rounded-full" /> : null}
-                    <div>
-                      <p className="font-semibold">{user.displayName}</p>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" onClick={onSignOut}>
-                    サインアウト
-                  </Button>
                   <div className="space-y-3 rounded-lg border p-4">
                     <h4 className="font-semibold">プッシュ通知</h4>
                     {!webPushConfigured ? (
@@ -510,7 +500,7 @@ export function SettingsModal({
                   </div>
                 </div>
               ) : (
-                <Button onClick={onSignIn}>Google でサインイン</Button>
+                <Button onClick={onSignIn}>ログイン画面を開く</Button>
               )}
             </div>
           </TabsContent>

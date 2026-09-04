@@ -12,6 +12,23 @@ export type EventType =
 export type DiaperKind = "pee" | "poop" | "mix";
 export type MilkMethod = "bottle" | "breast";
 
+export type FamilyRelationship = "father" | "mother" | "grandfather" | "grandmother" | "other";
+export type FamilyRole = "owner" | "member";
+
+export type FamilyMember = {
+  uid: string;
+  nickname: string;
+  relationship: FamilyRelationship;
+  role: FamilyRole;
+  status: "active" | "inactive";
+};
+
+export type FamilyInfo = {
+  id: string;
+  name: string;
+  ownerUid: string;
+};
+
 export type LogEvent = {
   id: string;
   babyId: BabyId;
@@ -24,6 +41,10 @@ export type LogEvent = {
   weight?: number;
   height?: number;
   note?: string;
+  createdByUid?: string;
+  updatedByUid?: string;
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type BabyProfile = {

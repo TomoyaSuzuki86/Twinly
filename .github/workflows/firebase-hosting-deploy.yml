@@ -28,6 +28,7 @@ jobs:
       VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
       VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
       VITE_WEB_PUSH_PUBLIC_KEY: ${{ secrets.VITE_WEB_PUSH_PUBLIC_KEY }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,8 +56,11 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
-      - name: Deploy Firebase Functions
-        run: npx --yes firebase-tools@latest deploy --only functions:sendMilkReminderNotifications --project twinly-prod --non-interactive
+      - name: Deploy Firebase Functions and Firestore rules
+        run: >-
+          npx --yes firebase-tools@latest deploy
+          --only functions:sendMilkReminderNotifications,functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,firestore:rules
+          --project twinly-prod --non-interactive
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
