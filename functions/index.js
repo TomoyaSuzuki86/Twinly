@@ -60,19 +60,6 @@ const buildLegacyFamilyProfile = (request, userData = {}) => {
 
 const hashFamilyInvite = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
 
-const addLegacyEventAttribution = (appState, uid) => ({
-  ...appState,
-  events: Array.isArray(appState?.events)
-    ? appState.events.map((event) => ({
-        ...event,
-        createdByUid: event.createdByUid || uid,
-        updatedByUid: event.updatedByUid || event.createdByUid || uid,
-        createdAt: event.createdAt || event.timestamp || Date.now(),
-        updatedAt: event.updatedAt || event.createdAt || event.timestamp || Date.now(),
-      }))
-    : [],
-});
-
 const getAppRefForUid = async (uid) => {
   const userSnap = await db.collection("users").doc(uid).get();
   const familyId = userSnap.data()?.activeFamilyId;
@@ -87,34 +74,40 @@ exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request)
   const requestedProfile = migrateLegacyOnly ? null : validateFamilyProfile(request.data);
   const userRef = db.collection("users").doc(uid);
   const legacyAppRef = userRef.collection("app").doc("state");
+  const [existingUserSnap, legacyAppSnap] = await Promise.all([
+    userRef.get(),
+    legacyAppRef.get(),
+  ]);
+  const existingFamilyId = existingUserSnap.data()?.activeFamilyId;
 
-  const familyId = await db.runTransaction(async (transaction) => {
-    const [userSnap, legacyAppSnap] = await Promise.all([
-      transaction.get(userRef),
-      transaction.get(legacyAppRef),
-    ]);
-    const existingFamilyId = userSnap.data()?.activeFamilyId;
-    if (migrateLegacyOnly && typeof existingFamilyId === "string" && existingFamilyId) {
-      return existingFamilyId;
-    }
-    if (migrateLegacyOnly && (!legacyAppSnap.exists || !legacyAppSnap.data()?.app)) {
-      return null;
-    }
+  // A brand-new account should still complete the profile screen. Existing users,
+  // including accounts whose old app document is missing or unusually large, are
+  // repaired automatically so data-copy trouble can never block sign-in again.
+  if (migrateLegacyOnly && !existingUserSnap.exists && !legacyAppSnap.exists) {
+    return { familyId: null };
+  }
+  const nextFamilyId = typeof existingFamilyId === "string" && existingFamilyId ? existingFamilyId : uid;
+  const familyRef = db.collection("families").doc(nextFamilyId);
+  const memberRef = familyRef.collection("members").doc(uid);
+  const familyAppRef = familyRef.collection("app").doc("state");
 
-    const profile = requestedProfile || buildLegacyFamilyProfile(request, userSnap.data());
-    const nextFamilyId = typeof existingFamilyId === "string" && existingFamilyId ? existingFamilyId : uid;
-    const familyRef = db.collection("families").doc(nextFamilyId);
-    const memberRef = familyRef.collection("members").doc(uid);
-    const familyAppRef = familyRef.collection("app").doc("state");
-    const [familySnap, memberSnap, familyAppSnap] = await Promise.all([
+  await db.runTransaction(async (transaction) => {
+    const [familySnap, memberSnap] = await Promise.all([
       transaction.get(familyRef),
       transaction.get(memberRef),
-      transaction.get(familyAppRef),
     ]);
 
     if (familySnap.exists && existingFamilyId && !memberSnap.exists) {
       throw new HttpsError("permission-denied", "この家族のメンバーではありません");
     }
+
+    const existingMember = memberSnap.data() || {};
+    const profile = requestedProfile || (memberSnap.exists
+      ? {
+          nickname: String(existingMember.nickname || "メンバー"),
+          relationship: validRelationships.has(existingMember.relationship) ? existingMember.relationship : "other",
+        }
+      : buildLegacyFamilyProfile(request, existingUserSnap.data()));
 
     transaction.set(
       userRef,
@@ -141,27 +134,29 @@ exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request)
       {
         uid,
         ...profile,
-        profileCompleted: !migrateLegacyOnly,
-        role: memberSnap.data()?.role === "member" ? "member" : "owner",
+        profileCompleted: requestedProfile ? true : existingMember.profileCompleted === true,
+        role: existingMember.role === "member" ? "member" : "owner",
         status: "active",
-        joinedAt: memberSnap.data()?.joinedAt || admin.firestore.FieldValue.serverTimestamp(),
+        joinedAt: existingMember.joinedAt || admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
-    if (!familyAppSnap.exists && legacyAppSnap.exists && legacyAppSnap.data()?.app) {
-      transaction.set(familyAppRef, {
-        app: addLegacyEventAttribution(legacyAppSnap.data().app, uid),
-        migratedFromUid: uid,
-        migratedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: uid,
-      });
-    }
-    return nextFamilyId;
   });
 
-  return { familyId };
+  // Preserve the legacy document byte-for-byte. This happens only after the
+  // family/member transaction succeeds; a large document can no longer roll back
+  // the account repair and trap the user on the registration screen.
+  if (legacyAppSnap.exists) {
+    try {
+      const familyAppSnap = await familyAppRef.get();
+      if (!familyAppSnap.exists) await familyAppRef.set(legacyAppSnap.data());
+    } catch (error) {
+      logger.error("Legacy app copy failed after family onboarding", { uid, familyId: nextFamilyId, error });
+    }
+  }
+
+  return { familyId: nextFamilyId };
 });
 
 exports.createFamilyInvite = onCall(publicCallableOptions, async (request) => {
