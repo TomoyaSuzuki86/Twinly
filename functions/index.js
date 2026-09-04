@@ -33,6 +33,7 @@ const hashWearToken = (token) => crypto.createHash("sha256").update(normalizeWea
 const createEventId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 const inviteLifetimeMs = 24 * 60 * 60 * 1000;
 const validRelationships = new Set(["father", "mother", "grandfather", "grandmother", "other"]);
+const publicCallableOptions = { invoker: "public" };
 
 const requireAuthUid = (request) => {
   const uid = request.auth?.uid;
@@ -71,7 +72,7 @@ const getAppRefForUid = async (uid) => {
     : db.collection("users").doc(uid).collection("app").doc("state");
 };
 
-exports.completeFamilyOnboarding = onCall(async (request) => {
+exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request) => {
   const uid = requireAuthUid(request);
   const profile = validateFamilyProfile(request.data);
   const userRef = db.collection("users").doc(uid);
@@ -144,7 +145,7 @@ exports.completeFamilyOnboarding = onCall(async (request) => {
   return { familyId };
 });
 
-exports.createFamilyInvite = onCall(async (request) => {
+exports.createFamilyInvite = onCall(publicCallableOptions, async (request) => {
   const uid = requireAuthUid(request);
   const familyId = String(request.data?.familyId || "").trim();
   if (!familyId) throw new HttpsError("invalid-argument", "家族IDが必要です");
@@ -168,7 +169,7 @@ exports.createFamilyInvite = onCall(async (request) => {
   return { token, expiresAt };
 });
 
-exports.joinFamily = onCall(async (request) => {
+exports.joinFamily = onCall(publicCallableOptions, async (request) => {
   const uid = requireAuthUid(request);
   const profile = validateFamilyProfile(request.data);
   const token = String(request.data?.token || "").trim();
