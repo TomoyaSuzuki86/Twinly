@@ -62,6 +62,26 @@ jobs:
           --only functions:sendMilkReminderNotifications,functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,firestore:rules
           --project twinly-prod --non-interactive
 
+      - name: Allow authenticated app calls to reach family functions
+        run: |
+          for service in completefamilyonboarding createfamilyinvite joinfamily; do
+            gcloud run services add-iam-policy-binding "$service" \
+              --project twinly-prod \
+              --region asia-northeast1 \
+              --member="allUsers" \
+              --role="roles/run.invoker" \
+              --quiet
+          done
+
+      - name: Verify family functions are reachable
+        run: |
+          status="$(curl --silent --show-error --output /tmp/complete-family-onboarding.json --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '{"data":{"nickname":"probe","relationship":"father"}}' \
+            'https://asia-northeast1-twinly-prod.cloudfunctions.net/completeFamilyOnboarding')"
+          test "$status" = "401"
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
