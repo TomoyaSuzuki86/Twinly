@@ -21,6 +21,7 @@ export type FamilyMember = {
   relationship: FamilyRelationship;
   role: FamilyRole;
   status: "active" | "inactive";
+  profileCompleted?: boolean;
 };
 
 export type FamilyInfo = {

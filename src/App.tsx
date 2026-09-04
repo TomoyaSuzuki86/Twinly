@@ -421,6 +421,7 @@ export default function App() {
               setFamily(session?.family ?? null);
               setFamilyMember(session?.member ?? null);
               if (session) {
+                if (session.member.profileCompleted === false) setAccountModalOpen(true);
                 void ensureNotificationSettingsDocument(user);
               } else {
                 setFamilyMembers([]);
@@ -1011,7 +1012,7 @@ export default function App() {
   }) => {
     if (!authUser || !family) return;
     await updateMemberProfile(family.id, authUser.uid, profile);
-    setFamilyMember((current) => current ? { ...current, ...profile } : current);
+    setFamilyMember((current) => current ? { ...current, ...profile, profileCompleted: true } : current);
   };
 
   const handleCreateFamilyInvite = async () => {

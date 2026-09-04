@@ -45,7 +45,7 @@ export function ProfileSetup({ defaultNickname, joiningFamily, onSubmit, onSignO
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 shadow-xl sm:p-8">
         <div className="space-y-2 text-center">
           <UserRoundPlus className="mx-auto h-9 w-9 text-violet-400" />
-          <h1 className="text-xl font-bold">プロフィール登録</h1>
+          <h1 className="text-xl font-bold">初回プロフィール設定</h1>
           <p className="text-sm text-muted-foreground">
             {joiningFamily ? "ニックネームを登録して家族に参加します。" : "家族に表示する名前を登録します。"}
           </p>
@@ -78,7 +78,7 @@ export function ProfileSetup({ defaultNickname, joiningFamily, onSubmit, onSignO
         </div>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         <Button className="w-full" type="submit" disabled={busy || !normalizeNickname(nickname) || !relationship}>
-          {busy ? "登録中…" : joiningFamily ? "家族に参加する" : "Twinlyをはじめる"}
+          {busy ? "設定中…" : joiningFamily ? "家族に参加する" : "Twinlyを開く"}
         </Button>
         <Button className="w-full" type="button" variant="ghost" onClick={() => void onSignOut()} disabled={busy}>
           別のアカウントでログイン

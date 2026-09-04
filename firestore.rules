@@ -46,7 +46,7 @@ service cloud.firestore {
         allow update: if isFamilyMember(familyId)
           && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(["nickname", "relationship", "updatedAt"]);
+            .hasOnly(["nickname", "relationship", "profileCompleted", "updatedAt"]);
       }
 
       match /app/{docId} {

@@ -1,5 +1,5 @@
 import { User } from "firebase/auth";
-import { collection, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocFromServer, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/firebase";
 import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
@@ -24,15 +24,41 @@ export type FamilySession = {
   member: FamilyMember;
 };
 
+type FamilySetupResult = { familyId: string | null };
+type FamilyOnboardingInput =
+  | { nickname: string; relationship: FamilyRelationship }
+  | { migrateLegacyOnly: true };
+
+const callCompleteFamilyOnboarding = async (input: FamilyOnboardingInput) => {
+  if (!functions) throw new Error("Firebase Functions is not configured");
+  const call = httpsCallable<FamilyOnboardingInput, FamilySetupResult>(functions, "completeFamilyOnboarding");
+  return (await call(input)).data;
+};
+
 export const loadFamilySession = async (user: User): Promise<FamilySession | null> => {
   if (!db) return null;
   const userSnap = await getDoc(doc(db, "users", user.uid));
-  const familyId = userSnap.data()?.activeFamilyId;
+  let familyId = userSnap.data()?.activeFamilyId;
+  let migratedLegacyUser = false;
+  if (typeof familyId !== "string" || !familyId) {
+    try {
+      const result = await callCompleteFamilyOnboarding({ migrateLegacyOnly: true });
+      familyId = result.familyId;
+      migratedLegacyUser = Boolean(familyId);
+    } catch (error) {
+      console.warn("Failed to auto-migrate legacy family session", error);
+      return null;
+    }
+  }
   if (typeof familyId !== "string" || !familyId) return null;
 
   const [familySnap, memberSnap] = await Promise.all([
-    getDoc(doc(db, "families", familyId)),
-    getDoc(doc(db, "families", familyId, "members", user.uid)),
+    migratedLegacyUser
+      ? getDocFromServer(doc(db, "families", familyId))
+      : getDoc(doc(db, "families", familyId)),
+    migratedLegacyUser
+      ? getDocFromServer(doc(db, "families", familyId, "members", user.uid))
+      : getDoc(doc(db, "families", familyId, "members", user.uid)),
   ]);
   if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") return null;
 
@@ -50,6 +76,7 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
         : "other",
       role: memberSnap.data().role === "owner" ? "owner" : "member",
       status: "active",
+      profileCompleted: memberSnap.data().profileCompleted !== false,
     },
   };
 };
@@ -79,19 +106,16 @@ export const updateMemberProfile = async (
   await updateDoc(doc(db, "families", familyId, "members", uid), {
     nickname,
     relationship: profile.relationship,
+    profileCompleted: true,
     updatedAt: serverTimestamp(),
   });
 };
-
-type FamilySetupResult = { familyId: string };
 
 export const completeFamilyOnboarding = async (profile: {
   nickname: string;
   relationship: FamilyRelationship;
 }) => {
-  if (!functions) throw new Error("Firebase Functions is not configured");
-  const call = httpsCallable<typeof profile, FamilySetupResult>(functions, "completeFamilyOnboarding");
-  return (await call(profile)).data;
+  return callCompleteFamilyOnboarding(profile);
 };
 
 export const joinFamilyWithInvite = async (input: {

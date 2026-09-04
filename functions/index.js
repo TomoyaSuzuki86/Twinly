@@ -49,6 +49,15 @@ const validateFamilyProfile = (data) => {
   return { nickname, relationship };
 };
 
+const buildLegacyFamilyProfile = (request, userData = {}) => {
+  const email = String(request.auth?.token?.email || userData.email || "").trim();
+  const fallbackName = email.includes("@") ? email.split("@")[0] : "メンバー";
+  const nickname = String(userData.displayName || request.auth?.token?.name || fallbackName)
+    .trim()
+    .slice(0, 20) || "メンバー";
+  return { nickname, relationship: "other" };
+};
+
 const hashFamilyInvite = (token) => crypto.createHash("sha256").update(String(token || "")).digest("hex");
 
 const addLegacyEventAttribution = (appState, uid) => ({
@@ -74,7 +83,8 @@ const getAppRefForUid = async (uid) => {
 
 exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request) => {
   const uid = requireAuthUid(request);
-  const profile = validateFamilyProfile(request.data);
+  const migrateLegacyOnly = request.data?.migrateLegacyOnly === true;
+  const requestedProfile = migrateLegacyOnly ? null : validateFamilyProfile(request.data);
   const userRef = db.collection("users").doc(uid);
   const legacyAppRef = userRef.collection("app").doc("state");
 
@@ -84,6 +94,14 @@ exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request)
       transaction.get(legacyAppRef),
     ]);
     const existingFamilyId = userSnap.data()?.activeFamilyId;
+    if (migrateLegacyOnly && typeof existingFamilyId === "string" && existingFamilyId) {
+      return existingFamilyId;
+    }
+    if (migrateLegacyOnly && (!legacyAppSnap.exists || !legacyAppSnap.data()?.app)) {
+      return null;
+    }
+
+    const profile = requestedProfile || buildLegacyFamilyProfile(request, userSnap.data());
     const nextFamilyId = typeof existingFamilyId === "string" && existingFamilyId ? existingFamilyId : uid;
     const familyRef = db.collection("families").doc(nextFamilyId);
     const memberRef = familyRef.collection("members").doc(uid);
@@ -123,6 +141,7 @@ exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request)
       {
         uid,
         ...profile,
+        profileCompleted: !migrateLegacyOnly,
         role: memberSnap.data()?.role === "member" ? "member" : "owner",
         status: "active",
         joinedAt: memberSnap.data()?.joinedAt || admin.firestore.FieldValue.serverTimestamp(),
@@ -212,9 +231,10 @@ exports.joinFamily = onCall(publicCallableOptions, async (request) => {
       { merge: true }
     );
     transaction.set(memberRef, {
-      uid,
-      ...profile,
-      role: "member",
+        uid,
+        ...profile,
+        profileCompleted: true,
+        role: "member",
       status: "active",
       joinedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
