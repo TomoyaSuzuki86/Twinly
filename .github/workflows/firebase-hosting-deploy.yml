@@ -153,18 +153,6 @@ jobs:
         shell: bash
         run: npx --yes firebase-tools@latest deploy --only firestore --project twinly-prod --non-interactive
 
-      - name: Allow app calls to family functions
-        if: steps.scope.outputs.functions == 'true'
-        run: |
-          for service in completefamilyonboarding createfamilyinvite joinfamily; do
-            gcloud run services add-iam-policy-binding "$service" \
-              --project twinly-prod \
-              --region asia-northeast1 \
-              --member="allUsers" \
-              --role="roles/run.invoker" \
-              --quiet
-          done
-
       - name: Verify family function reachability
         if: steps.scope.outputs.functions == 'true'
         run: |
