@@ -21,7 +21,7 @@ export const sameValue = (a: unknown, b: unknown): boolean => {
     sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]));
 };
 
-export function createMutation(before: AppState, after: AppState, id: string): AppMutation {
+export function createMutation(before: AppState, after: AppState, id: string, options: { relativeStock?: boolean } = {}): AppMutation {
   const previous = new Map(before.events.map((event) => [event.id, event]));
   const next = new Map(after.events.map((event) => [event.id, event]));
   const events: EventChange[] = [];
@@ -39,7 +39,7 @@ export function createMutation(before: AppState, after: AppState, id: string): A
       }
     } else {
       // Stock consumption is relative; explicit stock/settings edits remain absolute.
-      const delta = events.length && path.includes("diaperStockBySize") &&
+      const delta = options.relativeStock !== false && events.length && path.includes("diaperStockBySize") &&
         typeof left === "number" && typeof right === "number" ? right - left : undefined;
       settings.push({ path, before: left, after: right, ...(delta === undefined ? {} : { delta }) });
     }

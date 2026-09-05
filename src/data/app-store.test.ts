@@ -106,4 +106,14 @@ describe("durable app storage", () => {
     expect(appendEvents(once, [diaper]).events).toHaveLength(1);
     expect(once.profiles.A.diaperStockBySize.新生児).toBe(80);
   });
+  it("can encode backup inventory as absolute values beside event changes", () => {
+    const initial = createInitialAppState();
+    const imported = appendEvents(initial, [{ ...milk, id: "imported" }]);
+    imported.profiles.A.diaperStockBySize.新生児 = 12;
+    imported.profiles.B.diaperStockBySize.新生児 = 12;
+    const mutation = createMutation(initial, imported, "backup", { relativeStock: false });
+    const stockChange = mutation.settings.find((change) => change.path[change.path.length - 1] === "新生児");
+    expect(stockChange?.after).toBe(12);
+    expect(stockChange?.delta).toBeUndefined();
+  });
 });

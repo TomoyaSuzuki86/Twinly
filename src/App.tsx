@@ -259,11 +259,12 @@ export default function App() {
     if (direction === "right" && selectedBabyTab === "B") setSelectedBabyTab("A");
   };
 
-  const updateApp = (updater: (previous: AppState) => AppState, syncRemote = true) => {
+  const updateApp = (updater: (previous: AppState) => AppState, syncRemote = true,
+    options: { absoluteSettings?: boolean } = {}) => {
     if (!syncRemote) { setApp(updater); return true; }
     try {
       if (!store.current) throw new Error("記録を読み込んでいます。");
-      store.current.update(updater);
+      store.current.update(updater, options);
       setNow(new Date());
       return true;
     } catch (error) {
@@ -1007,7 +1008,7 @@ export default function App() {
         const json = ev.target?.result as string;
         const importedState = parseBackup(json);
         if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
-        if (updateApp(() => importedState)) {
+        if (updateApp(() => importedState, true, { absoluteSettings: true })) {
           setActiveDate(importedState.ui.lastViewedDate);
           alert("復元内容を端末に保存しました。同期状況をご確認ください。");
         }

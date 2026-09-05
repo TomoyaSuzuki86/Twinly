@@ -50,11 +50,13 @@ export class AppStore {
     });
     return () => { this.stopped = true; stop(); };
   }
-  update(updater: (state: AppState) => AppState) {
+  update(updater: (state: AppState) => AppState, options: { absoluteSettings?: boolean } = {}) {
     if (!this.status.ready) throw new Error("記録を読み込んでいます。");
     this.queue = this.readQueue();
     const before = this.view();
-    const mutation = createMutation(before, updater(before), crypto.randomUUID());
+    const mutation = createMutation(before, updater(before), crypto.randomUUID(), {
+      relativeStock: !options.absoluteSettings,
+    });
     if (!mutation.events.length && !mutation.settings.length) return;
     this.repository.validate?.(mutation);
     mutation.queuedAt = Math.max(Date.now(), ...this.queue.map((item) => (item.queuedAt ?? 0) + 1));
