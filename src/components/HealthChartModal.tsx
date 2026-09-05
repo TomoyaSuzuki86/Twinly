@@ -122,8 +122,8 @@ export function HealthChartModal({
   }, [chartData]);
 
   const yAxisLabel = chartType === "weight" ? "体重 (kg)" : "身長 (cm)";
-  const tooltipFormatter = (value: number) => [
-    `${value.toFixed(chartType === "weight" ? 2 : 1)} ${chartType === "weight" ? "kg" : "cm"}`,
+  const tooltipFormatter = (value: number | undefined): [string, string] => [
+    `${value === undefined ? "—" : value.toFixed(chartType === "weight" ? 2 : 1)} ${chartType === "weight" ? "kg" : "cm"}`,
     chartType === "weight" ? "体重" : "身長",
   ];
 

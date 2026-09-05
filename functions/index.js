@@ -1,5 +1,6 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const { readApp, writeApp, assertWritable } = require("./app-storage");
 const webpush = require("web-push");
 const { defineSecret } = require("firebase-functions/params");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -63,6 +64,10 @@ const hashFamilyInvite = (token) => crypto.createHash("sha256").update(String(to
 const getAppRefForUid = async (uid) => {
   const userSnap = await db.collection("users").doc(uid).get();
   const familyId = userSnap.data()?.activeFamilyId;
+  if (familyId) {
+    const member = await db.collection("families").doc(familyId).collection("members").doc(uid).get();
+    if (!member.exists || member.data()?.status !== "active") throw new Error("Family access denied");
+  }
   return familyId
     ? db.collection("families").doc(familyId).collection("app").doc("state")
     : db.collection("users").doc(uid).collection("app").doc("state");
@@ -150,7 +155,10 @@ exports.completeFamilyOnboarding = onCall(publicCallableOptions, async (request)
   if (legacyAppSnap.exists) {
     try {
       const familyAppSnap = await familyAppRef.get();
-      if (!familyAppSnap.exists) await familyAppRef.set(legacyAppSnap.data());
+      if (!familyAppSnap.exists) {
+        try { await familyAppRef.create(legacyAppSnap.data()); }
+        catch (error) { if (error.code !== 6) throw error; }
+      }
     } catch (error) {
       logger.error("Legacy app copy failed after family onboarding", { uid, familyId: nextFamilyId, error });
     }
@@ -528,6 +536,7 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
 
   await db.runTransaction(async (transaction) => {
     const snap = await transaction.get(appRef);
+    assertWritable(snap);
     const appState = snap.exists && snap.data()?.app ? snap.data().app : { profiles: {}, events: [], ui: {} };
     const nextAppState = {
       ...appState,
@@ -535,10 +544,13 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
     };
 
     for (const event of events.filter((item) => item.type === "diaper")) {
+      if (nextAppState.diaperStockManagementEnabled === false) continue;
       const profile = nextAppState.profiles?.[event.babyId];
       const selectedSize = profile?.diaperSize;
       const currentStock = selectedSize ? profile?.diaperStockBySize?.[selectedSize] ?? 0 : null;
       if (selectedSize && currentStock !== null) {
+        event.diaperSizeUsed = selectedSize;
+        event.diaperStockConsumed = Math.min(1, Math.max(0, currentStock));
         const nextProfiles = { ...nextAppState.profiles };
         for (const id of ["A", "B"]) {
           const currentProfile = nextProfiles[id];
@@ -547,7 +559,7 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
             ...currentProfile,
             diaperStockBySize: {
               ...(currentProfile.diaperStockBySize || {}),
-              [selectedSize]: currentStock - 1,
+              [selectedSize]: Math.max(0, currentStock - 1),
             },
           };
         }
@@ -555,15 +567,7 @@ const appendWearEvent = async ({ uid, transcript, parsed }) => {
       }
     }
 
-    transaction.set(
-      appRef,
-      {
-        app: nextAppState,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: "wear",
-      },
-      { merge: true }
-    );
+    writeApp(transaction, appRef, snap, nextAppState, events, [], admin.firestore.FieldValue, uid);
   });
 
   return events;
@@ -578,8 +582,12 @@ const deleteWearEvents = async ({ uid, eventIds }) => {
     const snap = await transaction.get(appRef);
     if (!snap.exists || !snap.data()?.app) return;
 
+    assertWritable(snap);
     const appState = snap.data().app;
-    const events = Array.isArray(appState.events) ? appState.events : [];
+    const eventRows = snap.data()?.schemaVersion === 2
+      ? await Promise.all(eventIds.map((id) => transaction.get(appRef.parent.parent.collection("events").doc(id)))) : null;
+    const events = eventRows ? eventRows.filter((row) => row.exists).map((row) => ({ ...row.data(), id: row.id }))
+      : Array.isArray(appState.events) ? appState.events : [];
     const deletingEvents = events.filter((event) => targetIds.has(event.id));
     if (!deletingEvents.length) return;
 
@@ -591,8 +599,8 @@ const deleteWearEvents = async ({ uid, eventIds }) => {
 
     for (const event of deletingEvents.filter((item) => item.type === "diaper")) {
       const profile = nextProfiles[event.babyId];
-      const selectedSize = profile?.diaperSize;
-      if (!selectedSize) continue;
+      const selectedSize = event.diaperSizeUsed;
+      if (!selectedSize || !event.diaperStockConsumed) continue;
       const currentStock = profile?.diaperStockBySize?.[selectedSize] ?? 0;
 
       for (const id of ["A", "B"]) {
@@ -602,7 +610,7 @@ const deleteWearEvents = async ({ uid, eventIds }) => {
           ...currentProfile,
           diaperStockBySize: {
             ...(currentProfile.diaperStockBySize || {}),
-            [selectedSize]: currentStock + 1,
+            [selectedSize]: currentStock + event.diaperStockConsumed,
           },
         };
       }
@@ -611,15 +619,7 @@ const deleteWearEvents = async ({ uid, eventIds }) => {
     nextAppState.profiles = nextProfiles;
     deletedCount = deletingEvents.length;
 
-    transaction.set(
-      appRef,
-      {
-        app: nextAppState,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedBy: "wear",
-      },
-      { merge: true }
-    );
+    writeApp(transaction, appRef, snap, nextAppState, [], [...targetIds], admin.firestore.FieldValue, uid);
   });
 
   return deletedCount;
@@ -791,22 +791,21 @@ exports.sendMilkReminderNotifications = onSchedule(
   for (const userDoc of usersSnapshot.docs) {
     const uid = userDoc.id;
     const familyId = userDoc.data()?.activeFamilyId;
-    const [appSnap, settingsSnap, devicesSnap] = await Promise.all([
-      familyId
-        ? db.collection("families").doc(familyId).collection("app").doc("state").get()
-        : db.collection("users").doc(uid).collection("app").doc("state").get(),
+    const [settingsSnap, devicesSnap] = await Promise.all([
       db.collection("users").doc(uid).collection("settings").doc("notifications").get(),
       db.collection("users").doc(uid).collection("devices").where("notificationsEnabled", "==", true).get(),
     ]);
 
-    if (!appSnap.exists || devicesSnap.empty) continue;
+    if (devicesSnap.empty) continue;
 
     const settings = settingsSnap.exists ? settingsSnap.data() : {};
     const milkReminder = settings?.milkReminder ?? {};
     const careReminder = settings?.careReminder ?? {};
     if (careReminder.enabled === false || milkReminder.enabled === false) continue;
 
-    const appState = appSnap.data()?.app;
+    let appState;
+    try { appState = await readApp(await getAppRefForUid(uid)); }
+    catch (error) { logger.warn("Reminder family unavailable", { uid, message: error.message }); continue; }
     if (!appState) continue;
 
     const lastSentByKey = careReminder.lastSentByKey ?? {};
@@ -893,8 +892,7 @@ exports.recordFromWear = onRequest({ cors: true }, async (req, res) => {
 
     const uid = tokenSnap.data().uid;
     const appRef = await getAppRefForUid(uid);
-    const appSnap = await appRef.get();
-    const appState = appSnap.exists ? appSnap.data()?.app : null;
+    const appState = await readApp(appRef);
     const profiles = appState?.profiles || {};
     const defaultMilkMlByBaby = getDefaultMilkMlByBaby(appState?.events);
     const now = new Date();
@@ -938,7 +936,7 @@ exports.undoWearRecord = onRequest({ cors: true }, async (req, res) => {
     ? req.body.eventIds.map((id) => String(id || "").trim()).filter(Boolean)
     : [];
 
-  if (!token || !eventIds.length) {
+  if (!token || !eventIds.length || eventIds.length > 100 || eventIds.some((id) => id.includes("/"))) {
     res.status(400).json({ ok: false, error: "missing_token_or_event_ids" });
     return;
   }
@@ -980,8 +978,7 @@ exports.latestMilkElapsedFromWear = onRequest({ cors: true }, async (req, res) =
     }
 
     const uid = tokenSnap.data().uid;
-    const appSnap = await (await getAppRefForUid(uid)).get();
-    const appState = appSnap.exists ? appSnap.data()?.app : null;
+    const appState = await readApp(await getAppRefForUid(uid));
     const elapsedByBaby = buildLatestMilkElapsedByBaby(appState);
     const text = formatWearMilkElapsedText(elapsedByBaby);
 

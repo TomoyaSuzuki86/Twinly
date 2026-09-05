@@ -263,7 +263,7 @@ export const parseVoiceCommand = (
     "forcedBabyId" in babyNamesOrOptions ||
     "now" in babyNamesOrOptions
       ? babyNamesOrOptions
-      : { babyNames: babyNamesOrOptions, now: legacyNow };
+      : { babyNames: babyNamesOrOptions as VoiceCommandBabyNames, now: legacyNow };
   const babyNames = options.babyNames ?? {};
   const now = options.now ?? new Date();
   const normalizedText = normalizeText(text);
@@ -539,7 +539,7 @@ export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): O
     babyId: command.babyId,
     type: "diaper",
     timestamp: command.timestamp,
-    diaperKind: command.diaperKind,
+    diaperKind: "diaperKind" in command ? command.diaperKind : "pee",
     note: command.note,
   };
 };
