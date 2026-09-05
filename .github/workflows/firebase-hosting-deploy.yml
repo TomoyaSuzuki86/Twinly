@@ -139,18 +139,19 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
-      - name: Deploy changed Firebase backend
-        if: steps.scope.outputs.functions == 'true' || steps.scope.outputs.rules == 'true'
+      - name: Deploy changed Firebase Functions
+        id: functions_deploy
+        if: steps.scope.outputs.functions == 'true'
+        continue-on-error: true
         shell: bash
-        run: |
-          targets=""
-          if [ "${{ steps.scope.outputs.functions }}" = "true" ]; then
-            targets="${{ steps.scope.outputs.function_selector }}"
-          fi
-          if [ "${{ steps.scope.outputs.rules }}" = "true" ]; then
-            targets="${targets:+$targets,}firestore"
-          fi
-          npx --yes firebase-tools@latest deploy --only "$targets" --project twinly-prod --non-interactive
+        run: npx --yes firebase-tools@latest deploy --only "${{ steps.scope.outputs.function_selector }}" --project twinly-prod --non-interactive
+
+      - name: Deploy Firestore rules and indexes
+        id: firestore_deploy
+        if: steps.scope.outputs.rules == 'true'
+        continue-on-error: true
+        shell: bash
+        run: npx --yes firebase-tools@latest deploy --only firestore --project twinly-prod --non-interactive
 
       - name: Allow app calls to family functions
         if: steps.scope.outputs.functions == 'true'
@@ -175,10 +176,16 @@ jobs:
           test "$status" = "401"
 
       - name: Deploy app to Firebase Hosting
-        if: steps.scope.outputs.frontend == 'true'
+        if: always() && steps.scope.outputs.frontend == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
           projectId: twinly-prod
           channelId: live
+
+      - name: Report backend deployment failure
+        if: always() && (steps.functions_deploy.outcome == 'failure' || steps.firestore_deploy.outcome == 'failure')
+        run: |
+          echo "Firebase backend deployment failed; inspect the individual deployment step above."
+          exit 1
