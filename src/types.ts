@@ -38,6 +38,8 @@ export type LogEvent = {
   milkMl?: number;
   milkMethod?: MilkMethod;
   diaperKind?: DiaperKind;
+  diaperSizeUsed?: string;
+  diaperStockConsumed?: number;
   temperature?: number;
   weight?: number;
   height?: number;

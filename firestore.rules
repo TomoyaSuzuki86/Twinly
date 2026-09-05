@@ -50,7 +50,42 @@ service cloud.firestore {
       }
 
       match /app/{docId} {
-        allow read, write: if isFamilyMember(familyId);
+        allow read: if isFamilyMember(familyId);
+        allow create: if isFamilyMember(familyId) && docId == "state"
+          && request.resource.data.get('migrationState', '') != 'copying';
+        allow update: if isFamilyMember(familyId) && docId == "state"
+          && resource.data.get('migrationState', '') != 'copying'
+          && request.resource.data.get('migrationState', '') == resource.data.get('migrationState', '')
+          && request.resource.data.get('schemaVersion', 1) == resource.data.get('schemaVersion', 1)
+          && (resource.data.get('schemaVersion', 1) != 2 || !('events' in request.resource.data.app));
+        allow delete: if false;
+      }
+
+      match /events/{eventId} {
+        function storageReady() {
+          let state = getAfter(/databases/$(database)/documents/families/$(familyId)/app/state).data;
+          return state.get('schemaVersion', 1) == 2 && state.get('migrationState', '') != 'copying';
+        }
+        function validEvent() {
+          let event = request.resource.data;
+          return event.keys().hasAll(['id', 'babyId', 'type', 'timestamp'])
+            && event.id == eventId
+            && event.babyId in ['A', 'B']
+            && event.type in ['milk', 'solidFood', 'diaper', 'sleepStart', 'wake', 'daily', 'temperature', 'weight', 'height']
+            && event.timestamp is number && event.timestamp >= 0
+            && (!('note' in event) || (event.note is string && event.note.size() <= 20000));
+        }
+        allow read: if isFamilyMember(familyId);
+        allow create, update: if isFamilyMember(familyId) && storageReady() && validEvent();
+        allow delete: if isFamilyMember(familyId) && storageReady();
+      }
+
+      match /mutations/{mutationId} {
+        allow read: if isFamilyMember(familyId);
+        allow create: if isFamilyMember(familyId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'settings', 'consumption', 'createdAt']);
+        allow update, delete: if false;
       }
     }
 

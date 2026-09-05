@@ -1,4 +1,4 @@
-const SHELL_CACHE = "twinly-shell-v4";
+const SHELL_CACHE = "twinly-shell-v5";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -30,26 +30,32 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/__/")) return;
 
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(() => caches.match("/index.html"))
+      fetch(req).then((response) => {
+        if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy)));
+        }
+        return response;
+      }).catch(async () => (await caches.match("/index.html")) || new Response("通信状態を確認してください", { status: 503 }))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      const fetchPromise = fetch(req)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put(req, clone));
-          return res;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
-  );
+  // Do not cache authentication handlers, API responses, or arbitrary same-origin URLs.
+  if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/") && url.pathname !== "/manifest.webmanifest") return;
+  event.respondWith(caches.match(req).then(async (cached) => {
+    if (cached) return cached; // Hashed Vite assets are immutable.
+    const response = await fetch(req);
+    if (response.ok && !response.headers.get("content-type")?.includes("text/html")) {
+      const copy = response.clone();
+      event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+    }
+    return response;
+  }));
 });
 
 self.addEventListener("push", (event) => {

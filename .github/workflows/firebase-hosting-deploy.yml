@@ -8,10 +8,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: firebase-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -33,17 +34,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Detect deployment scope
         id: scope
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          base="${{ github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            base="HEAD^"
+          base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/firebase-hosting-deploy.yml/runs?branch=master&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null || true)"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed="$(git ls-files)"
+          else
+            changed="$(git diff --name-only "$base" HEAD)"
           fi
-          changed="$(git diff --name-only "$base" HEAD)"
+          if grep -Eq '^(firebase\.json|\.github/workflows/firebase-hosting-deploy\.yml)$' <<< "$changed"; then
+            changed="$(git ls-files)"
+          fi
           if grep -Eq '^(src/|public/|index.html$|package(-lock)?\.json$|vite\.config\.|tsconfig|tailwind\.config\.|postcss\.config\.)' <<< "$changed"; then
             echo "frontend=true" >> "$GITHUB_OUTPUT"
           else
@@ -54,7 +62,7 @@ jobs:
           else
             echo "functions=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qx 'firestore.rules' <<< "$changed"; then
+          if grep -Eq '^firestore\.(rules|indexes\.json)$' <<< "$changed"; then
             echo "rules=true" >> "$GITHUB_OUTPUT"
           else
             echo "rules=false" >> "$GITHUB_OUTPUT"
@@ -62,7 +70,7 @@ jobs:
 
           message="$(git log -1 --pretty=%B)"
           tagged="$(sed -n 's/.*\[deploy-function:\([^]]*\)\].*/\1/p' <<< "$message" | head -1)"
-          if [ -n "$tagged" ] && [[ "$tagged" =~ ^[A-Za-z0-9_,]+$ ]]; then
+          if [ -n "$tagged" ] && [[ "$tagged" =~ ^[A-Za-z0-9_,]+$ ]] && [ "$EVENT_NAME" != "workflow_dispatch" ] && ! grep -Eq '^functions/(app-storage\.js|package(-lock)?\.json)$' <<< "$changed"; then
             selector="$(sed 's/[^,]*/functions:&/g' <<< "$tagged")"
           else
             selector="functions"
@@ -110,11 +118,16 @@ jobs:
 
       - name: Check changed Functions
         if: steps.scope.outputs.functions == 'true'
-        run: node --check functions/index.js
+        run: |
+          node --check functions/index.js
+          node --check functions/app-storage.js
+          node --test functions/test/migration.test.js
 
-      - name: Run affected app tests
+      - name: Run critical storage and auth tests
         if: steps.scope.outputs.frontend == 'true'
-        run: npx vitest run --changed "${{ steps.scope.outputs.base }}"
+        run: |
+          npm run typecheck
+          npx vitest run src/data src/lib/family.test.ts src/lib/app-state.test.ts src/lib/diaper-stock.test.ts
 
       - name: Build app
         if: steps.scope.outputs.frontend == 'true'
@@ -135,7 +148,7 @@ jobs:
             targets="${{ steps.scope.outputs.function_selector }}"
           fi
           if [ "${{ steps.scope.outputs.rules }}" = "true" ]; then
-            targets="${targets:+$targets,}firestore:rules"
+            targets="${targets:+$targets,}firestore"
           fi
           npx --yes firebase-tools@latest deploy --only "$targets" --project twinly-prod --non-interactive
 

@@ -310,8 +310,9 @@ export function EventHistoryModal({
     strokeMap[profile.iconGradient ?? ""] ?? (historyType === "milk" ? "#0ea5e9" : "#f59e0b");
   const Icon = historyType === "milk" ? Utensils : Droplets;
 
-  const handleChartClick = (state: { activePayload?: Array<{ payload?: { key?: string } }> } | undefined) => {
-    const clickedKey = state?.activePayload?.[0]?.payload?.key;
+  const handleChartClick = (state: { activeIndex?: number | string | null }) => {
+    const index = state.activeIndex;
+    const clickedKey = index == null ? undefined : chartData[Number(index)]?.key;
     if (!clickedKey) {
       setSelectedPeriodKey(null);
       return;

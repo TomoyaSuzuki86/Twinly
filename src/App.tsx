@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, ChevronLeft, ChevronRight, Settings, Undo2 } from "lucide-react";
 import {
@@ -12,7 +12,7 @@ import {
   signOut,
   User,
 } from "firebase/auth";
-import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
+import { deleteDoc, doc, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
 import { BabyPanel } from "./components/BabyPanel";
 import {
@@ -25,7 +25,7 @@ import {
   FamilyRelationship,
   LogEvent,
 } from "./types";
-import { endOfDayMs, fmtDate, startOfDayMs, uid, removeUndefined } from "./lib/utils";
+import { endOfDayMs, fmtDate, startOfDayMs, uid } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
 import { SleepRecordModal } from "./components/SleepRecordModal";
@@ -36,27 +36,25 @@ import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger";
 import { iconGradients } from "./lib/utils";
-import { HealthChartModal } from "./components/HealthChartModal";
+const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
 import { SkeletonLoader } from "./components/SkeletonLoader";
-import { DailyReportModal } from "./components/DailyReportModal";
-import { EventHistoryModal } from "./components/EventHistoryModal";
-import { SleepHistoryModal } from "./components/SleepHistoryModal";
-import { WeeklyTimelineModal } from "./components/WeeklyTimelineModal";
+const DailyReportModal = lazy(() => import("./components/DailyReportModal").then((module) => ({ default: module.DailyReportModal })));
+const EventHistoryModal = lazy(() => import("./components/EventHistoryModal").then((module) => ({ default: module.EventHistoryModal })));
+const SleepHistoryModal = lazy(() => import("./components/SleepHistoryModal").then((module) => ({ default: module.SleepHistoryModal })));
+const WeeklyTimelineModal = lazy(() => import("./components/WeeklyTimelineModal").then((module) => ({ default: module.WeeklyTimelineModal })));
 import { LoginScreen } from "./components/LoginScreen";
 import { ProfileSetup } from "./components/ProfileSetup";
 import { AccountModal } from "./components/AccountModal";
 import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
-import { createInitialAppState, mergeSharedAppState, stripLegacyCalendarFields, toSharedAppState } from "./lib/app-state";
+import { createInitialAppState } from "./lib/app-state";
+import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { estimateDiaperStockBySize } from "./lib/diaper-stock";
 import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { buildCareGauges } from "./lib/care-gauges";
-import {
-  loadPendingEvents,
-  mergePendingEvents,
-  removePendingEvents,
-  storePendingEvents,
-} from "./lib/pending-events";
+import { useAppStore } from "./data/use-app-store";
+import { appendEvents, removeEvents } from "./lib/event-mutations";
+import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
@@ -239,36 +237,10 @@ export default function App() {
   const voiceLongPressTimerRef = useRef<number | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
-  const syncingPendingEventIdsRef = useRef(new Set<string>());
-
-  const syncAppToFirestore = async (updater: (prevApp: AppState) => AppState) => {
-    if (!db || !authUser || !family) return false;
-    try {
-      const appRef = doc(db, "families", family.id, "app", "state");
-      await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(appRef);
-        const currentState =
-          snap.exists() && snap.data().app
-            ? stripLegacyCalendarFields(snap.data().app as Parameters<typeof stripLegacyCalendarFields>[0])
-            : createEmptyState();
-        const nextApp = updater(currentState);
-
-        transaction.set(
-          appRef,
-          {
-            app: removeUndefined(toSharedAppState(nextApp)),
-            updatedAt: serverTimestamp(),
-            updatedBy: authUser.uid,
-          },
-          { merge: true }
-        );
-      });
-      return true;
-    } catch (error) {
-      console.error("syncAppToFirestore failed", error);
-      return false;
-    }
-  };
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
+    new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
+  const { store, status: syncStatus } = useAppStore(authUser?.uid, family?.id, allHistory, setApp, setAppLoading);
 
   const handleBabyTabTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches.item(0);
@@ -287,47 +259,32 @@ export default function App() {
     if (direction === "right" && selectedBabyTab === "B") setSelectedBabyTab("A");
   };
 
-  const updateApp = (updater: (prevApp: AppState) => AppState, syncRemote = true) => {
-    setApp((prevApp) => updater(prevApp));
-    setNow(new Date());
-    if (syncRemote) {
-      void syncAppToFirestore(updater);
+  const updateApp = (updater: (previous: AppState) => AppState, syncRemote = true) => {
+    if (!syncRemote) { setApp(updater); return true; }
+    try {
+      if (!store.current) throw new Error("記録を読み込んでいます。");
+      store.current.update(updater);
+      setNow(new Date());
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "端末に保存できませんでした。空き容量を確認してください。");
+      return false;
     }
   };
-
-  const updateAppWithPendingEvents = (events: LogEvent[], updater: (prevApp: AppState) => AppState) => {
-    if (!authUser) return;
-    const eventIds = events.map((event) => event.id);
-    storePendingEvents(authUser.uid, events);
-    eventIds.forEach((eventId) => syncingPendingEventIdsRef.current.add(eventId));
-    setApp((prevApp) => updater(prevApp));
-    setNow(new Date());
-    void syncAppToFirestore(updater).then((synced) => {
-      if (synced) removePendingEvents(authUser.uid, eventIds);
-      eventIds.forEach((eventId) => syncingPendingEventIdsRef.current.delete(eventId));
-    });
-  };
+  const updateAppWithPendingEvents = (_events: LogEvent[], updater: (previous: AppState) => AppState) => updateApp(updater);
 
   const ensureNotificationSettingsDocument = async (user: User) => {
     if (!db) return;
     const settingsRef = doc(db, "users", user.uid, "settings", "notifications");
-    await setDoc(
-      settingsRef,
-      {
-        milkReminder: {
-          enabled: true,
-          intervalMinutes: 150,
-          mergeWindowMinutes: 15,
-        },
-        careReminder: {
-          enabled: true,
-          mergeWindowMinutes: 15,
-          diaperGaugeWindowMinutes: 120,
-        },
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(settingsRef);
+      if (snapshot.exists()) return;
+      transaction.set(settingsRef, {
+        milkReminder: { enabled: true, intervalMinutes: 150, mergeWindowMinutes: 15 },
+        careReminder: { enabled: true, mergeWindowMinutes: 15, diaperGaugeWindowMinutes: 120 },
         updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+      });
+    });
   };
 
   const syncPushSubscriptionToFirestore = async (user: User) => {
@@ -391,17 +348,19 @@ export default function App() {
       return undefined;
     }
 
+    const currentAuth = auth;
     let unsub = () => {};
     let cancelled = false;
+    let authGeneration = 0;
 
     const init = async () => {
       await ensureAuthPersistence();
       if (cancelled) return;
-      if (isSignInWithEmailLink(auth, window.location.href)) {
+      if (isSignInWithEmailLink(currentAuth, window.location.href)) {
         const email = window.localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) || window.prompt("ログイン用メールアドレスを入力してください");
         if (email) {
           try {
-            await signInWithEmailLink(auth, email, window.location.href);
+            await signInWithEmailLink(currentAuth, email, window.location.href);
             window.localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
             window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
           } catch (error) {
@@ -411,18 +370,28 @@ export default function App() {
         }
       }
       if (cancelled) return;
-      unsub = onAuthStateChanged(auth, (user) => {
+      unsub = onAuthStateChanged(currentAuth, (user) => {
+        const generation = ++authGeneration;
+        setAuthReady(false);
+        setSessionError(null);
+        setFamily(null);
+        setFamilyMember(null);
+        setFamilyMembers([]);
+        setApp(createEmptyState());
+        setModal(null);
+        setHistoryModal(null);
+        setUndo({ open: false });
         setAuthUser(user);
         if (user) {
           setAppLoading(true);
           void loadFamilySession(user)
             .then((session) => {
-              if (cancelled) return;
+              if (cancelled || generation !== authGeneration) return;
               setFamily(session?.family ?? null);
               setFamilyMember(session?.member ?? null);
               if (session) {
                 if (session.member.profileCompleted === false) setAccountModalOpen(true);
-                void ensureNotificationSettingsDocument(user);
+                void ensureNotificationSettingsDocument(user).catch(console.error);
               } else {
                 setFamilyMembers([]);
                 setAppLoading(false);
@@ -431,7 +400,8 @@ export default function App() {
             })
             .catch((error) => {
               console.error("Failed to load family session", error);
-              if (cancelled) return;
+              if (cancelled || generation !== authGeneration) return;
+              setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
               setFamily(null);
               setFamilyMember(null);
               setFamilyMembers([]);
@@ -468,8 +438,9 @@ export default function App() {
       if (authUser) {
         const currentMember = members.find((member) => member.uid === authUser.uid);
         if (currentMember) setFamilyMember(currentMember);
+        else setSessionError("家族へのアクセス権を確認できません。再読み込みしてください。");
       }
-    });
+    }, () => setSessionError("家族情報を取得できませんでした。再読み込みしてください。"));
   }, [authUser, family]);
 
   useEffect(() => {
@@ -491,49 +462,6 @@ export default function App() {
       if (synced) setPushSubscribed(true);
     });
   }, [authUser, pushPermission]);
-
-  useEffect(() => {
-    if (!authUser || !db || !family) return;
-    setAppLoading(true);
-    const appRef = doc(db, "families", family.id, "app", "state");
-    const unsub = onSnapshot(appRef, (snap) => {
-      setNow(new Date());
-      const data = snap.exists() ? snap.data() : null;
-      const remoteState = data?.app
-        ? stripLegacyCalendarFields(data.app as Parameters<typeof stripLegacyCalendarFields>[0])
-        : createEmptyState();
-      const pendingEvents = loadPendingEvents(authUser.uid);
-      const remoteEventIds = new Set(remoteState.events.map((event) => event.id));
-      const confirmedEventIds = pendingEvents
-        .filter((event) => remoteEventIds.has(event.id))
-        .map((event) => event.id);
-      if (confirmedEventIds.length) removePendingEvents(authUser.uid, confirmedEventIds);
-
-      const eventsToReplay = pendingEvents.filter(
-        (event) => !remoteEventIds.has(event.id) && !syncingPendingEventIdsRef.current.has(event.id)
-      );
-      if (eventsToReplay.length) {
-        const replayIds = eventsToReplay.map((event) => event.id);
-        replayIds.forEach((eventId) => syncingPendingEventIdsRef.current.add(eventId));
-        void syncAppToFirestore((currentState) => ({
-          ...currentState,
-          events: mergePendingEvents(currentState.events, eventsToReplay),
-        })).then((synced) => {
-          if (synced) removePendingEvents(authUser.uid, replayIds);
-          replayIds.forEach((eventId) => syncingPendingEventIdsRef.current.delete(eventId));
-        });
-      }
-
-      const nextState = {
-        ...remoteState,
-        events: mergePendingEvents(remoteState.events, pendingEvents),
-      };
-      setApp((prev) => mergeSharedAppState(toSharedAppState(nextState), prev.ui));
-      setAppLoading(false);
-    });
-
-    return () => unsub();
-  }, [authUser, family]);
 
   useEffect(() => {
     updateApp((prev) => {
@@ -618,12 +546,7 @@ export default function App() {
       }
     }
 
-    updateAppWithPendingEvents(createdEvents, (prevApp) => ({
-      ...prevApp,
-      events: mergePendingEvents(prevApp.events, createdEvents),
-    }));
-
-    scheduleUndo(createdEvents);
+    if (updateAppWithPendingEvents(createdEvents, (prevApp) => appendEvents(prevApp, createdEvents))) scheduleUndo(createdEvents);
   };
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
@@ -649,28 +572,7 @@ export default function App() {
 
     const babyId = modal.babyId;
     const { diaperKind, note, selectedDiaperSize, timestamp, autoWake } = payload;
-    addEvent(babyId, "diaper", { diaperKind, note, timestamp }, { autoWake });
-
-    if (!app.diaperStockManagementEnabled) return;
-
-    updateApp((prevApp) => {
-      const nextProfiles = { ...prevApp.profiles };
-      const currentStock = nextProfiles[babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
-      const nextStock = clampDiaperStock(currentStock - 1);
-
-      (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
-        nextProfiles[id] = {
-          ...nextProfiles[id],
-          diaperStockBySize: {
-            ...nextProfiles[id].diaperStockBySize,
-            [selectedDiaperSize]: nextStock,
-          },
-          diaperSize: id === babyId ? selectedDiaperSize : nextProfiles[id].diaperSize,
-        };
-      });
-
-      return { ...prevApp, profiles: nextProfiles };
-    });
+    addEvent(babyId, "diaper", { diaperKind, note, timestamp, diaperSizeUsed: selectedDiaperSize }, { autoWake });
   };
 
   const handleVoiceCommand = (command: VoiceCommand) => {
@@ -794,34 +696,7 @@ export default function App() {
       eventsWithAutoWake.push(event);
     });
 
-    updateAppWithPendingEvents(eventsWithAutoWake, (prevApp) => {
-      const nextProfiles = { ...prevApp.profiles };
-
-      createdEvents
-        .filter((event) => event.type === "diaper")
-        .forEach((event) => {
-          if (!prevApp.diaperStockManagementEnabled) return;
-          const selectedDiaperSize = nextProfiles[event.babyId].diaperSize;
-          const currentStock = nextProfiles[event.babyId].diaperStockBySize[selectedDiaperSize] ?? 0;
-          const nextStock = clampDiaperStock(currentStock - 1);
-
-          (Object.keys(nextProfiles) as BabyId[]).forEach((id) => {
-            nextProfiles[id] = {
-              ...nextProfiles[id],
-              diaperStockBySize: {
-                ...nextProfiles[id].diaperStockBySize,
-                [selectedDiaperSize]: nextStock,
-              },
-            };
-          });
-        });
-
-      return {
-        ...prevApp,
-        profiles: nextProfiles,
-        events: mergePendingEvents(prevApp.events, eventsWithAutoWake),
-      };
-    });
+    if (!updateAppWithPendingEvents(eventsWithAutoWake, (prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
 
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
     scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
@@ -831,10 +706,6 @@ export default function App() {
     const auditPayload = authUser
       ? { ...payload, updatedByUid: authUser.uid, updatedAt: Date.now() }
       : payload;
-    if (authUser) {
-      const pendingEvent = loadPendingEvents(authUser.uid).find((event) => event.id === eventId);
-      if (pendingEvent) storePendingEvents(authUser.uid, [{ ...pendingEvent, ...auditPayload }]);
-    }
     updateApp((prevApp) => {
       const originalEvent = prevApp.events.find((event) => event.id === eventId);
       if (!originalEvent) return prevApp;
@@ -861,16 +732,14 @@ export default function App() {
 
   const removeEvent = (eventId: string) => {
     if (!authUser || !db) return;
-    removePendingEvents(authUser.uid, [eventId]);
-    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => event.id !== eventId) }));
+    updateApp((prevApp) => removeEvents(prevApp, new Set([eventId])));
   };
 
   const undoLast = () => {
     if (!authUser || !db || !undo.events?.length) return;
 
     const undoIds = new Set(undo.events.map((event) => event.id));
-    removePendingEvents(authUser.uid, undoIds);
-    updateApp((prevApp) => ({ ...prevApp, events: prevApp.events.filter((event) => !undoIds.has(event.id)) }));
+    if (!updateApp((prevApp) => removeEvents(prevApp, undoIds))) return;
 
     setUndo({ open: false });
     if (undoTimerRef.current) {
@@ -923,9 +792,10 @@ export default function App() {
 
   const resetAll = () => {
     if (!authUser || !db) return;
+    if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから削除してください。"); return; }
     if (!confirm("すべてのデータを削除しますか？")) return;
     const nextState = createEmptyState();
-    updateApp(() => nextState);
+    if (!updateApp(() => nextState)) return;
     setActiveDate(nextState.ui.lastViewedDate);
     setModal(null);
     setUndo({ open: false });
@@ -1113,30 +983,34 @@ export default function App() {
     }
   };
 
-  const handleExport = () => {
-    const blob = new Blob([JSON.stringify(app, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `twinly-backup-${fmtDate(new Date())}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      if (!store.current) throw new Error("記録を読み込んでいます。");
+      const complete = await store.current.exportAll();
+      const blob = new Blob([JSON.stringify(complete, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `twinly-backup-${fmtDate(new Date())}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) { alert(error instanceof Error ? error.message : "全履歴を書き出せませんでした。"); }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから復元してください。"); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const json = ev.target?.result as string;
-        const importedState = stripLegacyCalendarFields(
-          JSON.parse(json) as Parameters<typeof stripLegacyCalendarFields>[0]
-        );
-        setApp(importedState);
-        setActiveDate(importedState.ui.lastViewedDate);
-        void syncAppToFirestore(() => importedState);
-        alert("データをインポートしました");
+        const importedState = parseBackup(json);
+        if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
+        if (updateApp(() => importedState)) {
+          setActiveDate(importedState.ui.lastViewedDate);
+          alert("復元内容を端末に保存しました。同期状況をご確認ください。");
+        }
       } catch {
         alert("ファイルの読み込みに失敗しました");
       }
@@ -1184,14 +1058,14 @@ export default function App() {
 
   const latestEventsByBaby = useMemo(() => {
     const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
-    const sortedEvents = [...app.events].sort((a, b) => b.timestamp - a.timestamp);
+    const sortedEvents = app.events;
     for (const event of sortedEvents) grouped[event.babyId].push(event);
     return grouped;
   }, [app.events]);
 
   const lastWeights = useMemo(() => {
     const result: Record<BabyId, number | null> = { A: null, B: null };
-    const sortedEvents = [...app.events].sort((a, b) => b.timestamp - a.timestamp);
+    const sortedEvents = app.events;
     const lastWeightA = sortedEvents.find((event) => event.babyId === "A" && event.type === "weight" && event.weight !== undefined);
     const lastWeightB = sortedEvents.find((event) => event.babyId === "B" && event.type === "weight" && event.weight !== undefined);
     if (lastWeightA?.weight !== undefined) result.A = lastWeightA.weight;
@@ -1201,7 +1075,7 @@ export default function App() {
 
   const lastHeights = useMemo(() => {
     const result: Record<BabyId, number | null> = { A: null, B: null };
-    const sortedEvents = [...app.events].sort((a, b) => b.timestamp - a.timestamp);
+    const sortedEvents = app.events;
     const lastHeightA = sortedEvents.find((event) => event.babyId === "A" && event.type === "height" && event.height !== undefined);
     const lastHeightB = sortedEvents.find((event) => event.babyId === "B" && event.type === "height" && event.height !== undefined);
     if (lastHeightA?.height !== undefined) result.A = lastHeightA.height;
@@ -1360,6 +1234,14 @@ export default function App() {
     );
   }
 
+  if (sessionError || (syncStatus.error && authUser && family && !syncStatus.ready)) {
+    return <AppContainer><div className="grid min-h-screen place-items-center p-6"><div className="max-w-md space-y-4 text-center">
+      <p role="alert">{sessionError || syncStatus.error}</p>
+      <Button onClick={() => window.location.reload()}>再読み込み</Button>
+      <Button variant="ghost" onClick={handleSignOut}>ログアウト</Button>
+    </div></div></AppContainer>;
+  }
+
   if (!authReady || appLoading) {
     return (
       <AppContainer>
@@ -1433,6 +1315,20 @@ export default function App() {
                   </button>
                 </div>
               </header>
+              {(syncStatus.pending > 0 || syncStatus.error || syncStatus.fromCache) && <div className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm" role="status">
+                <span>{syncStatus.error ? `未同期 ${syncStatus.pending}件：${syncStatus.error}` : syncStatus.pending ? `端末に保存済み・同期待ち ${syncStatus.pending}件` : "端末の保存データを表示中"}</span>
+                {syncStatus.error && <Button size="sm" variant="outline" onClick={() => syncStatus.pending ? void store.current?.flush() : window.location.reload()}>再試行</Button>}
+                {syncStatus.error && syncStatus.pending > 0 && <>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const url = URL.createObjectURL(new Blob([JSON.stringify(store.current?.exportPending(), null, 2)], { type: "application/json" }));
+                    const link = document.createElement("a"); link.href = url; link.download = "twinly-unsynced-backup.json"; link.click(); URL.revokeObjectURL(url);
+                  }}>未同期を書き出す</Button>
+                  <Button size="sm" variant="ghost" onClick={() => {
+                    if (!confirm("未同期の変更をすべて取り消しますか？必要な内容は先に書き出してください。")) return;
+                    try { store.current?.discardPending(); } catch (error) { alert(error instanceof Error ? error.message : "取り消せませんでした。"); }
+                  }}>未同期を取り消す</Button>
+                </>}
+              </div>}
 
               <p className="text-center text-[10px] leading-none text-muted-foreground">
                 ダブルクリック／長押しで音声入力
@@ -1652,9 +1548,10 @@ export default function App() {
         onSave={onSaveEdit}
         onDelete={removeEvent}
       />
-      <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />
-      <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />
-      <WeeklyTimelineModal
+      <Suspense fallback={<div role="status" className="fixed bottom-4 left-4 rounded border bg-background p-3">読み込み中…</div>}>
+      {chartModalOpen && <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />}
+      {dailyReportModalOpen && <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />}
+      {timelineModalOpen && <WeeklyTimelineModal
         open={timelineModalOpen}
         onOpenChange={setTimelineModalOpen}
         events={app.events}
@@ -1662,7 +1559,7 @@ export default function App() {
         initialDate={activeDate}
         initialBabyId={selectedBabyTab}
         now={now}
-      />
+      />}
       {historyModal?.type === "sleep" ? (
         <SleepHistoryModal
           open
@@ -1682,6 +1579,7 @@ export default function App() {
           now={now}
         />
       ) : null}
+      </Suspense>
     </AppContainer>
   );
 }

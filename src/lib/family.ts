@@ -41,14 +41,9 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
   let familyId = userSnap.data()?.activeFamilyId;
   let migratedLegacyUser = false;
   if (typeof familyId !== "string" || !familyId) {
-    try {
-      const result = await callCompleteFamilyOnboarding({ migrateLegacyOnly: true });
-      familyId = result.familyId;
-      migratedLegacyUser = Boolean(familyId);
-    } catch (error) {
-      console.warn("Failed to auto-migrate legacy family session", error);
-      return null;
-    }
+    const result = await callCompleteFamilyOnboarding({ migrateLegacyOnly: true });
+    familyId = result.familyId;
+    migratedLegacyUser = Boolean(familyId);
   }
   if (typeof familyId !== "string" || !familyId) return null;
 
@@ -60,7 +55,9 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
       ? getDocFromServer(doc(db, "families", familyId, "members", user.uid))
       : getDoc(doc(db, "families", familyId, "members", user.uid)),
   ]);
-  if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") return null;
+  if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") {
+    throw new Error("家族情報が見つからないか、アクセス権がありません。");
+  }
 
   return {
     family: {
@@ -83,7 +80,8 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
 
 export const subscribeFamilyMembers = (
   familyId: string,
-  onChange: (members: FamilyMember[]) => void
+  onChange: (members: FamilyMember[]) => void,
+  onError?: (error: unknown) => void
 ) => {
   if (!db) return () => {};
   return onSnapshot(collection(db, "families", familyId, "members"), (snapshot) => {
@@ -92,7 +90,7 @@ export const subscribeFamilyMembers = (
       .filter((member) => member.status !== "inactive")
       .sort((a, b) => (a.role === b.role ? a.nickname.localeCompare(b.nickname, "ja") : a.role === "owner" ? -1 : 1));
     onChange(members);
-  });
+  }, onError);
 };
 
 export const updateMemberProfile = async (

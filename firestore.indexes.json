@@ -1,4 +1,17 @@
 {
-  "indexes": [],
-  "fieldOverrides": []
+  "indexes": [{
+    "collectionGroup": "events",
+    "queryScope": "COLLECTION",
+    "fields": [
+      { "fieldPath": "babyId", "order": "ASCENDING" },
+      { "fieldPath": "type", "order": "ASCENDING" },
+      { "fieldPath": "timestamp", "order": "DESCENDING" }
+    ]
+  }],
+  "fieldOverrides": [
+    { "collectionGroup": "app", "fieldPath": "app", "indexes": [] },
+    { "collectionGroup": "storageBackups", "fieldPath": "app", "indexes": [] },
+    { "collectionGroup": "mutations", "fieldPath": "settings", "indexes": [] },
+    { "collectionGroup": "events", "fieldPath": "note", "indexes": [] }
+  ]
 }
