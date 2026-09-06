@@ -17,13 +17,13 @@ describe('AI feature preview',()=>{
     render(<AiTools familyId="test" app={createInitialAppState()} onSave={()=>true}/>);
     fireEvent.click(screen.getByRole('button',{name:'プラン・AI'}));
     const toggle=await screen.findByRole('switch');
-    expect(screen.getByRole('button',{name:'AIの振り返りを見る'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeDisabled();
     fireEvent.click(toggle);
     await waitFor(()=>expect(screen.getByRole('switch')).toHaveAttribute('aria-checked','true'));
     fireEvent.click(screen.getByRole('checkbox'));
-    expect(screen.getByRole('button',{name:'AIの振り返りを見る'})).toBeEnabled();
+    expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeEnabled();
     fireEvent.click(screen.getByRole('switch'));
-    await waitFor(()=>expect(screen.getByRole('button',{name:'AIの振り返りを見る'})).toBeDisabled());
+    await waitFor(()=>expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeDisabled());
     expect(mock.call.mock.calls.every(([name])=>['getFamilyAccess','setFamilyPreviewPlan'].includes(name))).toBe(true);
   });
   it('keeps mixed records as drafts and requires resolving the unknown time',async()=>{
