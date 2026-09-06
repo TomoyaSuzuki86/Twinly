@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
-import { AiReview, FamilyAccess, callService } from "@/lib/ai";
+import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
+import { callService } from "@/lib/ai";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { VoiceCommandButton } from "./VoiceCommandButton";
 
 const TARGET_SELECTOR = 'button[aria-label="週間タイムラインを開く"]';
-const CONSENT_KEY = "twinly-ai-review-consent-v2";
+const CONSENT_KEY = "twinly-ai-review-consent-v3";
 const JST = 9 * 60 * 60 * 1000;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
@@ -16,8 +18,11 @@ export function AiAdviceLauncher() {
   const [access, setAccess] = useState<FamilyAccess | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [busyText, setBusyText] = useState("");
   const [error, setError] = useState("");
   const [review, setReview] = useState<AiReview | null>(null);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState<AiQuestionAnswer | null>(null);
   const [consent, setConsent] = useState(() => {
     try { return window.localStorage.getItem(CONSENT_KEY) === "yes"; } catch { return false; }
   });
@@ -73,7 +78,11 @@ export function AiAdviceLauncher() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      if (review && dayKey(review.generatedAt) !== dayKey()) setReview(null);
+      if (review && dayKey(review.generatedAt) !== dayKey()) {
+        setReview(null);
+        setAnswer(null);
+        setQuestion("");
+      }
     }, 60000);
     return () => window.clearInterval(interval);
   }, [review]);
@@ -83,15 +92,37 @@ export function AiAdviceLauncher() {
     if (review && dayKey(review.generatedAt) === dayKey()) return;
     inFlight.current = true;
     setBusy(true);
+    setBusyText("直近2週間を確認しています…");
     setError("");
     try {
       const next = await callService<AiReview>("twinlyAi", { mode: "review" });
       setReview(next);
+      setAnswer(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "AIアドバイスを取得できませんでした");
     } finally {
       inFlight.current = false;
       setBusy(false);
+      setBusyText("");
+    }
+  };
+
+  const askQuestion = async () => {
+    const value = question.trim();
+    if (!value || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setBusyText("AIが記録を確認しています…");
+    setError("");
+    try {
+      const next = await callService<AiQuestionAnswer>("twinlyAi", { mode: "ask", question: value });
+      setAnswer(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "質問に回答できませんでした");
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+      setBusyText("");
     }
   };
 
@@ -144,7 +175,7 @@ export function AiAdviceLauncher() {
                   onChange={(event) => setConsentChecked(event.target.checked)}
                 />
                 <span>
-                  AIアドバイス生成時、GoogleのAPIへ赤ちゃんの登録名、生年月日、直近2週間のミルク・おむつ・離乳食・睡眠・体重の集計、メモを送信することに同意します。
+                  AIアドバイス・質問時、GoogleのAPIへ質問文、赤ちゃんの登録名、生年月日、直近2週間の育児集計を送信し、質問に必要な場合のみ時系列記録も追加送信することに同意します。
                 </span>
               </label>
               <Button disabled={!consentChecked || busy} onClick={acceptAndLoad}>同意してアドバイスを見る</Button>
@@ -155,7 +186,7 @@ export function AiAdviceLauncher() {
             <Button onClick={() => void loadReview()}>AIアドバイスを生成・表示</Button>
           ) : null}
 
-          {busy ? <p role="status" className="text-sm text-muted-foreground">直近2週間を確認しています…</p> : null}
+          {busy ? <p role="status" className="text-sm text-muted-foreground">{busyText}</p> : null}
           {error ? <p role="alert" className="rounded-lg border p-3 text-sm">{error}</p> : null}
 
           {review ? (
@@ -168,6 +199,41 @@ export function AiAdviceLauncher() {
                 <h3 className="mb-2 font-bold">今日のポイント</h3>
                 <p>{review.checks}</p>
               </section>
+
+              {access?.features.aiChat ? (
+                <section className="space-y-3 rounded-lg border bg-card p-4">
+                  <div>
+                    <h3 className="font-bold">AIに質問する</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      まず上のAIアドバイスと集計済みデータから回答し、時刻や前後関係の確認が必要な質問だけ記録を追加確認します。
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!busy ? <VoiceCommandButton onCommand={()=>{}} onMessage={setError} onTranscript={(value)=>{setQuestion(value);setAnswer(null);}}/> : null}
+                    <span className="text-xs text-muted-foreground">音声でも質問できます</span>
+                  </div>
+                  <textarea
+                    aria-label="AIへの質問"
+                    className="w-full rounded border bg-background p-2"
+                    rows={2}
+                    maxLength={500}
+                    disabled={busy}
+                    value={question}
+                    placeholder="例：最近、日向の睡眠時間は減ってる？"
+                    onChange={(event)=>{setQuestion(event.target.value);setAnswer(null);}}
+                  />
+                  <Button disabled={busy||!question.trim()} onClick={()=>void askQuestion()}>質問する</Button>
+                  {answer ? (
+                    <div className="space-y-1 rounded-lg bg-muted/40 p-3">
+                      <p>{answer.answer}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {answer.source==='review+timeline' ? 'AIアドバイスに加えて必要な時系列記録も確認して回答' : '今日のAIアドバイスと集計データから回答'}
+                      </p>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
               <p className="text-xs text-muted-foreground">
                 {new Date(review.generatedAt).toLocaleString("ja-JP")}作成。同じ日の生成結果は家族で共有します。医療上の診断ではありません。
               </p>

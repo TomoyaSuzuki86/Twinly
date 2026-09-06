@@ -131,7 +131,7 @@ jobs:
         if: steps.scope.outputs.frontend == 'true'
         run: |
           npm run typecheck
-          npx vitest run src/data src/lib/family.test.ts src/lib/app-state.test.ts src/lib/diaper-stock.test.ts src/lib/ai.test.ts src/components/AiTools.test.tsx src/components/ComfortTools.test.tsx src/components/BabyPanel.test.tsx src/lib/sleep-music.test.ts
+          npx vitest run src/data src/lib/family.test.ts src/lib/app-state.test.ts src/lib/diaper-stock.test.ts src/lib/ai.test.ts src/components/AiTools.test.tsx src/components/AiAdviceLauncher.test.tsx src/components/ComfortTools.test.tsx src/components/BabyPanel.test.tsx src/lib/sleep-music.test.ts
 
       - name: Build app
         if: steps.scope.outputs.frontend == 'true'
@@ -160,7 +160,7 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails"
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
             fi

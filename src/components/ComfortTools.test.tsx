@@ -10,8 +10,8 @@ it('limits free music to 12 seconds and revokes premium playback on downgrade',a
   const stop=vi.fn(),close=vi.fn(),gain={cancelScheduledValues:vi.fn(),setValueAtTime:vi.fn(),linearRampToValueAtTime:vi.fn(),value:0};
   vi.stubGlobal('AudioContext',class {currentTime=0;destination={};resume=async()=>{};close=close;createGain=()=>({gain,connect:vi.fn()});createBufferSource=()=>({connect:vi.fn(),start:vi.fn(),stop,onended:null});});
   const app=createInitialAppState();
-  const free:FamilyAccess={plan:'free',canPreview:true,features:{aiVoice:false,aiReview:false,music:false,themes:false}};
-  const premium:FamilyAccess={...free,plan:'premium',features:{...free.features,music:true,themes:true}};
+  const free:FamilyAccess={plan:'free',canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false,music:false,themes:false}};
+  const premium:FamilyAccess={...free,plan:'premium',features:{...free.features,aiReview:true,aiChat:true,dailySummaryEmail:true,music:true,themes:true}};
   const {rerender}=render(<ComfortTools access={free} app={app} familyId="f"/>);
   fireEvent.click(screen.getByRole('button',{name:'おやすみ音楽'}));
   fireEvent.click(screen.getByRole('button',{name:'心音風（12秒試聴）'}));
