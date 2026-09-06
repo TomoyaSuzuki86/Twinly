@@ -21,6 +21,7 @@ import {
   getDefaultSleepTargetHours,
 } from "@/lib/sleep";
 import { RotateCcw } from "lucide-react";
+import { DailySummaryEmailSettings } from "./DailySummaryEmailSettings";
 
 type SettingsModalProps = {
   open: boolean;
@@ -172,11 +173,11 @@ export function SettingsModal({
   return (
     <>
       <DialogComponents.Dialog open={open} onOpenChange={handleClose}>
-        <DialogComponents.DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-md">
+        <DialogComponents.DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-lg">
           <DialogComponents.DialogHeader>
             <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
             <DialogComponents.DialogDescription>
-              プロフィール、通知、データ、デザイン、プランをまとめて管理できます。
+              プロフィール、通知、データ、デザイン、料金とプランをまとめて管理できます。
             </DialogComponents.DialogDescription>
           </DialogComponents.DialogHeader>
 
@@ -186,7 +187,7 @@ export function SettingsModal({
               <TabsTrigger value="notifications">通知</TabsTrigger>
               <TabsTrigger value="data">データ管理</TabsTrigger>
               <TabsTrigger value="design">デザイン</TabsTrigger>
-              <TabsTrigger value="premium">有料版</TabsTrigger>
+              <TabsTrigger value="premium">料金とプラン</TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile" className="mt-4">
@@ -446,7 +447,7 @@ export function SettingsModal({
               </div>
             </TabsContent>
 
-            <TabsContent value="notifications" className="mt-4">
+            <TabsContent value="notifications" className="mt-4 space-y-4">
               <div className="space-y-4 rounded-lg border p-4">
                 <div>
                   <h3 className="font-semibold">プッシュ通知</h3>
@@ -498,6 +499,8 @@ export function SettingsModal({
                   <Button onClick={onSignIn}>ログイン画面を開く</Button>
                 )}
               </div>
+
+              {user ? <DailySummaryEmailSettings /> : null}
             </TabsContent>
 
             <TabsContent value="data" className="mt-4 space-y-4">

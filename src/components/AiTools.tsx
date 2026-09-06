@@ -1,11 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/firebase';
-import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import type { AiDraft, AiReview, DailySummaryEmailSettings, FamilyAccess } from '@/lib/ai';
-import { callService } from '@/lib/ai';
-import type { AppState } from '@/types';
+import { useEffect, useRef, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import {
+  BarChart3,
+  Check,
+  Crown,
+  Mail,
+  Music2,
+  PackageSearch,
+  Palette,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import { db } from "@/firebase";
+import type { AiDraft, FamilyAccess } from "@/lib/ai";
+import { callService } from "@/lib/ai";
+import type { AppState } from "@/types";
+import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 
 type AiToolsProps = {
   familyId: string;
@@ -14,122 +25,185 @@ type AiToolsProps = {
   embedded?: boolean;
 };
 
-const defaultEmailSettings: DailySummaryEmailSettings = { enabled:false, hourJst:21, recipients:[], canEdit:false };
+const premiumBenefits = [
+  { icon: Sparkles, title: "AIが育児記録を読み解く", description: "直近2週間の傾向を整理し、今日見るポイントを提案。気になることはそのままAIへ質問できます。" },
+  { icon: BarChart3, title: "今の状態がひと目でわかる", description: "ミルク・おむつ・睡眠などのゲージで、次のお世話のタイミングを直感的に把握できます。" },
+  { icon: PackageSearch, title: "おむつ切れを先回り", description: "使用ペースから在庫切れを予測し、必要なタイミングで通知します。" },
+  { icon: Users, title: "家族みんなで共有", description: "家族メンバーと同じ育児記録を共有して、誰が見ても今の状況がわかります。" },
+  { icon: Mail, title: "1日の育児を自動で日報に", description: "ミルク・睡眠・排泄・離乳食を毎日まとめて、家族へメールで届けます。" },
+  { icon: Palette, title: "Twinlyを自分たちらしく", description: "複数の背景テーマと、Premium限定の見やすい表示を利用できます。" },
+  { icon: Music2, title: "選べるおやすみ音楽", description: "ホワイトノイズに加えて、複数のおやすみ音源を選べます。" },
+];
 
-export function AiTools({familyId,embedded=false}:AiToolsProps) {
-  const [open,setOpen]=useState(false);
-  const [access,setAccess]=useState<FamilyAccess|null>(null);
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-  const [consent,setConsent]=useState(false);
-  const [review,setReview]=useState<AiReview|null>(null);
-  const [emailSettings,setEmailSettings]=useState<DailySummaryEmailSettings>(defaultEmailSettings);
-  const generation=useRef(0), mounted=useRef(true), inFlight=useRef(false);
+const comparisonRows = [
+  ["基本の育児記録", true, true],
+  ["通常の音声入力", true, true],
+  ["ホワイトノイズ", true, true],
+  ["各種お世話ゲージ", false, true],
+  ["AIアドバイス・AI質問", false, true],
+  ["おむつ在庫切れ予測・通知", false, true],
+  ["家族との記録共有", false, true],
+  ["複数のおやすみ音楽", false, true],
+  ["今日のまとめメール", false, true],
+  ["追加テーマ", false, true],
+] as const;
 
-  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;generation.current++;};},[]);
-  useEffect(()=>{
-    let active=true, revision=0;
-    const refresh=()=>{
-      const current=++revision;
-      generation.current++;
-      setAccess(null);setReview(null);
-      callService<FamilyAccess>('getFamilyAccess').then(value=>{
-        if(!active||current!==revision)return;
-        setAccess(value);
-        return callService<DailySummaryEmailSettings>('getDailySummaryEmailSettings').then(settings=>{
-          if(active&&current===revision)setEmailSettings(settings);
+export function AiTools({ familyId, embedded = false }: AiToolsProps) {
+  const [open, setOpen] = useState(false);
+  const [access, setAccess] = useState<FamilyAccess | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const mounted = useRef(true);
+  const inFlight = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      callService<FamilyAccess>("getFamilyAccess")
+        .then((value) => {
+          if (active) {
+            setAccess(value);
+            setError("");
+          }
+        })
+        .catch(() => {
+          if (active) setError("プラン情報を取得できませんでした。");
         });
-      }).catch(()=>{if(active&&current===revision)setError('機能設定を取得できません。サーバーの配備と接続を確認してください');});
     };
     refresh();
-    const unsubscribe=db?onSnapshot(doc(db,'families',familyId,'services','access'),refresh,()=>{setAccess(null);setError('機能設定の同期に失敗しました');}):()=>{};
-    return()=>{active=false;unsubscribe();generation.current++;};
-  },[familyId]);
+    const unsubscribe = db
+      ? onSnapshot(doc(db, "families", familyId, "services", "access"), refresh, () => {
+          if (active) setError("プラン情報の同期に失敗しました。");
+        })
+      : () => {};
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [familyId]);
 
-  async function run(task:()=>Promise<void>) {
-    if(inFlight.current)return;
-    inFlight.current=true;setBusy(true);setError('');
-    try {await task();}catch(e){if(mounted.current)setError(e instanceof Error?e.message:'処理に失敗しました');}
-    finally{inFlight.current=false;if(mounted.current)setBusy(false);}
-  }
+  const changePreviewPlan = async (plan: "free" | "premium") => {
+    if (inFlight.current || !access?.canPreview) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const next = await callService<FamilyAccess>("setFamilyPreviewPlan", { plan });
+      if (mounted.current) setAccess(next);
+    } catch (reason) {
+      if (mounted.current) setError(reason instanceof Error ? reason.message : "プランを切り替えられませんでした。");
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  };
 
-  const aiAllowed=Boolean(access?.features.aiReview||access?.features.aiChat);
-  const canEditEmail=Boolean(emailSettings.canEdit);
-  const canToggleEmail=Boolean(access?.features.dailySummaryEmail||emailSettings.enabled);
+  const premium = access?.plan === "premium";
 
   const content = (
-    <div className="space-y-4">
-      {embedded ? (
-        <div>
-          <h3 className="font-semibold">有料機能のお試し</h3>
-          <p className="mt-1 text-sm text-muted-foreground">有料プランの機能切替と、記録に基づくAI機能をここで確認できます。</p>
+    <div className="space-y-5">
+      <section className="overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/15 via-background to-background p-5">
+        <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+          <Crown className="h-4 w-4" /> Twinly Premium
+        </div>
+        <h3 className="mt-3 text-xl font-bold leading-tight">記録するだけから、育児を先回りできるTwinlyへ。</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          AIの振り返り、家族共有、在庫予測、見やすいゲージ。毎日の「次に何をすればいい？」を少し減らします。
+        </p>
+        <div className="mt-5 flex items-end gap-2">
+          <span className="text-3xl font-bold">¥500</span>
+          <span className="pb-1 text-sm text-muted-foreground">/ 月</span>
+        </div>
+        <div className="mt-1 text-sm font-semibold text-primary">最初の7日間は無料</div>
+        <Button
+          className="mt-5 w-full"
+          size="lg"
+          disabled={busy || premium || !access?.canPreview}
+          onClick={() => void changePreviewPlan("premium")}
+        >
+          {premium ? "Premiumを使用中" : busy ? "切り替え中…" : "7日間無料でPremiumを試す"}
+        </Button>
+        {!premium ? <p className="mt-2 text-center text-[11px] text-muted-foreground">いつでも無料版へ戻せます。</p> : null}
+      </section>
+
+      <section>
+        <div className="mb-3">
+          <h3 className="font-bold">Premiumで、こんなことができます</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Twinlyに記録したデータが、家族の次の行動につながります。</p>
+        </div>
+        <div className="space-y-2">
+          {premiumBenefits.map(({ icon: Icon, title, description }) => (
+            <div key={title} className="flex gap-3 rounded-xl border bg-card p-3">
+              <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><Icon className="h-4 w-4" /></div>
+              <div>
+                <div className="text-sm font-semibold">{title}</div>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border">
+        <div className="grid grid-cols-[1fr_64px_82px] border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
+          <span>機能</span><span className="text-center">Free</span><span className="text-center">Premium</span>
+        </div>
+        {comparisonRows.map(([label, free, paid]) => (
+          <div key={label} className="grid grid-cols-[1fr_64px_82px] items-center border-b px-3 py-2.5 text-xs last:border-b-0">
+            <span>{label}</span>
+            <span className="text-center">{free ? <Check className="mx-auto h-4 w-4" /> : <span className="text-muted-foreground">—</span>}</span>
+            <span className="text-center">{paid ? <Check className="mx-auto h-4 w-4 text-primary" /> : <span>—</span>}</span>
+          </div>
+        ))}
+      </section>
+
+      {!premium ? (
+        <Button className="w-full" size="lg" disabled={busy || !access?.canPreview} onClick={() => void changePreviewPlan("premium")}>
+          7日間無料でPremiumを試す
+        </Button>
+      ) : (
+        <div className="rounded-xl border bg-primary/5 p-4 text-sm">
+          <div className="flex items-center gap-2 font-semibold"><Check className="h-4 w-4 text-primary" />Premium機能が利用できます</div>
+          <p className="mt-1 text-xs text-muted-foreground">AIアドバイスはホームから、日次メールは「通知」タブから設定できます。</p>
+        </div>
+      )}
+
+      {access?.canPreview ? (
+        <div className="border-t pt-3 text-center">
+          <p className="text-[11px] text-muted-foreground">現在は正式決済前の開発プレビューです。課金は発生しません。</p>
+          {premium ? (
+            <button type="button" className="mt-2 text-xs text-muted-foreground underline" disabled={busy} onClick={() => void changePreviewPlan("free")}>
+              開発確認用：無料版表示に戻す
+            </button>
+          ) : null}
         </div>
       ) : null}
 
-      <p className="text-sm">現在：{access?(access.plan==='premium'?'有料機能のお試し':'無料モード'):'確認中'}。課金は発生しません。AI APIの利用料は別途かかる場合があります。</p>
-      {access?.canPreview && <Button disabled={busy} role="switch" aria-checked={access.plan==='premium'} onClick={()=>run(async()=>{
-        generation.current++;setReview(null);
-        const next=await callService<FamilyAccess>('setFamilyPreviewPlan',{plan:access.plan==='premium'?'free':'premium'});
-        if(mounted.current)setAccess(next);
-      })}>有料機能のお試し：{access.plan==='premium'?'ON':'OFF'}</Button>}
-      <p className="text-sm font-semibold">有料版：月500円・1週間無料体験（提供予定）</p>
-      <p className="text-xs text-muted-foreground">現在は家族向けのお試しです。決済や自動課金は行いません。</p>
-      <div className="grid grid-cols-2 gap-2 text-xs">{[
-        ['themes','背景テーマ'],['gauges','各種ゲージ'],['stockForecast','在庫切れ予測'],['stockNotifications','在庫予測通知'],
-        ['familySharing','家族共有'],['music','複数音楽'],['aiReview','AIアドバイス'],['aiChat','AIに質問'],['dailySummaryEmail','日次まとめメール'],
-      ].map(([key,label])=><div key={key} className="rounded border p-2">{label}：{access?.features[key as keyof FamilyAccess['features']]?'開放':'制限中'}</div>)}</div>
-      <p className="text-xs">無料でも基本記録・通常音声・在庫数管理・ホワイトノイズを利用でき、有料音楽を12秒試聴できます。複雑な自然文をAIで記録へ変換する機能は提供しません。</p>
-      {!aiAllowed && <p className="rounded border p-3 text-sm">AI機能はロック中です。家族のオーナーがお試しをONにすると利用できます。</p>}
-      <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} disabled={!aiAllowed||busy} onChange={e=>setConsent(e.target.checked)}/>AIアドバイス生成時、登録名・生年月日・直近2週間の育児集計をGoogleのAPIへ送信することに同意する</label>
-
-      <section className="space-y-3 border-t pt-3">
-        <h3 className="font-bold">直近2週間のAIアドバイス</h3>
-        <p className="text-xs text-muted-foreground">今日を除く直近14日を中心に、ミルク・おむつ・離乳食・睡眠・体重・メモを双子で比較し、変化と今日見るポイントをまとめます。ホームの「AIアドバイス」からは、その内容について続けて質問できます。</p>
-        <Button disabled={!access?.features.aiReview||!consent||busy} onClick={()=>run(async()=>{
-          const current=generation.current;
-          const result=await callService<AiReview>('twinlyAi',{mode:'review'});
-          if(mounted.current&&current===generation.current)setReview(result);
-        })}>AIアドバイスを見る</Button>
-        {review&&<div className="space-y-2 whitespace-pre-wrap text-sm">
-          <h4 className="font-bold">最近の傾向</h4><p>{review.observations}</p>
-          <h4 className="font-bold">今日のポイント</h4><p>{review.checks}</p>
-          <p className="text-xs">{new Date(review.generatedAt).toLocaleString('ja-JP')}作成。医療上の診断ではありません。</p>
-        </div>}
-      </section>
-
-      <section className="space-y-3 border-t pt-3">
-        <h3 className="font-bold">家族への今日のまとめメール</h3>
-        <p className="text-xs text-muted-foreground">毎日指定した時刻に、その時点のミルク量・睡眠時間・おしっこ・うんち・離乳食回数を家族メンバーへまとめて送ります。数値はAIではなくTwinlyが集計します。</p>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={emailSettings.enabled} disabled={!canEditEmail||!canToggleEmail||busy} onChange={e=>setEmailSettings(value=>({...value,enabled:e.target.checked}))}/>毎日メールを送る</label>
-        <label className="flex items-center gap-2 text-sm">送信時刻
-          <select aria-label="日次まとめメール送信時刻" className="rounded border bg-background px-2 py-1" value={emailSettings.hourJst} disabled={!canEditEmail||busy} onChange={e=>setEmailSettings(value=>({...value,hourJst:Number(e.target.value)}))}>
-            {Array.from({length:24},(_,hour)=><option key={hour} value={hour}>{String(hour).padStart(2,'0')}:00</option>)}
-          </select>
-        </label>
-        <div className="text-xs text-muted-foreground">送信先：{emailSettings.recipients.length?emailSettings.recipients.join(' / '):'メールアドレスが登録された家族メンバーがいません'}</div>
-        <Button disabled={!canEditEmail||busy||(emailSettings.enabled&&!access?.features.dailySummaryEmail)} onClick={()=>run(async()=>{
-          const result=await callService<DailySummaryEmailSettings>('setDailySummaryEmailSettings',{enabled:emailSettings.enabled,hourJst:emailSettings.hourJst});
-          if(mounted.current){setEmailSettings(result);setError('日次まとめメールの設定を保存しました');}
-        })}>メール設定を保存</Button>
-        {!canEditEmail&&<p className="text-xs text-muted-foreground">この設定は家族のオーナーのみ変更できます。</p>}
-      </section>
-
-      {busy&&<p role="status">処理中…</p>}{error&&<p role="status" className="text-sm">{error}</p>}
+      {error ? <p role="alert" className="rounded-lg border p-3 text-sm">{error}</p> : null}
     </div>
   );
 
   if (embedded) return content;
 
-  return <>
-    <Button variant="ghost" size="sm" className="px-2 text-xs" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onClick={()=>setOpen(true)}>プラン・AI</Button>
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>有料機能のお試し</DialogTitle>
-          <DialogDescription>有料プランの機能切替と、記録に基づくAI機能を確認できます。</DialogDescription>
-        </DialogHeader>
-        {content}
-      </DialogContent>
-    </Dialog>
-  </>;
+  return (
+    <>
+      <Button variant="ghost" size="sm" className="px-2 text-xs" onClick={() => setOpen(true)}>料金とプラン</Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>料金とプラン</DialogTitle>
+            <DialogDescription>FreeとPremiumの違いを確認できます。</DialogDescription>
+          </DialogHeader>
+          {content}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
