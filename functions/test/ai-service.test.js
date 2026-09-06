@@ -7,7 +7,7 @@ function setup(extra={}) {
   const docs=new Map(Object.entries({
     'users/u':{activeFamilyId:'f'},
     'families/f/members/u':{status:'active',role:'owner'},
-    'families/f/app/state':{app:{profiles:{A:{displayName:'奏汰'},B:{displayName:'日向'}},events:[]}},
+    'families/f/app/state':{app:{profiles:{A:{displayName:'奏汰',birthDate:'2026-04-02'},B:{displayName:'日向',birthDate:'2026-04-02'}},events:[]}},
     ...extra
   }));
   const ref=path=>({path,collection:name=>ref(`${path}/${name}`),doc:id=>ref(`${path}/${id}`),
@@ -37,17 +37,17 @@ test('direct AI calls in free mode never contact provider',async()=>{
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:Date.now()})),e=>e.code==='permission-denied');
 });
 test('successful quota rejects before provider and failed provider calls do not consume quota',async()=>{
-  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,7),month=new Date(now+9*3600000).toISOString().slice(0,7);
+  const actualDay=new Date(now+9*3600000).toISOString().slice(0,10);
   const {services,docs}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiUsage/${month}`]:{successfulCount:600}});
   let calls=0;global.fetch=async()=>{calls++;return {ok:false,status:429};};
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
   assert.equal(calls,0);
-  docs.set(`families/f/aiUsage/${month}`,{successfulCount:0});
-  process.env.TWINLY_AI_API_KEY='test-only';
+  docs.set(`families/f/aiUsage/${month}`,{successfulCount:0});process.env.TWINLY_AI_API_KEY='test-only';
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
-  assert.equal(calls,1);
-  assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,0);
-  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
+  assert.equal(calls,1);assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,0);
+  assert.equal(docs.get(`families/f/aiUsage/${actualDay}`).successfulCount||0,0);
+  void day;
 });
 test('provider configuration errors are reported specifically and do not consume quota',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
@@ -85,9 +85,32 @@ test('successful parsing returns candidates without writing any events',async()=
   assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
   assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
 });
-test('review uses daily cache without another provider call',async()=>{
+test('review sends registered names and broad care summary, then caches versioned advice',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10);
+  const state={app:{profiles:{A:{displayName:'奏汰',birthDate:'2026-04-02'},B:{displayName:'日向',birthDate:'2026-04-02'}},events:[
+    {babyId:'A',type:'milk',milkMl:180,timestamp:now-2*86400000},
+    {babyId:'B',type:'diaper',diaperKind:'pee',timestamp:now-2*86400000+60000},
+    {babyId:'A',type:'daily',note:'吐き戻しあり',timestamp:now-2*86400000+120000},
+  ]}};
+  const {services,docs}=setup({'families/f/services/access':{plan:'premium'},'families/f/app/state':state});
+  global.fetch=async(_url,options)=>{
+    const body=JSON.parse(options.body);
+    const payload=JSON.parse(body.contents[0].parts[0].text);
+    assert.equal(payload[0].name,'奏汰');
+    assert.equal(payload[1].name,'日向');
+    assert.equal(payload[0].notes[0].text,'吐き戻しあり');
+    return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({observations:'奏汰はミルク、日向はおむつの記録があります。',checks:'奏汰の吐き戻しメモを確認してください。'})}]}}]})};
+  };
+  const result=await services.twinlyAi.run(request({mode:'review'}));
+  assert.match(result.observations,/奏汰/);
+  assert.equal(result.version,2);
+  assert.equal(docs.get(`families/f/aiReviews/${day}`).version,2);
+  assert.equal('summary' in docs.get(`families/f/aiReviews/${day}`),false);
+});
+test('review uses current daily cache without another provider call',async()=>{
   const day=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
-  const {services}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiReviews/${day}`]:{observations:'cached',checks:'check'}});
+  const {services}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiReviews/${day}`]:{version:2,observations:'cached',checks:'check',generatedAt:Date.now()}});
   global.fetch=()=>{throw new Error('must not call provider');};
   assert.equal((await services.twinlyAi.run(request({mode:'review'}))).observations,'cached');
 });
