@@ -2,7 +2,6 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { accessFor, validateDrafts, summarize } = require('./ai-policy');
 const key = defineSecret('TWINLY_AI_API_KEY');
-const trialFamily = defineString('TWINLY_TRIAL_FAMILY_ID', { default: '' });
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-2.5-flash' });
 const options = { region: 'asia-northeast1', maxInstances: 1, timeoutSeconds: 60, invoker: 'public' };
 
@@ -18,8 +17,10 @@ module.exports = function createAiServices(db) {
     if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
     const ref = root.collection('services').doc('access');
     const snap = await ref.get();
-    const trialAllowed = Boolean(trialFamily.value()) && familyId === trialFamily.value();
-    return { root, ref, uid, access: accessFor(snap.data(),trialAllowed), canPreview: trialAllowed && member.data()?.role === 'owner' };
+    // The family owner controls the preview for their own family. Keeping this
+    // independent of a deployment-time allowlist prevents owner lockout.
+    const isOwner = member.data()?.role === 'owner';
+    return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
   async function generate(system, data) {
     const selectedModel = model.value() || 'gemini-2.5-flash';
@@ -59,7 +60,7 @@ module.exports = function createAiServices(db) {
     getFamilyAccess: onCall(options, async request => { const c=await context(request);return {...c.access,canPreview:c.canPreview}; }),
     setFamilyPreviewPlan: onCall(options, async request => {
       const c=await context(request);
-      if (!c.canPreview) throw new HttpsError('permission-denied','試用切替は指定家族のオーナーのみ利用できます');
+      if (!c.canPreview) throw new HttpsError('permission-denied','試用切替は家族のオーナーのみ利用できます');
       const previewPlan=request.data?.plan;
       if (!['free','premium'].includes(previewPlan)) throw new HttpsError('invalid-argument','プランが不正です');
       await c.ref.set({previewPlan,features:accessFor({previewPlan},true).features,previewUpdatedAt:Date.now(),previewUpdatedBy:c.uid},{merge:true});

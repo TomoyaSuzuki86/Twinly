@@ -4,7 +4,8 @@ const { accessFor } = require("./ai-policy");
 const { stockAlerts } = require("./stock-alerts");
 const familyAccess = async (familyId) => {
   const snap = await db.collection("families").doc(familyId).collection("services").doc("access").get();
-  return accessFor(snap.data(), Boolean(process.env.TWINLY_TRIAL_FAMILY_ID) && familyId === process.env.TWINLY_TRIAL_FAMILY_ID);
+  // previewPlan is written only after verifying the active family owner.
+  return accessFor(snap.data(), true);
 };
 const { readApp, writeApp, assertWritable } = require("./app-storage");
 const webpush = require("web-push");
