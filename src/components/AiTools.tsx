@@ -1,20 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
-import {
-  BarChart3,
-  Check,
-  Crown,
-  Mail,
-  Music2,
-  PackageSearch,
-  Palette,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { Check, Crown } from "lucide-react";
 import { db } from "@/firebase";
 import type { AiDraft, FamilyAccess } from "@/lib/ai";
 import { callService } from "@/lib/ai";
 import type { AppState } from "@/types";
+import { PremiumFeatureShowcase } from "./PremiumFeatureShowcase";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 
@@ -24,16 +15,6 @@ type AiToolsProps = {
   onSave: (events: AiDraft[]) => boolean;
   embedded?: boolean;
 };
-
-const premiumBenefits = [
-  { icon: Sparkles, title: "AIが育児記録を読み解く", description: "直近2週間の傾向を整理し、今日見るポイントを提案。気になることはそのままAIへ質問できます。" },
-  { icon: BarChart3, title: "今の状態がひと目でわかる", description: "ミルク・おむつ・睡眠などのゲージで、次のお世話のタイミングを直感的に把握できます。" },
-  { icon: PackageSearch, title: "おむつ切れを先回り", description: "使用ペースから在庫切れを予測し、必要なタイミングで通知します。" },
-  { icon: Users, title: "家族みんなで共有", description: "家族メンバーと同じ育児記録を共有して、誰が見ても今の状況がわかります。" },
-  { icon: Mail, title: "1日の育児を自動で日報に", description: "ミルク・睡眠・排泄・離乳食を毎日まとめて、家族へメールで届けます。" },
-  { icon: Palette, title: "Twinlyを自分たちらしく", description: "複数の背景テーマと、Premium限定の見やすい表示を利用できます。" },
-  { icon: Music2, title: "選べるおやすみ音楽", description: "ホワイトノイズに加えて、複数のおやすみ音源を選べます。" },
-];
 
 const comparisonRows = [
   ["基本の育児記録", true, true],
@@ -113,9 +94,9 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
         <div className="flex items-center gap-2 text-sm font-semibold text-primary">
           <Crown className="h-4 w-4" /> Twinly Premium
         </div>
-        <h3 className="mt-3 text-xl font-bold leading-tight">記録するだけから、育児を先回りできるTwinlyへ。</h3>
+        <h3 className="mt-3 text-xl font-bold leading-tight">双子育児の「次どうする？」を、少しでも減らす。</h3>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          AIの振り返り、家族共有、在庫予測、見やすいゲージ。毎日の「次に何をすればいい？」を少し減らします。
+          記録したデータを、AI・ゲージ・在庫予測・家族共有へ。2人分の育児を、もっと見通しよくします。
         </p>
         <div className="mt-5 flex items-end gap-2">
           <span className="text-3xl font-bold">¥500</span>
@@ -133,23 +114,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
         {!premium ? <p className="mt-2 text-center text-[11px] text-muted-foreground">いつでも無料版へ戻せます。</p> : null}
       </section>
 
-      <section>
-        <div className="mb-3">
-          <h3 className="font-bold">Premiumで、こんなことができます</h3>
-          <p className="mt-1 text-xs text-muted-foreground">Twinlyに記録したデータが、家族の次の行動につながります。</p>
-        </div>
-        <div className="space-y-2">
-          {premiumBenefits.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="flex gap-3 rounded-xl border bg-card p-3">
-              <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary"><Icon className="h-4 w-4" /></div>
-              <div>
-                <div className="text-sm font-semibold">{title}</div>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      <PremiumFeatureShowcase />
 
       <section className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-[1fr_64px_82px] border-b bg-muted/40 px-3 py-2 text-xs font-semibold">
@@ -165,9 +130,13 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
       </section>
 
       {!premium ? (
-        <Button className="w-full" size="lg" disabled={busy || !access?.canPreview} onClick={() => void changePreviewPlan("premium")}>
-          7日間無料でPremiumを試す
-        </Button>
+        <section className="rounded-2xl border bg-primary/5 p-4 text-center">
+          <div className="text-sm font-bold">Twinlyを、これからも育てていくために。</div>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">便利だと感じていただけたら、Premiumで応援していただけると嬉しいです。</p>
+          <Button className="mt-4 w-full" size="lg" disabled={busy || !access?.canPreview} onClick={() => void changePreviewPlan("premium")}>
+            7日間無料でPremiumを試す
+          </Button>
+        </section>
       ) : (
         <div className="rounded-xl border bg-primary/5 p-4 text-sm">
           <div className="flex items-center gap-2 font-semibold"><Check className="h-4 w-4 text-primary" />Premium機能が利用できます</div>
@@ -199,7 +168,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>料金とプラン</DialogTitle>
-            <DialogDescription>FreeとPremiumの違いを確認できます。</DialogDescription>
+            <DialogDescription>FreeとPremiumの違いを、実際の利用イメージと一緒に確認できます。</DialogDescription>
           </DialogHeader>
           {content}
         </DialogContent>
