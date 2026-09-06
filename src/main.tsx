@@ -2,6 +2,7 @@
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
+import { FamilyAccountIconEnhancer } from "./components/FamilyAccountIconEnhancer";
 import "./index.css";
 
 const preventDefault = (event: Event) => event.preventDefault();
@@ -18,6 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
     <AiAdviceLauncher />
+    <FamilyAccountIconEnhancer />
   </React.StrictMode>
 );
 
