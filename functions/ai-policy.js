@@ -1,6 +1,9 @@
 // Pure policy shared by the callable handlers and their tests. Billing can later
 // write plan independently of the private-family preview override.
-const FEATURES = Object.fromEntries(['aiReview','aiVoice','themes','gauges','stockForecast','stockNotifications','familySharing','music'].map(key => [key, ['premium']]));
+const FEATURES = Object.fromEntries(
+  ['aiReview','aiChat','dailySummaryEmail','themes','gauges','stockForecast','stockNotifications','familySharing','music']
+    .map(key => [key, ['premium']])
+);
 const DAY = 86400000;
 const JST = 9 * 3600000;
 function accessFor(data = {}, trialAllowed = false) {
@@ -151,4 +154,53 @@ function summarize(events, now, profiles = {}) {
     };
   });
 }
-module.exports = { accessFor, validateDrafts, summarize };
+
+function buildDailySummary(events, now, profiles = {}) {
+  const from = jstDayStart(now);
+  const scanFrom = from - DAY;
+  const babies = ['A','B'].map(babyId => {
+    const profile = profiles?.[babyId] || {};
+    const name = String(profile.displayName || babyId).trim().slice(0, 40) || babyId;
+    const rows = events
+      .filter(e => e.babyId === babyId && Number.isFinite(e.timestamp) && e.timestamp >= scanFrom && e.timestamp <= now + 60000)
+      .sort((a,b) => a.timestamp - b.timestamp);
+    const todayRows = rows.filter(e => e.timestamp >= from && e.timestamp <= now + 60000);
+    const result = {
+      babyId,
+      name,
+      milkMl: 0,
+      milkCount: 0,
+      solidFoodCount: 0,
+      diaperChanges: 0,
+      peeCount: 0,
+      poopCount: 0,
+      sleepMinutes: 0,
+      isSleeping: false,
+    };
+    for (const event of todayRows) {
+      if (event.type === 'milk' && Number.isFinite(event.milkMl)) { result.milkMl += event.milkMl; result.milkCount++; }
+      if (event.type === 'solidFood') result.solidFoodCount++;
+      if (event.type === 'diaper') {
+        result.diaperChanges++;
+        if (event.diaperKind === 'pee' || event.diaperKind === 'mix') result.peeCount++;
+        if (event.diaperKind === 'poop' || event.diaperKind === 'mix') result.poopCount++;
+      }
+    }
+    let sleepStart = null;
+    for (const event of rows) {
+      if (event.type === 'sleepStart') { sleepStart = event.timestamp; continue; }
+      if (event.type !== 'wake' || sleepStart === null || event.timestamp <= sleepStart) continue;
+      result.sleepMinutes += overlap(sleepStart, Math.min(event.timestamp, now), from, now) / 60000;
+      sleepStart = null;
+    }
+    if (sleepStart !== null && sleepStart <= now) {
+      result.sleepMinutes += overlap(sleepStart, now, from, now) / 60000;
+      result.isSleeping = true;
+    }
+    result.sleepMinutes = Math.round(result.sleepMinutes);
+    return result;
+  });
+  return { date: dateKey(now), from, to: now, generatedAt: now, babies };
+}
+
+module.exports = { accessFor, validateDrafts, summarize, buildDailySummary };
