@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
   BarChart3,
+  BellRing,
   Check,
   Crown,
-  Mail,
   Music2,
   PackageSearch,
   Palette,
@@ -51,10 +51,10 @@ const premiumBenefits = [
       "パパ・ママ・家族が同じ記録をリアルタイムで共有。『最後にミルクを飲んだのはいつ？』を毎回確認しなくても、Twinlyを見ればわかります。",
   },
   {
-    icon: Mail,
-    title: "今日のまとめメール",
+    icon: BellRing,
+    title: "今日のまとめ通知",
     description:
-      "1日のミルク量、睡眠時間、おしっこ・うんち・離乳食の回数を自動集計。家族へ毎日まとめて届けます。",
+      "1日のミルク量、睡眠時間、おしっこ・うんちを自動集計。指定した時刻に、家族の通知ON端末へその日のまとめを届けます。",
   },
   {
     icon: Palette,
@@ -79,7 +79,7 @@ const comparisonRows = [
   ["おむつ在庫切れ予測・通知", false, true],
   ["家族との記録共有", false, true],
   ["複数のおやすみ音楽", false, true],
-  ["今日のまとめメール", false, true],
+  ["今日のまとめ通知", false, true],
   ["追加テーマ", false, true],
 ] as const;
 
@@ -233,7 +233,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
       ) : (
         <div className="rounded-xl border bg-primary/5 p-4 text-sm">
           <div className="flex items-center gap-2 font-semibold"><Check className="h-4 w-4 text-primary" />Premium機能が利用できます</div>
-          <p className="mt-1 text-xs text-muted-foreground">AIアドバイスはホームから、日次メールは「通知」タブから設定できます。</p>
+          <p className="mt-1 text-xs text-muted-foreground">AIアドバイスはホームから、今日のまとめ通知は「通知」タブから設定できます。</p>
         </div>
       )}
 
