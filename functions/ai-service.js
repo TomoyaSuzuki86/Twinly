@@ -6,6 +6,17 @@ const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
 const options = { region: 'asia-northeast1', maxInstances: 1, timeoutSeconds: 60, invoker: 'public' };
 const REVIEW_VERSION = 2;
 
+function replaceBabyLabels(text, summary) {
+  let value = String(text);
+  for (const baby of summary) {
+    const id = baby.babyId;
+    const name = baby.name || id;
+    value = value.replace(new RegExp(`赤ちゃん${id}`, 'g'), name);
+    value = value.replace(new RegExp(`(^|[^A-Za-z0-9])${id}(?=[^A-Za-z0-9]|$)`, 'g'), (_match, prefix) => `${prefix}${name}`);
+  }
+  return value;
+}
+
 module.exports = function createAiServices(db) {
   async function context(request) {
     if (!request.auth) throw new HttpsError('unauthenticated','ログインしてください');
@@ -125,7 +136,7 @@ module.exports = function createAiServices(db) {
       if(typeof result.observations!=='string'||typeof result.checks!=='string'||result.observations.length>1200||result.checks.length>1200) throw new HttpsError('data-loss','AIアドバイスの形式が不正です');
       const latest=await context(request);
       if(!latest.access.features.aiReview) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
-      const review={version:REVIEW_VERSION,observations:result.observations,checks:result.checks,generatedAt:now};
+      const review={version:REVIEW_VERSION,observations:replaceBabyLabels(result.observations,summary),checks:replaceBabyLabels(result.checks,summary),generatedAt:now};
       await commitUsage(c,reservation);
       await cache.set(review);return review;
     })
