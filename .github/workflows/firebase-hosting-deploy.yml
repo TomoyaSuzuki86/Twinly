@@ -119,9 +119,11 @@ jobs:
       - name: Check changed Functions
         if: steps.scope.outputs.functions == 'true'
         run: |
+          node --check functions/main.js
           node --check functions/index.js
           node --check functions/app-storage.js
           node --check functions/ai-service.js
+          node --check functions/email-delivery.js
           node --test functions/test/migration.test.js
           node --test functions/test/ai-policy.test.js
           node --test functions/test/ai-service.test.js
@@ -143,14 +145,23 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
-      - name: Configure private AI services
+      - name: Configure private services
         id: ai_config
         if: steps.scope.outputs.functions == 'true'
         env:
           TWINLY_AI_API_KEY: ${{ secrets.TWINLY_AI_API_KEY }}
           TWINLY_TRIAL_FAMILY_ID: ${{ vars.TWINLY_TRIAL_FAMILY_ID }}
           TWINLY_AI_MODEL: ${{ vars.TWINLY_AI_MODEL }}
+          TWINLY_EMAIL_API_KEY: ${{ secrets.TWINLY_EMAIL_API_KEY }}
+          TWINLY_EMAIL_FROM: ${{ vars.TWINLY_EMAIL_FROM }}
         run: node functions/scripts/configure-ai-ci.js
+
+      - name: Remove email delivery functions when unconfigured
+        if: steps.scope.outputs.functions == 'true' && steps.ai_config.outputs.email_enabled != 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          npx --yes firebase-tools@latest functions:delete deliverQueuedDailySummaryEmail flushQueuedDailySummaryEmails --region asia-northeast1 --project twinly-prod --force
 
       - name: Deploy changed Firebase Functions
         id: functions_deploy
@@ -160,9 +171,12 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails,functions:ensureDailySummaryEmailQueue,functions:getDailySummaryDeliveryStatus"
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
+            fi
+            if [ "${{ steps.ai_config.outputs.email_enabled }}" = "true" ]; then
+              selector="$selector,functions:deliverQueuedDailySummaryEmail,functions:flushQueuedDailySummaryEmails"
             fi
           fi
           npx --yes firebase-tools@latest deploy --only "$selector" --project twinly-prod --non-interactive

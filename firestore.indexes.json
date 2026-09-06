@@ -12,6 +12,16 @@
     { "collectionGroup": "app", "fieldPath": "app", "indexes": [] },
     { "collectionGroup": "storageBackups", "fieldPath": "app", "indexes": [] },
     { "collectionGroup": "mutations", "fieldPath": "settings", "indexes": [] },
-    { "collectionGroup": "events", "fieldPath": "note", "indexes": [] }
+    { "collectionGroup": "events", "fieldPath": "note", "indexes": [] },
+    {
+      "collectionGroup": "services",
+      "fieldPath": "enabled",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    }
   ]
 }
