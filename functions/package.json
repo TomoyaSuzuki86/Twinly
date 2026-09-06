@@ -2,7 +2,7 @@
   "name": "functions",
   "version": "1.0.0",
   "description": "Twinly Cloud Functions",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
     "lint": "echo \"No lint configured\"",
     "test": "node --test test/*.test.js"
