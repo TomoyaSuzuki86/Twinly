@@ -203,8 +203,8 @@ describe("BabyPanel", () => {
     expect(screen.getByText("起床中").parentElement?.className).toContain("text-lg");
     expect(sleepButton.className).toContain("rounded-md");
     expect(sleepButton.className).toContain("--gauge-wake-track");
-    expect(screen.getByTestId("sleep-state-label").className).toContain("text-[#F1FAF5]");
-    expect(screen.getByTestId("sleep-detail").className).toContain("text-[#C4DDCE]");
+    expect(screen.getByTestId("sleep-state-label").className).toContain("--gauge-wake-on");
+    expect(screen.getByTestId("sleep-detail").className).toContain("--gauge-wake-muted");
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-[15px]");
@@ -273,8 +273,8 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-state-label").className).toContain("w-[38%]");
     expect(screen.getByTestId("sleep-detail").className).toContain("text-right");
     expect(screen.getByRole("switch", { name: /起床を記録/ }).className).toContain("--gauge-sleep-track");
-    expect(screen.getByTestId("sleep-state-label").className).toContain("text-[#F3F0FF]");
-    expect(screen.getByTestId("sleep-detail").className).toContain("text-[#C9C1E6]");
+    expect(screen.getByTestId("sleep-state-label").className).toContain("--gauge-sleep-on");
+    expect(screen.getByTestId("sleep-detail").className).toContain("--gauge-sleep-muted");
     expect(screen.getAllByText("長押しで時刻変更").length).toBeGreaterThan(0);
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("--gauge-sleep-fill");
     expect(screen.getByRole("switch", { name: /起床を記録/ }).getAttribute("aria-checked")).toBe("true");

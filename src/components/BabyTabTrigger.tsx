@@ -36,7 +36,7 @@ const MiniGauge = ({
       data-percent={normalizedPercent}
       data-full={isFull}
       style={{
-        background: `conic-gradient(${color} ${normalizedPercent * 3.6}deg, rgb(71 85 105 / 0.45) 0deg)`,
+        background: `conic-gradient(${color} ${normalizedPercent * 3.6}deg, hsl(var(--mini-gauge-track)) 0deg)`,
       }}
       aria-hidden="true"
     >
@@ -44,7 +44,7 @@ const MiniGauge = ({
         className="absolute inset-[5px] rounded-full bg-background transition-colors"
         style={isFull ? { backgroundColor: color } : undefined}
       />
-      <span className={`relative transition-colors ${isFull ? "text-white" : "text-foreground/80"}`}>
+      <span className={`relative transition-colors ${isFull ? "text-primary-foreground" : "text-foreground/80"}`}>
         {children}
       </span>
     </span>
@@ -69,7 +69,7 @@ export function BabyTabTrigger({
           <div
             className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br transition-[filter] ${
             p.iconGradient ?? "from-violet-500 to-fuchsia-500"
-          } ${selected ? "" : "brightness-50"}`}
+          } ${selected ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : "opacity-85"}`}
           >
             {p.iconEmoji ? (
               <span className="text-2xl">{p.iconEmoji}</span>
@@ -79,7 +79,7 @@ export function BabyTabTrigger({
           </div>
           {sleeping && !selected ? (
             <span
-              className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full border border-indigo-200 bg-indigo-700 text-white shadow"
+              className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full border border-[hsl(var(--sleep-badge)/.35)] bg-[hsl(var(--sleep-badge))] text-[hsl(var(--sleep-badge-foreground))] shadow"
               aria-label={`${p.displayName}は睡眠中`}
               title="睡眠中"
             >
@@ -101,16 +101,16 @@ export function BabyTabTrigger({
             activityGaugeEnabled ? `・活動時間経過${gaugePercents.activity}%` : ""
           }`}
         >
-          <MiniGauge percent={gaugePercents.milk} color="#0ea5e9" testId={`baby-${p.babyId}-milk-mini-gauge`}>
+          <MiniGauge percent={gaugePercents.milk} color="hsl(var(--care-milk))" testId={`baby-${p.babyId}-milk-mini-gauge`}>
             <Milk className="h-5 w-5" />
           </MiniGauge>
-          <MiniGauge percent={gaugePercents.diaper} color="#f59e0b" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
+          <MiniGauge percent={gaugePercents.diaper} color="hsl(var(--care-diaper))" testId={`baby-${p.babyId}-diaper-mini-gauge`}>
             <Droplets className="h-5 w-5" />
           </MiniGauge>
           {activityGaugeEnabled ? (
             <MiniGauge
               percent={gaugePercents.activity}
-              color="#22c55e"
+              color="hsl(var(--care-activity))"
               testId={`baby-${p.babyId}-activity-mini-gauge`}
             >
               <Sun className="h-5 w-5" />

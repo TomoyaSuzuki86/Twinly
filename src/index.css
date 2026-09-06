@@ -49,6 +49,11 @@
   --gauge-milk-track: 195 62% 16%; --gauge-milk-fill: 198 80% 44%; --gauge-milk-text: 198 65% 96%; --gauge-milk-muted: 197 37% 82%;
   --gauge-diaper-track: 34 55% 18%; --gauge-diaper-fill: 35 82% 42%; --gauge-diaper-text: 37 85% 95%; --gauge-diaper-muted: 35 49% 78%;
   --gauge-sleep-track: 255 26% 19%; --gauge-sleep-fill: 251 45% 59%; --gauge-wake-track: 151 39% 16%; --gauge-wake-fill: 145 29% 52%;
+  --mini-gauge-track: 215 28% 24%;
+  --care-milk: 198 80% 44%; --care-diaper: 35 82% 42%; --care-activity: 145 45% 48%;
+  --sleep-badge: 251 45% 38%; --sleep-badge-foreground: 0 0% 100%;
+  --gauge-sleep-on: 255 65% 96%; --gauge-sleep-muted: 255 40% 82%;
+  --gauge-wake-on: 145 55% 95%; --gauge-wake-muted: 145 35% 78%;
 }
 
 :root[data-theme='milk'], :root[data-theme='sakura'], :root[data-theme='sun'], :root[data-theme='forest'] {
@@ -59,6 +64,9 @@
   --gauge-milk-track: 204 34% 90%; --gauge-milk-fill: 201 74% 49%; --gauge-milk-text: 207 54% 18%; --gauge-milk-muted: 207 26% 32%;
   --gauge-diaper-track: 43 53% 89%; --gauge-diaper-fill: 34 88% 46%; --gauge-diaper-text: 32 56% 17%; --gauge-diaper-muted: 31 30% 30%;
   --gauge-sleep-track: 258 30% 91%; --gauge-sleep-fill: 255 55% 58%; --gauge-wake-track: 151 29% 90%; --gauge-wake-fill: 148 38% 42%;
+  --mini-gauge-track: 220 14% 84%;
+  --care-milk: 201 64% 48%; --care-diaper: 34 74% 44%; --care-activity: 148 39% 38%;
+  --sleep-badge: 255 38% 42%; --sleep-badge-foreground: 0 0% 100%;
 }
 :root[data-theme='milk'] { --background: 38 28% 96%; --primary: 25 38% 34%; --primary-foreground: 0 0% 100%; --secondary: 35 22% 89%; --muted: 35 22% 89%; --accent: 32 37% 86%; --accent-foreground: 25 38% 23%; --ring: 25 38% 40%; }
 :root[data-theme='sakura'] { --background: 342 72% 96%; --primary: 342 57% 42%; --primary-foreground: 0 0% 100%; --secondary: 342 48% 90%; --muted: 342 40% 91%; --accent: 341 67% 86%; --accent-foreground: 342 52% 23%; --ring: 342 57% 47%; }

@@ -83,7 +83,7 @@ export function MilkModal({
             <Button
               type="button"
               variant={recordType === "milk" ? "secondary" : "ghost"}
-              className={recordType === "milk" ? "text-sky-200" : ""}
+              className={recordType === "milk" ? "[color:hsl(var(--gauge-milk-text))]" : ""}
               onClick={() => setRecordType("milk")}
             >
               ミルク
@@ -112,7 +112,7 @@ export function MilkModal({
                   >
                     <span className="text-3xl font-semibold">-</span>
                   </Button>
-                  <div className="w-32 text-center text-7xl font-extrabold tracking-tight text-sky-300">
+                  <div className="w-32 text-center text-7xl font-extrabold tracking-tight [color:hsl(var(--care-milk))]">
                     {milkMl}
                   </div>
                   <Button
