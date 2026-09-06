@@ -20,7 +20,7 @@ setGlobalOptions({ region: "asia-northeast1", maxInstances: 1 });
 const db = admin.firestore();
 Object.assign(exports, require("./ai-service")(db));
 const geminiApiKey = process.env.GEMINI_API_KEY;
-const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const geminiModel = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
 const defaultMilkGaugeWindowHours = 3;
