@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('GitHub Actions専用です');
 const familyId = process.env.TWINLY_TRIAL_FAMILY_ID || '';
-const model = process.env.TWINLY_AI_MODEL || 'gemini-2.5-flash';
+const model = process.env.TWINLY_AI_MODEL || 'gemini-3.6-flash';
 if (!/^[A-Za-z0-9_-]*$/.test(familyId) || !/^[A-Za-z0-9.-]+$/.test(model)) throw new Error('AI設定値が不正です');
 fs.writeFileSync('functions/.env.twinly-prod', `TWINLY_TRIAL_FAMILY_ID=${familyId}\nTWINLY_AI_MODEL=${model}\n`);
 const apiKey = process.env.TWINLY_AI_API_KEY;
