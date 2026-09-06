@@ -19,18 +19,20 @@ export function FamilyAccountIconEnhancer() {
   const [label, setLabel] = useState("");
 
   useEffect(() => {
-    if (!auth || !db) return;
+    const currentAuth = auth;
+    const currentDb = db;
+    if (!currentAuth || !currentDb) return;
 
     let unsubscribeUser = () => {};
     let unsubscribeMember = () => {};
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(currentAuth, (user) => {
       unsubscribeUser();
       unsubscribeMember();
       setLabel("");
       if (!user) return;
 
-      unsubscribeUser = onSnapshot(doc(db, "users", user.uid), (userSnapshot) => {
+      unsubscribeUser = onSnapshot(doc(currentDb, "users", user.uid), (userSnapshot) => {
         unsubscribeMember();
         const familyId = userSnapshot.data()?.activeFamilyId;
         if (typeof familyId !== "string" || !familyId) {
@@ -38,7 +40,7 @@ export function FamilyAccountIconEnhancer() {
           return;
         }
 
-        unsubscribeMember = onSnapshot(doc(db, "families", familyId, "members", user.uid), (memberSnapshot) => {
+        unsubscribeMember = onSnapshot(doc(currentDb, "families", familyId, "members", user.uid), (memberSnapshot) => {
           const relationship = memberSnapshot.data()?.relationship;
           setLabel(isRelationship(relationship) ? accountIconLabels[relationship] : "他");
         });
