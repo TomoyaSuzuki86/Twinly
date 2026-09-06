@@ -1,5 +1,11 @@
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const { accessFor } = require("./ai-policy");
+const { stockAlerts } = require("./stock-alerts");
+const familyAccess = async (familyId) => {
+  const snap = await db.collection("families").doc(familyId).collection("services").doc("access").get();
+  return accessFor(snap.data(), Boolean(process.env.TWINLY_TRIAL_FAMILY_ID) && familyId === process.env.TWINLY_TRIAL_FAMILY_ID);
+};
 const { readApp, writeApp, assertWritable } = require("./app-storage");
 const webpush = require("web-push");
 const { defineSecret } = require("firebase-functions/params");
@@ -11,6 +17,7 @@ admin.initializeApp();
 setGlobalOptions({ region: "asia-northeast1", maxInstances: 1 });
 
 const db = admin.firestore();
+Object.assign(exports, require("./ai-service")(db));
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const mergeWindowMinutes = 15;
@@ -67,6 +74,7 @@ const getAppRefForUid = async (uid) => {
   if (familyId) {
     const member = await db.collection("families").doc(familyId).collection("members").doc(uid).get();
     if (!member.exists || member.data()?.status !== "active") throw new Error("Family access denied");
+    if (member.data()?.role !== "owner" && !(await familyAccess(familyId)).features.familySharing) throw new Error("Family sharing is locked");
   }
   return familyId
     ? db.collection("families").doc(familyId).collection("app").doc("state")
@@ -177,6 +185,7 @@ exports.createFamilyInvite = onCall(publicCallableOptions, async (request) => {
     throw new HttpsError("permission-denied", "管理者だけが家族を招待できます");
   }
 
+  if (!(await familyAccess(familyId)).features.familySharing) throw new HttpsError("permission-denied", "家族共有は有料限定です");
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashFamilyInvite(token);
   const expiresAt = Date.now() + inviteLifetimeMs;
@@ -212,6 +221,8 @@ exports.joinFamily = onCall(publicCallableOptions, async (request) => {
     }
 
     const familyRef = db.collection("families").doc(invite.familyId);
+    const accessSnap = await transaction.get(familyRef.collection("services").doc("access"));
+    if (!accessFor(accessSnap.data(), Boolean(process.env.TWINLY_TRIAL_FAMILY_ID) && invite.familyId === process.env.TWINLY_TRIAL_FAMILY_ID).features.familySharing) throw new HttpsError("permission-denied","招待先の家族共有は現在ロック中です");
     const memberRef = familyRef.collection("members").doc(uid);
     const [familySnap, memberSnap] = await Promise.all([
       transaction.get(familyRef),
@@ -808,6 +819,15 @@ exports.sendMilkReminderNotifications = onSchedule(
     catch (error) { logger.warn("Reminder family unavailable", { uid, message: error.message }); continue; }
     if (!appState) continue;
 
+    if (familyId && (await familyAccess(familyId)).features.stockNotifications) {
+      const day = new Date(nowMs + 9*3600000).toISOString().slice(0,10);
+      const alerts = stockAlerts(appState, nowMs).filter(a => settings.stockLastSent?.[a.size] !== day);
+      const stockDevices = devicesSnap.docs.map(d => ({id:d.id,...d.data()})).filter(d => d.subscription?.endpoint && d.subscription?.keys?.auth && d.subscription?.keys?.p256dh);
+      if (alerts.length && stockDevices.length) {
+        const sent = await sendPushToDevices(uid, stockDevices, {title:"おむつの買い足し目安",body:alerts.map(a=>`${a.size}：残り${a.remaining}枚、約${Math.ceil(a.daysRemaining)}日分`).join(" / "),tag:"twinly-stock",url:"/"});
+        if(sent) await settingsSnap.ref.set({stockLastSent:{...(settings.stockLastSent||{}),...Object.fromEntries(alerts.map(a=>[a.size,day]))}},{merge:true});
+      }
+    }
     const lastSentByKey = careReminder.lastSentByKey ?? {};
     const legacyLastSentByBaby = milkReminder.lastSentByBaby ?? {};
     const candidates = ["A", "B"].flatMap((babyId) =>

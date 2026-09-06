@@ -10,6 +10,7 @@ import { familyRelationshipOptions, normalizeNickname, relationshipLabels } from
 import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
 
 type AccountModalProps = {
+  sharingEnabled?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: User;
@@ -24,6 +25,7 @@ type AccountModalProps = {
 const initials = (nickname: string) => nickname.trim().slice(0, 1) || "?";
 
 export function AccountModal({
+  sharingEnabled = false,
   open,
   onOpenChange,
   user,
@@ -131,11 +133,12 @@ export function AccountModal({
                 <p className="mt-1 text-xs text-muted-foreground">{family.name}・{members.length}人</p>
               </div>
               {member.role === "owner" ? (
-                <Button size="sm" variant="outline" onClick={createInvite} disabled={inviteBusy}>
+                <Button size="sm" variant="outline" onClick={createInvite} disabled={inviteBusy || !sharingEnabled}>
                   {inviteBusy ? "作成中…" : "家族を招待"}
                 </Button>
               ) : null}
             </div>
+            {!sharingEnabled && <p className="text-sm">家族共有は有料限定です。プランのお試しをONにすると招待・共有を利用できます。</p>}
             <div className="space-y-2">
               {members.map((familyMember) => (
                 <div key={familyMember.uid} className="flex items-center gap-3 rounded-lg bg-muted/45 p-3">
@@ -154,7 +157,7 @@ export function AccountModal({
                 </div>
               ))}
             </div>
-            {inviteLink ? (
+            {inviteLink && sharingEnabled ? (
               <div className="space-y-2 rounded-lg border border-violet-500/30 bg-violet-500/5 p-3">
                 <p className="text-sm font-semibold">招待リンク（24時間・1回限り）</p>
                 <div className="flex gap-2">

@@ -12,6 +12,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.status == "active";
     }
 
+    function canUseFamilyData(familyId) {
+      return isFamilyMember(familyId) && (isFamilyOwner(familyId)
+        || (exists(/databases/$(database)/documents/families/$(familyId)/services/access)
+          && get(/databases/$(database)/documents/families/$(familyId)/services/access).data.get('features', {}).get('familySharing', false)));
+    }
+
     function isFamilyOwner(familyId) {
       return isFamilyMember(familyId)
         && get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == "owner";
@@ -35,6 +41,10 @@ service cloud.firestore {
     }
 
     match /families/{familyId} {
+      match /services/{serviceId} {
+        allow read: if isFamilyMember(familyId) && serviceId == 'access';
+        allow write: if false;
+      }
       allow read: if isFamilyMember(familyId);
       allow create, delete: if false;
       allow update: if isFamilyOwner(familyId)
@@ -50,10 +60,10 @@ service cloud.firestore {
       }
 
       match /app/{docId} {
-        allow read: if isFamilyMember(familyId);
-        allow create: if isFamilyMember(familyId) && docId == "state"
+        allow read: if canUseFamilyData(familyId);
+        allow create: if canUseFamilyData(familyId) && docId == "state"
           && request.resource.data.get('migrationState', '') != 'copying';
-        allow update: if isFamilyMember(familyId) && docId == "state"
+        allow update: if canUseFamilyData(familyId) && docId == "state"
           && resource.data.get('migrationState', '') != 'copying'
           && request.resource.data.get('migrationState', '') == resource.data.get('migrationState', '')
           && request.resource.data.get('schemaVersion', 1) == resource.data.get('schemaVersion', 1)
@@ -75,14 +85,14 @@ service cloud.firestore {
             && event.timestamp is number && event.timestamp >= 0
             && (!('note' in event) || (event.note is string && event.note.size() <= 20000));
         }
-        allow read: if isFamilyMember(familyId);
-        allow create, update: if isFamilyMember(familyId) && storageReady() && validEvent();
-        allow delete: if isFamilyMember(familyId) && storageReady();
+        allow read: if canUseFamilyData(familyId);
+        allow create, update: if canUseFamilyData(familyId) && storageReady() && validEvent();
+        allow delete: if canUseFamilyData(familyId) && storageReady();
       }
 
       match /mutations/{mutationId} {
-        allow read: if isFamilyMember(familyId);
-        allow create: if isFamilyMember(familyId)
+        allow read: if canUseFamilyData(familyId);
+        allow create: if canUseFamilyData(familyId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.keys().hasOnly(['uid', 'settings', 'consumption', 'createdAt']);
         allow update, delete: if false;
