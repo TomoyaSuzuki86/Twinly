@@ -12,6 +12,7 @@ vi.mock('@/lib/ai',async importOriginal=>({...await importOriginal<typeof import
 const free={plan:'free',canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
 const premium={plan:'premium',canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
 const emailSettings={enabled:false,hourJst:21,recipients:['family@example.com'],canEdit:true};
+const deliveryStatus={lastSentDate:'2026-09-05',lastSentAt:new Date('2026-09-05T11:05:00Z').getTime(),lastDeliveryAttemptAt:null,lastDeliveryError:''};
 
 function renderTools(){
   render(<AiTools familyId="test" app={createInitialAppState()} onSave={()=>true}/>);
@@ -63,18 +64,36 @@ describe('pricing and plans',()=>{
     expect(screen.getByRole('button',{name:'開発確認用：無料版表示に戻す'})).toBeInTheDocument();
   });
 
-  it('keeps daily-summary email controls in their own notification settings component',async()=>{
+  it('keeps daily-summary email controls in notifications and shows delivery health',async()=>{
     mock.call.mockImplementation(async(name,data)=>{
       if(name==='getFamilyAccess')return premium;
       if(name==='getDailySummaryEmailSettings')return emailSettings;
+      if(name==='getDailySummaryDeliveryStatus')return deliveryStatus;
       if(name==='setDailySummaryEmailSettings')return {...emailSettings,...data};
       return premium;
     });
     render(<DailySummaryEmailSettings/>);
     expect(await screen.findByText('今日のまとめメール')).toBeInTheDocument();
+    expect(await screen.findByText('メール配送の準備は完了しています')).toBeInTheDocument();
+    expect(screen.getByText(/最終送信/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox',{name:'毎日メールを送る'}));
     fireEvent.change(screen.getByLabelText('日次まとめメール送信時刻'),{target:{value:'22'}});
     fireEvent.click(screen.getByRole('button',{name:'メール設定を保存'}));
     await waitFor(()=>expect(mock.call.mock.calls.some(([name,data])=>name==='setDailySummaryEmailSettings'&&data.enabled===true&&data.hourJst===22)).toBe(true));
+  });
+
+  it('warns when delivery infrastructure is not configured yet',async()=>{
+    mock.call.mockImplementation(async(name)=>{
+      if(name==='getFamilyAccess')return premium;
+      if(name==='getDailySummaryEmailSettings')return {...emailSettings,enabled:true};
+      if(name==='getDailySummaryDeliveryStatus'){
+        const error=Object.assign(new Error('not found'),{code:'functions/not-found'});
+        throw error;
+      }
+      return premium;
+    });
+    render(<DailySummaryEmailSettings/>);
+    expect(await screen.findByText('メール配送は準備中です')).toBeInTheDocument();
+    expect(screen.getByText(/実際のメールは送信されません/)).toBeInTheDocument();
   });
 });
