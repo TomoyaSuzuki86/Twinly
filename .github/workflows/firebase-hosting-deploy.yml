@@ -161,7 +161,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          npx --yes firebase-tools@latest functions:delete deliverQueuedDailySummaryEmail flushQueuedDailySummaryEmails --region asia-northeast1 --project twinly-prod --force
+          npx --yes firebase-tools@latest functions:delete deliverQueuedDailySummaryEmail flushQueuedDailySummaryEmails ensureDailySummaryEmailQueue getDailySummaryDeliveryStatus --region asia-northeast1 --project twinly-prod --force
 
       - name: Deploy changed Firebase Functions
         id: functions_deploy
@@ -171,12 +171,12 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails,functions:ensureDailySummaryEmailQueue,functions:getDailySummaryDeliveryStatus"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails"
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
             fi
             if [ "${{ steps.ai_config.outputs.email_enabled }}" = "true" ]; then
-              selector="$selector,functions:deliverQueuedDailySummaryEmail,functions:flushQueuedDailySummaryEmails"
+              selector="$selector,functions:ensureDailySummaryEmailQueue,functions:getDailySummaryDeliveryStatus,functions:deliverQueuedDailySummaryEmail,functions:flushQueuedDailySummaryEmails"
             fi
           fi
           npx --yes firebase-tools@latest deploy --only "$selector" --project twinly-prod --non-interactive
