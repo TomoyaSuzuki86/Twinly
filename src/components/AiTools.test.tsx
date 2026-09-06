@@ -22,17 +22,20 @@ describe('pricing and plans',()=>{
   afterEach(cleanup);
   beforeEach(()=>mock.call.mockReset());
 
-  it('shows Premium with concrete demo screens and the Twinly founder story',async()=>{
+  it('explains Premium benefits clearly without screenshot-style demos',async()=>{
     mock.call.mockResolvedValue(free);
     renderTools();
     expect(await screen.findByText('Twinly Premium')).toBeInTheDocument();
     expect(screen.getByText('¥500')).toBeInTheDocument();
-    expect(screen.getByText('Premiumを、画面で見てみる')).toBeInTheDocument();
-    expect(screen.getByText('今日のAIアドバイス')).toBeInTheDocument();
-    expect(screen.getByText('おむつ在庫')).toBeInTheDocument();
-    expect(screen.getByText('Twinly 今日のまとめ')).toBeInTheDocument();
+    expect(screen.getByText('Premiumでできること')).toBeInTheDocument();
+    expect(screen.getByText('AIアドバイス & AI質問')).toBeInTheDocument();
+    expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();
+    expect(screen.getByText('おむつ在庫切れ予測')).toBeInTheDocument();
+    expect(screen.getByText('今日のまとめメール')).toBeInTheDocument();
     expect(screen.getByText('Twinlyをつくった理由')).toBeInTheDocument();
-    expect(screen.getByText(/私たち夫婦が双子育児をする中から生まれました/)).toBeInTheDocument();
+    expect(screen.getByText(/双子育児をする私たち夫婦の/)).toBeInTheDocument();
+    expect(screen.queryByText('Premiumを、画面で見てみる')).not.toBeInTheDocument();
+    expect(screen.queryByText(/横にスワイプ/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button',{name:'7日間無料でPremiumを試す'}).length).toBeGreaterThan(0);
     expect(screen.queryByText(/AIアドバイス生成時/)).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
