@@ -22,7 +22,13 @@ type AccountModalProps = {
   onSignOut: () => Promise<void> | void;
 };
 
-const initials = (nickname: string) => nickname.trim().slice(0, 1) || "?";
+const relationshipAvatarLabels: Record<FamilyRelationship, string> = {
+  father: "父",
+  mother: "母",
+  grandfather: "祖父",
+  grandmother: "祖母",
+  other: "他",
+};
 
 export function AccountModal({
   sharingEnabled = false,
@@ -142,8 +148,11 @@ export function AccountModal({
             <div className="space-y-2">
               {members.map((familyMember) => (
                 <div key={familyMember.uid} className="flex items-center gap-3 rounded-lg bg-muted/45 p-3">
-                  <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-violet-500/20 font-bold text-violet-200">
-                    {initials(familyMember.nickname)}
+                  <div
+                    className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm ring-1 ring-primary/30"
+                    aria-label={`続柄: ${relationshipLabels[familyMember.relationship]}`}
+                  >
+                    {relationshipAvatarLabels[familyMember.relationship]}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">
