@@ -52,10 +52,10 @@ export function AiTools({familyId,app,onSave}:{familyId:string;app:AppState;onSa
         })}>有料機能のお試し：{access.plan==='premium'?'ON':'OFF'}</Button>}
         <p className="text-sm font-semibold">有料版：月500円・1週間無料体験（提供予定）</p>
         <p className="text-xs text-muted-foreground">現在は家族向けのお試しです。決済や自動課金は行いません。</p>
-        <div className="grid grid-cols-2 gap-2 text-xs">{[['themes','背景テーマ'],['gauges','各種ゲージ'],['stockForecast','在庫切れ予測'],['stockNotifications','在庫予測通知'],['familySharing','家族共有'],['music','複数音楽'],['aiVoice','Gemini高度音声入力'],['aiReview','AI振り返り']].map(([key,label])=><div key={key} className="rounded border p-2">{label}：{access?.features[key as keyof FamilyAccess['features']]?'開放':'制限中'}</div>)}</div>
+        <div className="grid grid-cols-2 gap-2 text-xs">{[['themes','背景テーマ'],['gauges','各種ゲージ'],['stockForecast','在庫切れ予測'],['stockNotifications','在庫予測通知'],['familySharing','家族共有'],['music','複数音楽'],['aiVoice','Gemini高度音声入力'],['aiReview','AIアドバイス']].map(([key,label])=><div key={key} className="rounded border p-2">{label}：{access?.features[key as keyof FamilyAccess['features']]?'開放':'制限中'}</div>)}</div>
         <p className="text-xs">無料でも基本記録・通常音声・在庫数管理・ホワイトノイズを利用でき、有料音楽を12秒試聴できます。無料への切替中、管理者以外の家族メンバーは共有記録を利用できません。</p>
         {!allowed && <p className="rounded border p-3 text-sm">AI機能はロック中です。家族のオーナーがお試しをONにすると利用できます。</p>}
-        <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} disabled={!allowed||busy} onChange={e=>setConsent(e.target.checked)}/>AI利用時、GoogleのAPIへ入力文・登録名と別名（解析）、または氏名を含まないミルク・体重の集計（振り返り）を送信することに同意する</label>
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} disabled={!allowed||busy} onChange={e=>setConsent(e.target.checked)}/>AI利用時、GoogleのAPIへ入力文・登録名と別名（音声解析）、または登録名・生年月日・直近2週間の育児集計とメモ（AIアドバイス）を送信することに同意する</label>
         <section className="space-y-3 border-t pt-3">
           <h3 className="font-bold">話した内容をまとめて記録</h3>
           <p className="text-xs text-muted-foreground">例：奏汰はミルク70、日向は15分前に20飲んで、その後おしっこも替えた</p>
@@ -83,9 +83,9 @@ export function AiTools({familyId,app,onSave}:{familyId:string;app:AppState;onSa
             if(onSave(drafts)){setDrafts([]);setText('');setError('保存しました。ホームの「取り消す」で一括Undoできます');}
           })}>確認した{drafts.length}件を保存</Button>}
         </section>
-        <section className="space-y-3 border-t pt-3"><h3 className="font-bold">直近2週間の振り返り</h3><p className="text-xs text-muted-foreground">今日を除く7日間同士を比較。１日１回分を家族で共有します。未同期の記録は含まれません。</p>
-          <Button disabled={!access?.features.aiReview||!consent||busy} onClick={()=>run(async()=>{const current=generation.current;const result=await callService<AiReview>('twinlyAi',{mode:'review'});if(mounted.current&&current===generation.current)setReview(result);})}>AIの振り返りを見る</Button>
-          {review&&<div className="space-y-2 whitespace-pre-wrap text-sm"><p>A：{app.profiles.A.displayName} / B：{app.profiles.B.displayName}</p><h4 className="font-bold">記録からわかること</h4><p>{review.observations}</p><h4 className="font-bold">確認すること</h4><p>{review.checks}</p><p className="text-xs">{new Date(review.generatedAt).toLocaleString('ja-JP')}作成。医療上の診断ではありません。</p></div>}
+        <section className="space-y-3 border-t pt-3"><h3 className="font-bold">直近2週間のAIアドバイス</h3><p className="text-xs text-muted-foreground">今日を除く直近14日を中心に、ミルク・おむつ・離乳食・睡眠・体重・メモを双子で比較し、変化と今日見るポイントをまとめます。同じ日の生成結果は家族で共有します。</p>
+          <Button disabled={!access?.features.aiReview||!consent||busy} onClick={()=>run(async()=>{const current=generation.current;const result=await callService<AiReview>('twinlyAi',{mode:'review'});if(mounted.current&&current===generation.current)setReview(result);})}>AIアドバイスを見る</Button>
+          {review&&<div className="space-y-2 whitespace-pre-wrap text-sm"><h4 className="font-bold">最近の傾向</h4><p>{review.observations}</p><h4 className="font-bold">今日のポイント</h4><p>{review.checks}</p><p className="text-xs">{new Date(review.generatedAt).toLocaleString('ja-JP')}作成。医療上の診断ではありません。</p></div>}
         </section>
         {busy&&<p role="status">処理中…</p>}{error&&<p role="status" className="text-sm">{error}</p>}
       </DialogContent>
