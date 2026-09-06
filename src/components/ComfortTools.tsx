@@ -5,11 +5,10 @@ import { createSleepSound, sleepMusicDeadline } from '@/lib/sleep-music';
 import type { AppState } from '@/types';
 import type { FamilyAccess } from '@/lib/ai';
 
-const tracks = [['white','ホワイトノイズ'],['moon','月あかりの子守歌'],['stars','星のオルゴール'],['forest','森のゆりかご']];
+const tracks = [['white','ホワイトノイズ'],['musicBox','星のオルゴール'],['heartbeat','心音風'],['shush','シーッという音'],['rain','やさしい雨']];
 export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app:AppState;familyId:string}) {
   const [open,setOpen]=useState(false), [playing,setPlaying]=useState(''), [message,setMessage]=useState('');
-  const [volume,setVolume]=useState(0.3);
-  const [theme,setTheme]=useState(()=>{try{return localStorage.getItem(`twinly-theme:${familyId}`)||'dark';}catch{return 'dark';}});
+  const [volume,setVolume]=useState(0.55);
   const player=useRef<{context:AudioContext;source:AudioBufferSourceNode;gain:GainNode;previewEnd:number|null}|null>(null);
   const operation=useRef(0);
   const deadline=sleepMusicDeadline(app.events,app.sleepManagementEnabled);
@@ -54,22 +53,15 @@ export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app
     document.addEventListener('visibilitychange',visible);
     return()=>{document.removeEventListener('visibilitychange',visible);operation.current++;void player.current?.context.close();player.current=null;};
   },[]);
-  useEffect(()=>{
-    document.documentElement.dataset.theme=access?.features.themes&&['light','pink','yellow'].includes(theme)?theme:'dark';
-    return()=>{delete document.documentElement.dataset.theme;};
-  },[theme,access?.features.themes]);
   return <>
-    <Button variant="ghost" size="icon" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onClick={()=>setOpen(true)} aria-label="音楽と背景">{playing?'♫':'♪'}</Button>
+    <Button variant="ghost" size="icon" onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onClick={()=>setOpen(true)} aria-label="おやすみ音楽">{playing?'♫':'♪'}</Button>
     <Dialog open={open} onOpenChange={setOpen}><DialogContent onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} className="max-h-[90vh] overflow-y-auto">
-      <DialogHeader><DialogTitle>おやすみ音楽と背景</DialogTitle><DialogDescription>2人が入眠すると、15分後に音楽を自動停止します。最後の10秒で音を小さくします。</DialogDescription></DialogHeader>
-      <p className="text-xs text-muted-foreground">画面ロック中の再生は端末やブラウザによって停止する場合があります。</p>
+      <DialogHeader><DialogTitle>おやすみ音楽</DialogTitle><DialogDescription>2人が入眠すると、15分後に自動停止します。最後の10秒で音を小さくします。</DialogDescription></DialogHeader>
+      <p className="text-xs text-muted-foreground">赤ちゃんの頭から離し、無理のない音量で使ってください。</p>
       <div className="grid gap-2">{tracks.map(([id,label])=><Button key={id} variant={playing===id?'default':'outline'} onClick={()=>void play(id)}>{label}{id!=='white'&&!access?.features.music?'（12秒試聴）':''}{playing===id?'・再生中':''}</Button>)}</div>
-      <label className="flex gap-3">音量<input aria-label="音量" type="range" min="0" max="1" step="0.01" value={volume} onChange={e=>setVolume(Number(e.target.value))}/></label>
+      <label className="flex items-center gap-3">音量 <input aria-label="音量" className="flex-1 accent-primary" type="range" min="0" max="1" step="0.01" value={volume} onChange={e=>setVolume(Number(e.target.value))}/> <span className="w-10 text-right text-sm tabular-nums">{Math.round(volume*100)}%</span></label>
       <Button variant="outline" disabled={!playing} onClick={stop}>停止</Button>
       {deadline!==null&&<p className="text-sm">自動停止予定：{new Date(deadline).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</p>}
-      <label className="space-y-2">背景テーマ{!access?.features.themes&&'（有料限定）'}<select aria-label="背景テーマ" className="w-full rounded border bg-background p-2" disabled={!access?.features.themes} value={access?.features.themes?theme:'dark'} onChange={e=>{setTheme(e.target.value);try{localStorage.setItem(`twinly-theme:${familyId}`,e.target.value);}catch{}}}>
-        <option value="dark">ナイト</option><option value="light">ミルクホワイト</option><option value="pink">さくらピンク</option><option value="yellow">ひだまりイエロー</option>
-      </select></label>
       {message&&<p role="status">{message}</p>}
     </DialogContent></Dialog>
   </>;

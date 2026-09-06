@@ -334,59 +334,59 @@ export function BabyPanel({
         <div className="grid grid-cols-2 gap-4">
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#103846] p-0 text-2xl font-bold text-[#F2FAFD] hover:bg-[#103846] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-milk-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-milk-text))] hover:[background:hsl(var(--gauge-milk-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
-              className="absolute inset-y-0 left-0 bg-[#1596C8] transition-[width] duration-500"
+              className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-milk-fill))] transition-[width] duration-500"
               data-testid="milk-gauge-fill"
               style={{ width: gaugesEnabled ? `${milkGaugePercent}%` : 0 }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center text-[#F2FAFD]">
+              <div className="flex items-center [color:hsl(var(--gauge-milk-text))]">
                 <Utensils className="mr-3 h-7 w-7" />
                 食事
               </div>
               {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
-                <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight text-[#C2DCE5]">
+                <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">
                   あと {milkNeededMl} ml
                   <span className="ml-1 font-semibold">/ {milkTargetMl} ml</span>
                 </span>
               ) : (
-                <span className="mt-0.5 text-[15px] font-bold leading-tight text-[#C2DCE5]">必要量を計算中</span>
+                <span className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">必要量を計算中</span>
               )}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight text-[#C2DCE5]">
+              <span className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">
                 前回 {lastMilkTime} / {lastMilkElapsed}
               </span>
             </div>
           </Button>
           <Button
             size="lg"
-            className="relative h-28 select-none overflow-hidden bg-[#493116] p-0 text-2xl font-bold text-[#FFF4E5] hover:bg-[#493116] [-webkit-touch-callout:none]"
+            className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-diaper-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-diaper-text))] hover:[background:hsl(var(--gauge-diaper-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={!gaugesEnabled ? "おむつを記録" : `おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
             <span
               aria-hidden="true"
-              className="absolute inset-y-0 left-0 bg-[#C87512] transition-[width] duration-500"
+              className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-diaper-fill))] transition-[width] duration-500"
               data-testid="diaper-gauge-fill"
               style={{ width: gaugesEnabled ? `${diaperGaugePercent}%` : 0 }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center text-[#FFF4E5]">
+              <div className="flex items-center [color:hsl(var(--gauge-diaper-text))]">
                 <Droplets className="mr-3 h-7 w-7" />
                 おむつ
               </div>
               {diaperStockManagementEnabled ? (
-              <span className="mt-0.5 text-[15px] font-bold leading-tight text-[#E8C59A]">
+              <span className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]">
                 {profile.diaperSize}・残り {remainingDiapers}
               </span>
               ) : null}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight text-[#E8C59A]">
+              <span className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]">
                 前回 {lastDiaperTime} / {lastDiaperElapsed}
               </span>
             </div>
@@ -401,8 +401,8 @@ export function BabyPanel({
           aria-checked={sleeping}
           className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 shadow-sm [-webkit-touch-callout:none] ${
             sleeping
-              ? "border-violet-500/60 bg-[#29233E] hover:bg-[#29233E]"
-              : "border-emerald-500/60 bg-[#173C2B] hover:bg-[#173C2B]"
+              ? "border-violet-500/60 [background:hsl(var(--gauge-sleep-track))] hover:[background:hsl(var(--gauge-sleep-track))]"
+              : "border-emerald-500/60 [background:hsl(var(--gauge-wake-track))] hover:[background:hsl(var(--gauge-wake-track))]"
           }`}
           onPointerDown={startSleepLongPress}
           onPointerUp={clearSleepLongPressTimer}
@@ -435,7 +435,7 @@ export function BabyPanel({
           <span
             aria-hidden="true"
             className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
-              sleeping ? "bg-[#6755A5]" : "bg-[#61A77F]"
+              sleeping ? "[background:hsl(var(--gauge-sleep-fill))]" : "[background:hsl(var(--gauge-wake-fill))]"
             }`}
             data-testid="sleep-gauge-fill"
             data-percent={sleepButtonGaugePercent}

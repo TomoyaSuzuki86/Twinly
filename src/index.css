@@ -46,24 +46,24 @@
 
 :root {
   color-scheme: dark;
+  --gauge-milk-track: 195 62% 16%; --gauge-milk-fill: 198 80% 44%; --gauge-milk-text: 198 65% 96%; --gauge-milk-muted: 197 37% 82%;
+  --gauge-diaper-track: 34 55% 18%; --gauge-diaper-fill: 35 82% 42%; --gauge-diaper-text: 37 85% 95%; --gauge-diaper-muted: 35 49% 78%;
+  --gauge-sleep-track: 255 26% 19%; --gauge-sleep-fill: 251 45% 59%; --gauge-wake-track: 151 39% 16%; --gauge-wake-fill: 145 29% 52%;
 }
 
-:root[data-theme='light'], :root[data-theme='pink'], :root[data-theme='yellow'] {
+:root[data-theme='milk'], :root[data-theme='sakura'], :root[data-theme='sun'], :root[data-theme='forest'] {
   color-scheme: light;
-  --background: 40 35% 97%; --foreground: 230 25% 18%;
-  --card: 0 0% 100%; --card-foreground: 230 25% 18%;
-  --popover: 0 0% 100%; --popover-foreground: 230 25% 18%;
-  --primary: 255 45% 40%; --primary-foreground: 0 0% 100%;
-  --secondary: 240 20% 92%; --secondary-foreground: 230 25% 18%;
-  --muted: 240 20% 92%; --muted-foreground: 230 12% 40%;
-  --accent: 245 30% 90%; --accent-foreground: 230 25% 18%;
-  --border: 235 20% 80%; --input: 235 20% 80%; --ring: 255 45% 40%;
+  --foreground: 228 24% 17%; --card: 0 0% 100%; --card-foreground: 228 24% 17%;
+  --popover: 0 0% 100%; --popover-foreground: 228 24% 17%; --secondary-foreground: 228 24% 17%;
+  --muted-foreground: 228 12% 38%; --border: 228 18% 78%; --input: 228 18% 78%;
+  --gauge-milk-track: 204 34% 90%; --gauge-milk-fill: 201 74% 49%; --gauge-milk-text: 207 54% 18%; --gauge-milk-muted: 207 26% 32%;
+  --gauge-diaper-track: 43 53% 89%; --gauge-diaper-fill: 34 88% 46%; --gauge-diaper-text: 32 56% 17%; --gauge-diaper-muted: 31 30% 30%;
+  --gauge-sleep-track: 258 30% 91%; --gauge-sleep-fill: 255 55% 58%; --gauge-wake-track: 151 29% 90%; --gauge-wake-fill: 148 38% 42%;
 }
-:root[data-theme='pink'] { --background: 345 70% 96%; --card: 345 80% 98%; --accent: 345 60% 90%; }
-:root[data-theme='yellow'] { --background: 45 90% 94%; --card: 45 100% 98%; --accent: 45 75% 87%; }
-:root[data-theme='light'] .twinly-baby-panel,
-:root[data-theme='pink'] .twinly-baby-panel,
-:root[data-theme='yellow'] .twinly-baby-panel { background-color: hsl(var(--card)); }
+:root[data-theme='milk'] { --background: 38 28% 96%; --primary: 25 38% 34%; --primary-foreground: 0 0% 100%; --secondary: 35 22% 89%; --muted: 35 22% 89%; --accent: 32 37% 86%; --accent-foreground: 25 38% 23%; --ring: 25 38% 40%; }
+:root[data-theme='sakura'] { --background: 342 72% 96%; --primary: 342 57% 42%; --primary-foreground: 0 0% 100%; --secondary: 342 48% 90%; --muted: 342 40% 91%; --accent: 341 67% 86%; --accent-foreground: 342 52% 23%; --ring: 342 57% 47%; }
+:root[data-theme='sun'] { --background: 43 88% 94%; --primary: 21 69% 39%; --primary-foreground: 0 0% 100%; --secondary: 42 58% 88%; --muted: 43 46% 89%; --accent: 35 77% 84%; --accent-foreground: 23 60% 22%; --ring: 21 69% 44%; }
+:root[data-theme='forest'] { --background: 143 36% 95%; --primary: 153 41% 31%; --primary-foreground: 0 0% 100%; --secondary: 145 27% 88%; --muted: 145 23% 89%; --accent: 147 39% 84%; --accent-foreground: 154 45% 20%; --ring: 153 41% 37%; }
 [data-transition] { opacity: 1 !important; }
 [data-transition='sleepStart'] .sleep-transition-message { background: linear-gradient(110deg,#61a77f,#6755a5,#29233e); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }
 [data-transition='wake'] .sleep-transition-message { background: linear-gradient(110deg,#6755a5,#61a77f,#173c2b); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }

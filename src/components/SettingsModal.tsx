@@ -42,6 +42,8 @@ type SettingsModalProps = {
   onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onResetAll: () => void;
+  appearance?: React.ReactNode;
+  planAi?: React.ReactNode;
 };
 
 const parseVoiceAliases = (value: string) =>
@@ -84,6 +86,8 @@ export function SettingsModal({
   onExport,
   onImport,
   onResetAll,
+  appearance,
+  planAi,
 }: SettingsModalProps) {
   const importRef = React.useRef<HTMLInputElement>(null);
   const [localProfiles, setLocalProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
@@ -181,6 +185,7 @@ export function SettingsModal({
             <TabsTrigger value="cloud">通知・端末</TabsTrigger>
             <TabsTrigger value="data">データ管理</TabsTrigger>
             <TabsTrigger value="diaper-stock">おむつ在庫</TabsTrigger>
+            <TabsTrigger value="appearance">デザイン・AI</TabsTrigger>
           </TabsList>
           <TabsContent value="profile" className="mt-4">
             <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
@@ -597,6 +602,10 @@ export function SettingsModal({
               </div>
               ) : null}
             </div>
+          </TabsContent>
+          <TabsContent value="appearance" className="mt-4 space-y-5">
+            {appearance}
+            {planAi && <section className="space-y-2 border-t pt-5"><h3 className="font-semibold">プラン・AI</h3>{planAi}</section>}
           </TabsContent>
         </Tabs>
         <DialogComponents.DialogFooter>

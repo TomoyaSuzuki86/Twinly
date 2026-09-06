@@ -198,6 +198,19 @@ export default function App() {
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
   const {access: familyAccess, error: accessError} = useFamilyAccess(authUser?.uid, family?.id);
+  const [theme, setTheme] = useState("dark");
+  useEffect(() => {
+    if (!family?.id) return;
+    try {
+      const saved = localStorage.getItem(`twinly-theme:${family.id}`) || "dark";
+      setTheme(saved === "light" ? "milk" : saved === "pink" ? "sakura" : saved === "yellow" ? "sun" : saved);
+    } catch { setTheme("dark"); }
+  }, [family?.id]);
+  useEffect(() => {
+    const allowed = ["milk", "sakura", "sun", "forest"].includes(theme) && familyAccess?.features.themes;
+    document.documentElement.dataset.theme = allowed ? theme : "dark";
+    return () => { delete document.documentElement.dataset.theme; };
+  }, [theme, familyAccess?.features.themes]);
   const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
@@ -1306,18 +1319,6 @@ export default function App() {
 
                 <div className="flex items-center gap-1">
                   <ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/>
-                  <AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
-                    if (!validConfirmedDrafts(drafts)) return false;
-                    const events = drafts.map(draft => createEvent(draft.babyId, draft.type, {
-                      timestamp: draft.timestamp!,
-                      ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}),
-                      ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}),
-                      note: "AI音声・文章解析（確認済み）",
-                    }));
-                    if (!updateAppWithPendingEvents(events, prev => appendEvents(prev, events))) return false;
-                    scheduleUndo(events);
-                    return true;
-                  }} />
                   <VoiceCommandButton
                     ref={voiceButtonRef}
                     babyNames={voiceCommandBabyNames}
@@ -1558,6 +1559,17 @@ export default function App() {
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}
+        appearance={<section className="space-y-3"><div><h3 className="font-semibold">テーマ</h3><p className="text-sm text-muted-foreground">背景・文字・ゲージをまとめて切り替えます。</p></div><div className="grid grid-cols-2 gap-2">{[
+          ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
+          ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
+          ["forest", "森の朝", "from-emerald-50 to-green-200"]
+        ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div></section>}
+        planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
+          if (!validConfirmedDrafts(drafts)) return false;
+          const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
+          if (!updateAppWithPendingEvents(events, prev => appendEvents(prev, events))) return false;
+          scheduleUndo(events); return true;
+        }} />}
       />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
