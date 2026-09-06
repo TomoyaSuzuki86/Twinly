@@ -13,13 +13,16 @@ module.exports = function createAiServices(db) {
     const familyId = user.data()?.activeFamilyId;
     if (typeof familyId !== 'string' || !familyId || familyId.includes('/')) throw new HttpsError('permission-denied','家族情報を確認してください');
     const root = db.collection('families').doc(familyId);
-    const member = await root.collection('members').doc(uid).get();
+    const [member, family] = await Promise.all([
+      root.collection('members').doc(uid).get(),
+      root.get(),
+    ]);
     if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
     const ref = root.collection('services').doc('access');
     const snap = await ref.get();
     // The family owner controls the preview for their own family. Keeping this
     // independent of a deployment-time allowlist prevents owner lockout.
-    const isOwner = member.data()?.role === 'owner';
+    const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
   async function generate(system, data) {
