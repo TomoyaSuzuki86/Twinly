@@ -31,7 +31,7 @@ describe('pricing and plans',()=>{
     expect(screen.getByText('AIアドバイス & AI質問')).toBeInTheDocument();
     expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();
     expect(screen.getByText('おむつ在庫切れ予測')).toBeInTheDocument();
-    expect(screen.getByText('今日のまとめメール')).toBeInTheDocument();
+    expect(screen.getAllByText('今日のまとめメール').length).toBeGreaterThan(0);
     expect(screen.getByText('Twinlyをつくった理由')).toBeInTheDocument();
     expect(screen.getByText(/双子育児をする私たち夫婦の/)).toBeInTheDocument();
     expect(screen.queryByText('Premiumを、画面で見てみる')).not.toBeInTheDocument();
