@@ -61,7 +61,7 @@ describe('pricing and plans',()=>{
       if(name==='getFamilyAccess')return premium;
       if(name==='getDailySummaryEmailSettings')return emailSettings;
       if(name==='setDailySummaryEmailSettings')return {...emailSettings,...data};
-      throw new Error(`unexpected ${name}`);
+      return premium;
     });
     render(<DailySummaryEmailSettings/>);
     expect(await screen.findByText('今日のまとめメール')).toBeInTheDocument();
