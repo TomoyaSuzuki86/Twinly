@@ -2,7 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const { accessFor, validateDrafts, summarize } = require('./ai-policy');
 const key = defineSecret('TWINLY_AI_API_KEY');
-const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-2.5-flash' });
+const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
 const options = { region: 'asia-northeast1', maxInstances: 1, timeoutSeconds: 60, invoker: 'public' };
 
 module.exports = function createAiServices(db) {
@@ -24,7 +24,7 @@ module.exports = function createAiServices(db) {
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
   async function generate(system, data) {
-    const selectedModel = model.value() || 'gemini-2.5-flash';
+    const selectedModel = model.value() || 'gemini-3.6-flash';
     if (!/^[a-zA-Z0-9.-]+$/.test(selectedModel)) throw new HttpsError('failed-precondition','AIモデル設定を確認してください');
     let response;
     try {
@@ -32,10 +32,19 @@ module.exports = function createAiServices(db) {
         method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':key.value()},
         signal:AbortSignal.timeout(40000),
         body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:JSON.stringify(data)}]}],
-          generationConfig:{temperature:0.1,maxOutputTokens:2048,responseMimeType:'application/json',thinkingConfig:{thinkingBudget:0}}})
+          generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'minimal'}}})
       });
     } catch { throw new HttpsError('unavailable','AIに接続できませんでした。入力は残っています'); }
-    if (!response.ok) throw new HttpsError(response.status === 429 ? 'resource-exhausted' : 'unavailable','AIが利用できません。API設定・利用上限を確認してください');
+    if (!response.ok) {
+      let details='';
+      try { if(typeof response.text==='function') details=(await response.text()).slice(0,1000); } catch {}
+      console.error('Gemini API request failed',{status:response.status,model:selectedModel,details});
+      if(response.status===400) throw new HttpsError('failed-precondition','AIモデルへの送信設定が対応していません');
+      if(response.status===401||response.status===403) throw new HttpsError('permission-denied','Gemini APIキーまたは利用権限を確認してください');
+      if(response.status===404) throw new HttpsError('failed-precondition','指定したAIモデルを利用できません');
+      if(response.status===429) throw new HttpsError('resource-exhausted','Gemini APIの利用上限に達しました');
+      throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
+    }
     try {
       const body = await response.json();
       const candidate = body.candidates?.[0];
