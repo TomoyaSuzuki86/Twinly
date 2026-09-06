@@ -1,6 +1,7 @@
 ﻿import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
 import "./index.css";
 
 const preventDefault = (event: Event) => event.preventDefault();
@@ -16,6 +17,7 @@ document.addEventListener("touchmove", preventMultiTouchZoom, { passive: false }
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
+    <AiAdviceLauncher />
   </React.StrictMode>
 );
 
