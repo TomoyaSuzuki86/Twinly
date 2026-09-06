@@ -1,32 +1,38 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {accessFor,validateDrafts,summarize}=require('../ai-policy');
+const {accessFor,validateDrafts,summarize,buildDailySummary}=require('../ai-policy');
+
 test('default is free; preview is ignored outside allowed family',()=>{
   assert.equal(Object.values(accessFor({previewPlan:'free'},true).features).every(v=>v===false),true);
   assert.equal(Object.values(accessFor({previewPlan:'premium'},true).features).every(v=>v===true),true);
-  assert.equal(accessFor().features.aiVoice,false);
-  assert.equal(accessFor({previewPlan:'premium'},false).features.aiVoice,false);
-  assert.equal(accessFor({previewPlan:'premium'},true).features.aiVoice,true);
+  assert.equal(accessFor().features.aiChat,false);
+  assert.equal(accessFor({previewPlan:'premium'},false).features.aiChat,false);
+  assert.equal(accessFor({previewPlan:'premium'},true).features.aiChat,true);
+  assert.equal(accessFor({previewPlan:'premium'},true).features.dailySummaryEmail,true);
   assert.equal(accessFor({plan:'premium',previewPlan:'free'},true).features.aiReview,false);
   assert.equal(accessFor({plan:'premium',previewPlan:'free'},false).features.aiReview,true);
 });
-test('voice keeps per-baby amounts, relative times and ambiguous time',()=>{
+
+test('legacy draft validation remains bounded for existing manual-save compatibility',()=>{
   const now=Date.now();
   const result=validateDrafts([{babyId:'A',type:'milk',timestamp:now,milkMl:70},{babyId:'B',type:'milk',timestamp:now-15*60000,milkMl:20},{babyId:'B',type:'diaper',timestamp:null,diaperKind:'pee',clarification:'その後の時刻を確認'}],now);
   assert.deepEqual(result.map(e=>[e.babyId,e.milkMl,e.timestamp]),[['A',70,now],['B',20,now-900000],['B',undefined,null]]);
 });
-test('untrusted output is bounded and cannot smuggle fields into saved events',()=>{
+
+test('untrusted draft output is bounded and cannot smuggle fields',()=>{
   const now=Date.now();
   for(const patch of [{babyId:'C'},{milkMl:-1},{milkMl:5000},{timestamp:now+999999},{timestamp:undefined},{type:'admin'}])
     assert.throws(()=>validateDrafts([{babyId:'A',type:'milk',milkMl:70,timestamp:now,...patch}],now));
   assert.equal(validateDrafts([{babyId:'A',type:'milk',milkMl:70,timestamp:now,createdByUid:'other'}],now)[0].createdByUid,undefined);
 });
+
 test('weekly comparison excludes partial today and reports missing days',()=>{
   const now=Date.parse('2026-09-05T12:00:00+09:00');
   const events=[{babyId:'A',type:'milk',milkMl:100,timestamp:Date.parse('2026-09-04T23:59:00+09:00')},{babyId:'A',type:'milk',milkMl:900,timestamp:Date.parse('2026-09-05T00:00:00+09:00')}];
   const result=summarize(events,now)[0].periods[1];
   assert.equal(result.milkMl,100);assert.equal(result.daysWithMilkRecords,1);
 });
+
 test('review summary uses registered names and combines feeding, diaper, sleep and notes',()=>{
   const now=Date.parse('2026-09-05T12:00:00+09:00');
   const sleepStart=Date.parse('2026-09-03T22:00:00+09:00'), wake=Date.parse('2026-09-04T06:00:00+09:00');
@@ -53,4 +59,26 @@ test('review summary uses registered names and combines feeding, diaper, sleep a
   assert.equal(result.notes[0].text,'少し吐き戻しあり');
   assert.equal(result.bedtimeFeeds[0].milkMl,180);
   assert.equal(result.bedtimeFeeds[0].minutesBefore,30);
+});
+
+test('daily email summary counts today and includes an ongoing sleep',()=>{
+  const now=Date.parse('2026-09-06T21:00:00+09:00');
+  const events=[
+    {babyId:'A',type:'milk',milkMl:180,timestamp:Date.parse('2026-09-06T08:00:00+09:00')},
+    {babyId:'A',type:'milk',milkMl:160,timestamp:Date.parse('2026-09-06T12:00:00+09:00')},
+    {babyId:'A',type:'diaper',diaperKind:'mix',timestamp:Date.parse('2026-09-06T13:00:00+09:00')},
+    {babyId:'A',type:'solidFood',timestamp:Date.parse('2026-09-06T10:00:00+09:00')},
+    {babyId:'A',type:'sleepStart',timestamp:Date.parse('2026-09-06T20:00:00+09:00')},
+  ];
+  const result=buildDailySummary(events,now,{A:{displayName:'奏汰'},B:{displayName:'日向'}});
+  const baby=result.babies[0];
+  assert.equal(result.date,'2026-09-06');
+  assert.equal(baby.name,'奏汰');
+  assert.equal(baby.milkMl,340);
+  assert.equal(baby.milkCount,2);
+  assert.equal(baby.peeCount,1);
+  assert.equal(baby.poopCount,1);
+  assert.equal(baby.solidFoodCount,1);
+  assert.equal(baby.sleepMinutes,60);
+  assert.equal(baby.isSleeping,true);
 });
