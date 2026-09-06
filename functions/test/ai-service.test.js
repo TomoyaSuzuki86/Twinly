@@ -49,6 +49,15 @@ test('successful quota rejects before provider and failed provider calls do not 
   assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,0);
   assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
 });
+test('provider configuration errors are reported specifically and do not consume quota',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
+  const {services,docs}=setup({'families/f/services/access':{plan:'premium'}});
+  global.fetch=async()=>({ok:false,status:400,text:async()=>'{"error":"bad config"}'});
+  await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='failed-precondition'&&e.message.includes('送信設定'));
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
+  assert.equal(docs.get(`families/f/aiUsage/${month}`)?.successfulCount||0,0);
+});
 test('legacy failed-call counters do not block a fresh successful call',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
@@ -64,6 +73,10 @@ test('successful parsing returns candidates without writing any events',async()=
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7),{services,docs}=setup({'families/f/services/access':{plan:'premium'}});
   global.fetch=async(_url,options)=>{
     assert.equal(options.headers['x-goog-api-key'],'test-only');
+    const body=JSON.parse(options.body);
+    assert.equal('temperature' in body.generationConfig,false);
+    assert.equal(body.generationConfig.thinkingConfig.thinkingLevel,'minimal');
+    assert.equal('thinkingBudget' in body.generationConfig.thinkingConfig,false);
     return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({events:[{babyId:'B',type:'diaper',diaperKind:'pee',timestamp:null,clarification:'時刻を確認'}]})}]}}]})};
   };
   const result=await services.twinlyAi.run(request({mode:'voice',text:'日向、その後おしっこ',referenceTime:now}));
