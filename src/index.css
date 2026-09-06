@@ -67,11 +67,53 @@
   --mini-gauge-track: 220 14% 84%;
   --care-milk: 201 64% 48%; --care-diaper: 34 74% 44%; --care-activity: 148 39% 38%;
   --sleep-badge: 255 38% 42%; --sleep-badge-foreground: 0 0% 100%;
+  /* Light themes use dark labels on pale gauge tracks, matching meal/diaper controls. */
+  --gauge-sleep-on: 228 24% 17%; --gauge-sleep-muted: 228 14% 31%;
+  --gauge-wake-on: 228 24% 17%; --gauge-wake-muted: 228 14% 31%;
 }
 :root[data-theme='milk'] { --background: 38 28% 96%; --primary: 25 38% 34%; --primary-foreground: 0 0% 100%; --secondary: 35 22% 89%; --muted: 35 22% 89%; --accent: 32 37% 86%; --accent-foreground: 25 38% 23%; --ring: 25 38% 40%; }
 :root[data-theme='sakura'] { --background: 342 72% 96%; --primary: 342 57% 42%; --primary-foreground: 0 0% 100%; --secondary: 342 48% 90%; --muted: 342 40% 91%; --accent: 341 67% 86%; --accent-foreground: 342 52% 23%; --ring: 342 57% 47%; }
 :root[data-theme='sun'] { --background: 43 88% 94%; --primary: 21 69% 39%; --primary-foreground: 0 0% 100%; --secondary: 42 58% 88%; --muted: 43 46% 89%; --accent: 35 77% 84%; --accent-foreground: 23 60% 22%; --ring: 21 69% 44%; }
 :root[data-theme='forest'] { --background: 143 36% 95%; --primary: 153 41% 31%; --primary-foreground: 0 0% 100%; --secondary: 145 27% 88%; --muted: 145 23% 89%; --accent: 147 39% 84%; --accent-foreground: 154 45% 20%; --ring: 153 41% 37%; }
+
+/* The selected baby's identity tint should stay airy on light themes instead of using the dark Night tint. */
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-violet-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-violet-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-violet-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-violet-900'] { background-color: rgb(237 233 254 / .74) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-sky-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-sky-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-sky-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-sky-900'] { background-color: rgb(224 242 254 / .78) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-emerald-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-emerald-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-emerald-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-emerald-900'] { background-color: rgb(209 250 229 / .76) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-amber-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-amber-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-amber-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-amber-900'] { background-color: rgb(254 243 199 / .78) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-rose-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-rose-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-rose-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-rose-900'] { background-color: rgb(255 228 230 / .78) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-indigo-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-indigo-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-indigo-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-indigo-900'] { background-color: rgb(224 231 255 / .76) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-lime-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-lime-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-lime-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-lime-900'] { background-color: rgb(236 252 203 / .76) !important; }
+:root[data-theme='milk'] .twinly-baby-panel[class*='bg-pink-900'],
+:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-pink-900'],
+:root[data-theme='sun'] .twinly-baby-panel[class*='bg-pink-900'],
+:root[data-theme='forest'] .twinly-baby-panel[class*='bg-pink-900'] { background-color: rgb(252 231 243 / .76) !important; }
+
+/* Night theme swatch uses a dark preview; force its labels to remain readable. */
+button[class*='from-slate-950'][class*='to-indigo-950'] > span:first-child { color: rgb(255 255 255) !important; }
+button[class*='from-slate-950'][class*='to-indigo-950'] > span:nth-child(2) { color: rgb(226 232 240) !important; }
+
 [data-transition] { opacity: 1 !important; }
 [data-transition='sleepStart'] .sleep-transition-message { background: linear-gradient(110deg,#61a77f,#6755a5,#29233e); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }
 [data-transition='wake'] .sleep-transition-message { background: linear-gradient(110deg,#6755a5,#61a77f,#173c2b); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }
