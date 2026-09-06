@@ -31,14 +31,14 @@ const renderSettings = (app = createInitialAppState(new Date("2026-04-18T09:00:0
 describe("SettingsModal", () => {
   afterEach(cleanup);
 
-  it("organizes settings into profile, notifications, data, design and premium tabs", () => {
+  it("organizes settings into profile, notifications, data, design and pricing tabs", () => {
     renderSettings();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "プロフィール",
       "通知",
       "データ管理",
       "デザイン",
-      "有料版",
+      "料金とプラン",
     ]);
     expect(screen.queryByText("Pixel Watch連携")).toBeNull();
     expect(screen.queryByRole("tab", { name: /Google Calendar/i })).toBeNull();
