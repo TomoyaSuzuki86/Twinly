@@ -160,7 +160,7 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails"
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
             fi
