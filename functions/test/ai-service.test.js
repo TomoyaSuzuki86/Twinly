@@ -37,8 +37,7 @@ test('direct AI calls in free mode never contact provider',async()=>{
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:Date.now()})),e=>e.code==='permission-denied');
 });
 test('successful quota rejects before provider and failed provider calls do not consume quota',async()=>{
-  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,7),month=new Date(now+9*3600000).toISOString().slice(0,7);
-  const actualDay=new Date(now+9*3600000).toISOString().slice(0,10);
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
   const {services,docs}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiUsage/${month}`]:{successfulCount:600}});
   let calls=0;global.fetch=async()=>{calls++;return {ok:false,status:429};};
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
@@ -46,8 +45,7 @@ test('successful quota rejects before provider and failed provider calls do not 
   docs.set(`families/f/aiUsage/${month}`,{successfulCount:0});process.env.TWINLY_AI_API_KEY='test-only';
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
   assert.equal(calls,1);assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,0);
-  assert.equal(docs.get(`families/f/aiUsage/${actualDay}`).successfulCount||0,0);
-  void day;
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
 });
 test('provider configuration errors are reported specifically and do not consume quota',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
@@ -85,7 +83,7 @@ test('successful parsing returns candidates without writing any events',async()=
   assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
   assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
 });
-test('review sends registered names and broad care summary, then caches versioned advice',async()=>{
+test('review sends registered names, replaces A/B labels, and caches versioned advice',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10);
   const state={app:{profiles:{A:{displayName:'奏汰',birthDate:'2026-04-02'},B:{displayName:'日向',birthDate:'2026-04-02'}},events:[
@@ -100,10 +98,14 @@ test('review sends registered names and broad care summary, then caches versione
     assert.equal(payload[0].name,'奏汰');
     assert.equal(payload[1].name,'日向');
     assert.equal(payload[0].notes[0].text,'吐き戻しあり');
-    return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({observations:'奏汰はミルク、日向はおむつの記録があります。',checks:'奏汰の吐き戻しメモを確認してください。'})}]}}]})};
+    return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({observations:'Aはミルク、Bはおむつの記録があります。',checks:'赤ちゃんAの吐き戻しメモを確認してください。'})}]}}]})};
   };
   const result=await services.twinlyAi.run(request({mode:'review'}));
   assert.match(result.observations,/奏汰/);
+  assert.match(result.observations,/日向/);
+  assert.equal(result.observations.includes('Aは'),false);
+  assert.equal(result.observations.includes('Bは'),false);
+  assert.equal(result.checks.includes('赤ちゃんA'),false);
   assert.equal(result.version,2);
   assert.equal(docs.get(`families/f/aiReviews/${day}`).version,2);
   assert.equal('summary' in docs.get(`families/f/aiReviews/${day}`),false);
