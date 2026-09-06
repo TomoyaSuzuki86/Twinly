@@ -2,7 +2,7 @@ const {test,afterEach}=require('node:test');
 const assert=require('node:assert/strict');
 const factory=require('../ai-service');
 const originalFetch=global.fetch;
-afterEach(()=>{global.fetch=originalFetch;delete process.env.TWINLY_TRIAL_FAMILY_ID;delete process.env.TWINLY_AI_API_KEY;});
+afterEach(()=>{global.fetch=originalFetch;delete process.env.TWINLY_AI_API_KEY;});
 function setup(extra={}) {
   const docs=new Map(Object.entries({
     'users/u':{activeFamilyId:'f'},
@@ -22,16 +22,14 @@ test('unauthenticated and inactive members are rejected',async()=>{
   await assert.rejects(services.getFamilyAccess.run({}),e=>e.code==='unauthenticated');
   await assert.rejects(services.getFamilyAccess.run(request({})),e=>e.code==='permission-denied');
 });
-test('only allowlisted family owner can change preview, never the billing plan',async()=>{
-  process.env.TWINLY_TRIAL_FAMILY_ID='f';
+test('only the active family owner can change preview, never the billing plan',async()=>{
   const {services,docs}=setup({'families/f/services/access':{plan:'free'}});
   await services.setFamilyPreviewPlan.run(request({plan:'premium'}));
   assert.equal(docs.get('families/f/services/access').plan,'free');
   assert.equal((await services.getFamilyAccess.run(request({}))).features.aiVoice,true);
   docs.set('families/f/members/u',{status:'active',role:'member'});
   await assert.rejects(services.setFamilyPreviewPlan.run(request({plan:'free'})),e=>e.code==='permission-denied');
-  process.env.TWINLY_TRIAL_FAMILY_ID='other';
-  assert.equal((await services.getFamilyAccess.run(request({}))).features.aiVoice,false);
+  assert.equal((await services.getFamilyAccess.run(request({}))).features.aiVoice,true);
 });
 test('direct AI calls in free mode never contact provider',async()=>{
   global.fetch=()=>{throw new Error('must not call provider');};
