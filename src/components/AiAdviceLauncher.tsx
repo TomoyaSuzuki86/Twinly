@@ -21,6 +21,7 @@ export function AiAdviceLauncher() {
   const [consent, setConsent] = useState(() => {
     try { return window.localStorage.getItem(CONSENT_KEY) === "yes"; } catch { return false; }
   });
+  const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export function AiAdviceLauncher() {
   const acceptAndLoad = () => {
     try { window.localStorage.setItem(CONSENT_KEY, "yes"); } catch {}
     setConsent(true);
+    setConsentChecked(true);
     void loadReview();
   };
 
@@ -121,7 +123,7 @@ export function AiAdviceLauncher() {
 
   return (
     <>
-      {access?.features.aiReview ? targets.map((target) => createPortal(launcher, target)) : null}
+      {access?.features.aiReview ? targets.map((target, index) => createPortal(launcher, target, `ai-advice-${index}`)) : null}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
@@ -137,14 +139,14 @@ export function AiAdviceLauncher() {
                 <input
                   type="checkbox"
                   className="mt-1"
-                  checked={consent}
-                  onChange={(event) => setConsent(event.target.checked)}
+                  checked={consentChecked}
+                  onChange={(event) => setConsentChecked(event.target.checked)}
                 />
                 <span>
                   AIアドバイス生成時、GoogleのAPIへ赤ちゃんの登録名、生年月日、直近2週間のミルク・おむつ・離乳食・睡眠・体重の集計、メモを送信することに同意します。
                 </span>
               </label>
-              <Button disabled={!consent || busy} onClick={acceptAndLoad}>同意してアドバイスを見る</Button>
+              <Button disabled={!consentChecked || busy} onClick={acceptAndLoad}>同意してアドバイスを見る</Button>
             </div>
           ) : null}
 
