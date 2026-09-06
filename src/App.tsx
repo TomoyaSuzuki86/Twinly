@@ -32,6 +32,10 @@ import { SleepRecordModal } from "./components/SleepRecordModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
+import { ComfortTools } from "./components/ComfortTools";
+import { useFamilyAccess } from "./lib/use-family-access";
+import { AiTools } from "./components/AiTools";
+import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger";
@@ -193,6 +197,8 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
+  const {access: familyAccess, error: accessError} = useFamilyAccess(authUser?.uid, family?.id);
+  const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [authReady, setAuthReady] = useState(false);
@@ -240,7 +246,7 @@ export default function App() {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
-  const { store, status: syncStatus } = useAppStore(authUser?.uid, family?.id, allHistory, setApp, setAppLoading);
+  const { store, status: syncStatus } = useAppStore(authUser?.uid, sharedAccessBlocked ? undefined : family?.id, allHistory, setApp, setAppLoading);
 
   const handleBabyTabTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches.item(0);
@@ -547,7 +553,9 @@ export default function App() {
       }
     }
 
-    if (updateAppWithPendingEvents(createdEvents, (prevApp) => appendEvents(prevApp, createdEvents))) scheduleUndo(createdEvents);
+    if (!updateAppWithPendingEvents(createdEvents, (prevApp) => appendEvents(prevApp, createdEvents))) return false;
+    scheduleUndo(createdEvents);
+    return true;
   };
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
@@ -720,7 +728,7 @@ export default function App() {
     eventData: Omit<LogEvent, "id" | "timestamp" | "createdByUid" | "updatedByUid" | "createdAt" | "updatedAt">
   ) => {
     const { babyId, type, ...payload } = eventData;
-    addEvent(babyId, type, payload);
+    return addEvent(babyId, type, payload);
   };
 
   const saveSleepEventAt = (timestamp: number) => {
@@ -1235,6 +1243,8 @@ export default function App() {
     );
   }
 
+  if (sharedAccessBlocked) return <AppContainer><div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-xl font-bold">家族共有は有料機能です</h1><p>{accessError || (familyAccess ? "無料モードの間は管理者だけが記録を利用できます。管理者がお試しをONにすると共有を再開します。" : "プランを確認中…")}</p><p>既存の記録とメンバー登録は保持しています。</p><Button onClick={handleSignOut}>ログアウト</Button></div></AppContainer>;
+
   if (sessionError || (syncStatus.error && authUser && family && !syncStatus.ready)) {
     return <AppContainer><div className="grid min-h-screen place-items-center p-6"><div className="max-w-md space-y-4 text-center">
       <p role="alert">{sessionError || syncStatus.error}</p>
@@ -1288,13 +1298,26 @@ export default function App() {
                 onContextMenu={(event) => event.preventDefault()}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
+                  <div className="hidden h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 min-[430px]:grid">
                     <Baby className="h-5 w-5 text-white" />
                   </div>
                   <h1 className="text-xl font-extrabold tracking-tight">Twinly</h1>
                 </div>
 
                 <div className="flex items-center gap-1">
+                  <ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/>
+                  <AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
+                    if (!validConfirmedDrafts(drafts)) return false;
+                    const events = drafts.map(draft => createEvent(draft.babyId, draft.type, {
+                      timestamp: draft.timestamp!,
+                      ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}),
+                      ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}),
+                      note: "AI音声・文章解析（確認済み）",
+                    }));
+                    if (!updateAppWithPendingEvents(events, prev => appendEvents(prev, events))) return false;
+                    scheduleUndo(events);
+                    return true;
+                  }} />
                   <VoiceCommandButton
                     ref={voiceButtonRef}
                     babyNames={voiceCommandBabyNames}
@@ -1354,6 +1377,7 @@ export default function App() {
                 >
                 <BabyTabTrigger
                   profile={app.profiles.A}
+                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                   gaugePercents={tabGaugePercents.A}
                   activityGaugeEnabled={app.sleepManagementEnabled}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
@@ -1372,6 +1396,7 @@ export default function App() {
                 >
                 <BabyTabTrigger
                   profile={app.profiles.B}
+                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                   gaugePercents={tabGaugePercents.B}
                   activityGaugeEnabled={app.sleepManagementEnabled}
                   sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
@@ -1388,7 +1413,7 @@ export default function App() {
                 babyTabSwipeStartRef.current = null;
               }}
             >
-            <TabsContent value="A" className="mt-1">
+            <TabsContent forceMount value="A" className="mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 profile={app.profiles.A}
                 events={currentEventsByBaby.A}
@@ -1400,6 +1425,8 @@ export default function App() {
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
                 lowStock={lowStock.A}
+                gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
                 diaperEstimate={diaperEstimates.A}
                 milkProgress={milkProgressByBaby.A}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
@@ -1418,7 +1445,7 @@ export default function App() {
                 memberNameByUid={memberNameByUid}
               />
             </TabsContent>
-            <TabsContent value="B" className="mt-1">
+            <TabsContent forceMount value="B" className="mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 profile={app.profiles.B}
                 events={currentEventsByBaby.B}
@@ -1430,6 +1457,8 @@ export default function App() {
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
                 lowStock={lowStock.B}
+                gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
                 diaperEstimate={diaperEstimates.B}
                 milkProgress={milkProgressByBaby.B}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
@@ -1530,7 +1559,7 @@ export default function App() {
         onImport={handleImport}
         onResetAll={resetAll}
       />
-      <AccountModal
+      <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
         onOpenChange={setAccountModalOpen}
         user={authUser}

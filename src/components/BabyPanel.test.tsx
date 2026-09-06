@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BabyPanel } from "./BabyPanel";
 import { createInitialAppState } from "@/lib/app-state";
@@ -190,6 +190,7 @@ describe("BabyPanel", () => {
   });
 
   it("toggles the sleep shortcut between sleep and wake", () => {
+    vi.useFakeTimers();
     const onAddEvent = vi.fn();
     const { rerender } = renderPanel({ onAddEvent });
 
@@ -215,6 +216,13 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("0%");
     fireEvent.click(sleepButton);
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "sleepStart" }));
+    fireEvent.click(sleepButton);
+    expect(onAddEvent).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(1999); });
+    expect(sleepButton.hasAttribute('disabled')).toBe(true);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(sleepButton.hasAttribute('disabled')).toBe(false);
+    vi.useRealTimers();
 
     const app = createInitialAppState(baseNow);
     const sleepingEvents: LogEvent[] = [

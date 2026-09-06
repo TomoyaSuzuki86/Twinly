@@ -4,9 +4,9 @@ dist
 .env
 .env.local
 .env.*.local
+functions/.env.twinly-prod
 wearos/.gradle/
 wearos/.kotlin/
 wearos/.idea/
 wearos/local.properties
 wearos/**/build/
-

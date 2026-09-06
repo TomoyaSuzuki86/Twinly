@@ -9,6 +9,7 @@ type BabyTabTriggerProps = {
     diaper: number;
     activity: number;
   };
+  gaugesEnabled?: boolean;
   activityGaugeEnabled?: boolean;
   sleeping?: boolean;
   selected?: boolean;
@@ -53,6 +54,7 @@ const MiniGauge = ({
 export function BabyTabTrigger({
   profile,
   gaugePercents,
+  gaugesEnabled = true,
   activityGaugeEnabled = true,
   sleeping = false,
   selected = false,
@@ -92,7 +94,7 @@ export function BabyTabTrigger({
           ) : null}
         </div>
       </div>
-      {!selected ? (
+      {!selected && gaugesEnabled ? (
         <div
           className="flex shrink-0 items-center gap-0.5"
           aria-label={`${p.displayName}のミルク必要度${gaugePercents.milk}%・おむつ交換必要度${gaugePercents.diaper}%${

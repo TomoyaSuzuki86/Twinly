@@ -21,6 +21,7 @@ type VoiceCommandButtonProps = {
   defaultMilkMlByBaby?: Partial<Record<BabyId, number>>;
   onCommand: (command: VoiceCommand) => void;
   onMessage: (message: string) => void;
+  onTranscript?: (text: string) => void;
 };
 
 export type VoiceCommandButtonHandle = {
@@ -74,7 +75,7 @@ const RESTART_DELAY_MS = 180;
 const MAX_LISTENING_MS = 20000;
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
-  { babyNames, defaultMilkMlByBaby, onCommand, onMessage },
+  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -139,6 +140,12 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       recognitionRef.current?.stop();
     }
 
+    if (onTranscript) {
+      onTranscript(transcripts[0]);
+      forcedBabyIdRef.current = undefined;
+      setListening(false);
+      return;
+    }
     const parsed = selectVoiceCommandFromAlternatives(transcripts, {
       babyNames,
       defaultMilkMlByBaby,

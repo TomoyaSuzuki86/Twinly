@@ -47,6 +47,8 @@ type BabyPanelProps = {
   now: Date;
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
+  gaugesEnabled?: boolean;
+  stockForecastEnabled?: boolean;
   lowStock: { size: string; remaining: number } | null;
   diaperEstimate: DiaperStockEstimate | null;
   milkProgress: MilkProgressComparison | null;
@@ -57,7 +59,7 @@ type BabyPanelProps = {
   ) => void;
   onAddEvent: (
     event: Omit<LogEvent, "id" | "timestamp" | "createdByUid" | "updatedByUid" | "createdAt" | "updatedAt">
-  ) => void;
+  ) => boolean | void;
   onOpenSleepTimeEditor: (payload: {
     babyId: BabyId;
     type: "sleepStart" | "wake";
@@ -138,6 +140,8 @@ export function BabyPanel({
   now,
   diaperStockManagementEnabled,
   sleepManagementEnabled,
+  gaugesEnabled = true,
+  stockForecastEnabled = true,
   lowStock,
   diaperEstimate,
   milkProgress,
@@ -228,7 +232,7 @@ export function BabyPanel({
   );
   const diaperCount = peeCount + poopCount;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
-  const diaperEstimateSummary = diaperStockManagementEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
+  const diaperEstimateSummary = diaperStockManagementEnabled && stockForecastEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
@@ -296,6 +300,10 @@ export function BabyPanel({
   const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
   const sleepLongPressTimerRef = useRef<number | null>(null);
   const sleepLongPressTriggeredRef = useRef(false);
+  const [sleepTransition, setSleepTransition] = useState<'sleepStart'|'wake'|null>(null);
+  const sleepTransitionUntil = useRef(0);
+  const sleepTransitionTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => { clearTimeout(sleepTransitionTimer.current); }, []);
 
   const clearSleepLongPressTimer = () => {
     if (sleepLongPressTimerRef.current !== null) {
@@ -305,6 +313,7 @@ export function BabyPanel({
   };
 
   const startSleepLongPress = () => {
+    if (Date.now() < sleepTransitionUntil.current) return;
     clearSleepLongPressTimer();
     sleepLongPressTriggeredRef.current = false;
     sleepLongPressTimerRef.current = window.setTimeout(() => {
@@ -317,7 +326,7 @@ export function BabyPanel({
 
   return (
     <Card
-      className={`flex flex-col border-border/60 ${themeDimmedBgColor} ${
+      className={`twinly-baby-panel flex flex-col border-border/60 ${themeDimmedBgColor} ${
         sleeping ? "ring-1 ring-indigo-400/60" : ""
       }`}
     >
@@ -328,20 +337,20 @@ export function BabyPanel({
             className="relative h-28 select-none overflow-hidden bg-[#103846] p-0 text-2xl font-bold text-[#F2FAFD] hover:bg-[#103846] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
-            aria-label={`食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
+            aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
           >
             <span
               aria-hidden="true"
               className="absolute inset-y-0 left-0 bg-[#1596C8] transition-[width] duration-500"
               data-testid="milk-gauge-fill"
-              style={{ width: `${milkGaugePercent}%` }}
+              style={{ width: gaugesEnabled ? `${milkGaugePercent}%` : 0 }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
               <div className="flex items-center text-[#F2FAFD]">
                 <Utensils className="mr-3 h-7 w-7" />
                 食事
               </div>
-              {milkNeededMl !== null && milkTargetMl !== null ? (
+              {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
                 <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight text-[#C2DCE5]">
                   あと {milkNeededMl} ml
                   <span className="ml-1 font-semibold">/ {milkTargetMl} ml</span>
@@ -359,13 +368,13 @@ export function BabyPanel({
             className="relative h-28 select-none overflow-hidden bg-[#493116] p-0 text-2xl font-bold text-[#FFF4E5] hover:bg-[#493116] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
             onContextMenu={(event) => event.preventDefault()}
-            aria-label={`おむつを記録・交換必要度${diaperGaugePercent}%`}
+            aria-label={!gaugesEnabled ? "おむつを記録" : `おむつを記録・交換必要度${diaperGaugePercent}%`}
           >
             <span
               aria-hidden="true"
               className="absolute inset-y-0 left-0 bg-[#C87512] transition-[width] duration-500"
               data-testid="diaper-gauge-fill"
-              style={{ width: `${diaperGaugePercent}%` }}
+              style={{ width: gaugesEnabled ? `${diaperGaugePercent}%` : 0 }}
             />
             <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
               <div className="flex items-center text-[#FFF4E5]">
@@ -386,6 +395,8 @@ export function BabyPanel({
 
         {sleepManagementEnabled ? (
         <Button
+          disabled={sleepTransition !== null}
+          data-transition={sleepTransition || undefined}
           role="switch"
           aria-checked={sleeping}
           className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 shadow-sm [-webkit-touch-callout:none] ${
@@ -399,17 +410,23 @@ export function BabyPanel({
           onPointerCancel={clearSleepLongPressTimer}
           onContextMenu={(event) => event.preventDefault()}
           onClick={() => {
+            if (Date.now() < sleepTransitionUntil.current) return;
             if (sleepLongPressTriggeredRef.current) {
               sleepLongPressTriggeredRef.current = false;
               return;
             }
-            onAddEvent({
+            const next = sleeping ? "wake" : "sleepStart";
+            sleepTransitionUntil.current = Date.now() + 2000;
+            setSleepTransition(next);
+            sleepTransitionTimer.current = setTimeout(() => { sleepTransitionUntil.current = 0; setSleepTransition(null); }, 2000);
+            const saved = onAddEvent({
               babyId,
-              type: sleeping ? "wake" : "sleepStart",
+              type: next,
               note: sleeping ? "手動: 起床" : "手動: 入眠",
             });
+            if (saved === false) { clearTimeout(sleepTransitionTimer.current); sleepTransitionUntil.current = 0; setSleepTransition(null); }
           }}
-          aria-label={`${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
+          aria-label={!gaugesEnabled ? (sleeping ? "起床を記録・長押しで時刻指定" : "入眠を記録・長押しで時刻指定") : `${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
             sleeping
               ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
               : `活動時間経過${activityGauge.elapsedPercent}%`
@@ -422,8 +439,9 @@ export function BabyPanel({
             }`}
             data-testid="sleep-gauge-fill"
             data-percent={sleepButtonGaugePercent}
-            style={{ width: `${sleepButtonGaugePercent}%` }}
+            style={{ width: gaugesEnabled ? `${sleepButtonGaugePercent}%` : 0 }}
           />
+          {sleepTransition && <span role="status" className="sleep-transition-message absolute inset-0 z-20 grid place-items-center whitespace-normal px-3 text-center text-sm font-bold text-white">{sleepTransition === 'sleepStart' ? '入眠を記録しました · おやすみなさい' : '起床を記録しました · おはよう'}</span>}
           <span className="relative z-10 flex h-full w-full items-stretch">
             <span
               className={`flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 ${

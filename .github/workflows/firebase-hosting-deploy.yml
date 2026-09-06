@@ -121,13 +121,17 @@ jobs:
         run: |
           node --check functions/index.js
           node --check functions/app-storage.js
+          node --check functions/ai-service.js
           node --test functions/test/migration.test.js
+          node --test functions/test/ai-policy.test.js
+          node --test functions/test/ai-service.test.js
+          node --test functions/test/stock-alerts.test.js
 
       - name: Run critical storage and auth tests
         if: steps.scope.outputs.frontend == 'true'
         run: |
           npm run typecheck
-          npx vitest run src/data src/lib/family.test.ts src/lib/app-state.test.ts src/lib/diaper-stock.test.ts
+          npx vitest run src/data src/lib/family.test.ts src/lib/app-state.test.ts src/lib/diaper-stock.test.ts src/lib/ai.test.ts src/components/AiTools.test.tsx src/components/ComfortTools.test.tsx src/components/BabyPanel.test.tsx src/lib/sleep-music.test.ts
 
       - name: Build app
         if: steps.scope.outputs.frontend == 'true'
@@ -139,6 +143,15 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
 
+      - name: Configure private AI services
+        id: ai_config
+        if: steps.scope.outputs.functions == 'true'
+        env:
+          TWINLY_AI_API_KEY: ${{ secrets.TWINLY_AI_API_KEY }}
+          TWINLY_TRIAL_FAMILY_ID: ${{ vars.TWINLY_TRIAL_FAMILY_ID }}
+          TWINLY_AI_MODEL: ${{ vars.TWINLY_AI_MODEL }}
+        run: node functions/scripts/configure-ai-ci.js
+
       - name: Deploy changed Firebase Functions
         id: functions_deploy
         if: steps.scope.outputs.functions == 'true'
@@ -147,7 +160,10 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan"
+            if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
+              selector="$selector,functions:twinlyAi"
+            fi
           fi
           npx --yes firebase-tools@latest deploy --only "$selector" --project twinly-prod --non-interactive
 
@@ -169,7 +185,7 @@ jobs:
           test "$status" = "401"
 
       - name: Deploy app to Firebase Hosting
-        if: always() && steps.scope.outputs.frontend == 'true'
+        if: success() && steps.scope.outputs.frontend == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
