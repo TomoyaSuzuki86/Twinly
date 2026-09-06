@@ -2,18 +2,9 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
-import type { FamilyRelationship } from "@/types";
 
-const accountIconLabels: Record<FamilyRelationship, string> = {
-  father: "父",
-  mother: "母",
-  grandfather: "祖父",
-  grandmother: "祖母",
-  other: "他",
-};
-
-const isRelationship = (value: unknown): value is FamilyRelationship =>
-  typeof value === "string" && Object.prototype.hasOwnProperty.call(accountIconLabels, value);
+const initialFromNickname = (nickname: unknown) =>
+  typeof nickname === "string" ? nickname.trim().slice(0, 1) : "";
 
 export function FamilyAccountIconEnhancer() {
   const [label, setLabel] = useState("");
@@ -41,8 +32,7 @@ export function FamilyAccountIconEnhancer() {
         }
 
         unsubscribeMember = onSnapshot(doc(currentDb, "families", familyId, "members", user.uid), (memberSnapshot) => {
-          const relationship = memberSnapshot.data()?.relationship;
-          setLabel(isRelationship(relationship) ? accountIconLabels[relationship] : "他");
+          setLabel(initialFromNickname(memberSnapshot.data()?.nickname) || "?");
         });
       });
     });
@@ -61,8 +51,17 @@ export function FamilyAccountIconEnhancer() {
       const button = document.querySelector<HTMLButtonElement>('button[aria-label="アカウントと家族を開く"]');
       if (!button) return;
       if (button.textContent !== label) button.textContent = label;
-      button.classList.remove("bg-violet-500/20", "text-violet-200", "hover:bg-violet-500/30");
-      button.classList.add("bg-primary", "text-primary-foreground", "hover:bg-primary/90", "ring-1", "ring-primary/30");
+      button.classList.remove(
+        "bg-violet-500/20",
+        "text-violet-200",
+        "hover:bg-violet-500/30",
+        "bg-primary",
+        "text-primary-foreground",
+        "hover:bg-primary/90",
+        "ring-1",
+        "ring-primary/30"
+      );
+      button.classList.add("twinly-account-avatar");
     };
 
     sync();

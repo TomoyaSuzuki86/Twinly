@@ -67,15 +67,15 @@ export function EventCard({
       : formatEventTitle(event);
   const iconBg =
     event.type === "milk"
-      ? "bg-sky-500/20"
+      ? "[background:hsl(var(--event-milk-bg))]"
       : event.type === "solidFood"
-      ? "bg-emerald-500/20"
+      ? "[background:hsl(var(--event-food-bg))]"
       : event.type === "diaper"
-      ? "bg-amber-500/20"
+      ? "[background:hsl(var(--event-diaper-bg))]"
       : event.type === "sleepStart"
-      ? "bg-indigo-500/20"
+      ? "[background:hsl(var(--event-sleep-bg))]"
       : event.type === "wake"
-      ? "bg-orange-500/20"
+      ? "[background:hsl(var(--event-wake-bg))]"
       : event.type === "temperature"
       ? "bg-rose-500/20"
       : event.type === "weight"
@@ -88,13 +88,13 @@ export function EventCard({
     event.type === "milk" ? (
       <Milk className="h-5 w-5 [color:hsl(var(--care-milk))]" />
     ) : event.type === "solidFood" ? (
-      <Utensils className="h-5 w-5 text-emerald-300" />
+      <Utensils className="h-5 w-5 [color:hsl(var(--care-food))]" />
     ) : event.type === "diaper" ? (
       <Droplets className="h-5 w-5 [color:hsl(var(--care-diaper))]" />
     ) : event.type === "sleepStart" ? (
       <Moon className="h-5 w-5 [color:hsl(var(--gauge-sleep-fill))]" />
     ) : event.type === "wake" ? (
-      <Sun className="h-5 w-5 text-orange-300" />
+      <Sun className="h-5 w-5 [color:hsl(var(--gauge-wake-fill))]" />
     ) : event.type === "temperature" ? (
       <Thermometer className="h-5 w-5 text-rose-300" />
     ) : event.type === "weight" ? (
@@ -132,7 +132,7 @@ export function EventCard({
           <div>{time}</div>
           {creatorName ? (
             <div className="mt-1 flex items-center justify-end gap-1 text-[11px]" title={`記録：${creatorName}`}>
-              <span className="grid h-4 w-4 place-items-center rounded-full bg-violet-500/20 text-[9px] font-bold text-violet-200">
+              <span className="twinly-member-avatar grid h-4 w-4 place-items-center rounded-full text-[9px] font-bold">
                 {creatorName.slice(0, 1)}
               </span>
               <span className="max-w-16 truncate">{creatorName}</span>
