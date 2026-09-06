@@ -2,13 +2,46 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/firebase';
 import type { BabyId, DiaperKind } from '@/types';
 
-export type FamilyAccess = { plan: 'free' | 'premium'; canPreview: boolean; features: { aiVoice: boolean; aiReview: boolean; themes?: boolean; gauges?: boolean; stockForecast?: boolean; stockNotifications?: boolean; familySharing?: boolean; music?: boolean } };
-export type AiDraft = { babyId: BabyId; type: 'milk'|'diaper'|'solidFood'|'sleepStart'|'wake'; timestamp: number|null; milkMl?: number; diaperKind?: DiaperKind; clarification: string };
+export type FamilyAccess = {
+  plan: 'free' | 'premium';
+  canPreview: boolean;
+  features: {
+    aiReview: boolean;
+    aiChat: boolean;
+    dailySummaryEmail: boolean;
+    themes?: boolean;
+    gauges?: boolean;
+    stockForecast?: boolean;
+    stockNotifications?: boolean;
+    familySharing?: boolean;
+    music?: boolean;
+  };
+};
+
+// Kept for compatibility with the existing manual-save pipeline. Gemini no longer creates these drafts.
+export type AiDraft = {
+  babyId: BabyId;
+  type: 'milk'|'diaper'|'solidFood'|'sleepStart'|'wake';
+  timestamp: number|null;
+  milkMl?: number;
+  diaperKind?: DiaperKind;
+  clarification: string;
+};
+
 export type AiReview = { observations: string; checks: string; generatedAt: number };
+export type AiQuestionAnswer = { answer: string; source: 'review'|'review+timeline'; generatedAt: number };
+export type DailySummaryEmailSettings = {
+  enabled: boolean;
+  hourJst: number;
+  recipients: string[];
+  canEdit: boolean;
+};
+
 export async function callService<T>(name: string, data: unknown = {}): Promise<T> {
   if (!functions) throw new Error('サーバー設定がありません');
   return (await httpsCallable<unknown,T>(functions,name)(data)).data;
 }
+
 export function validConfirmedDrafts(events: AiDraft[], now=Date.now()): boolean {
   return events.length>0 && events.length<=12 && events.every(e =>
     ['A','B'].includes(e.babyId) && ['milk','diaper','solidFood','sleepStart','wake'].includes(e.type) &&
