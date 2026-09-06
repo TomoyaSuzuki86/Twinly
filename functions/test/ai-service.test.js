@@ -36,19 +36,32 @@ test('direct AI calls in free mode never contact provider',async()=>{
   const {services}=setup();
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:Date.now()})),e=>e.code==='permission-denied');
 });
-test('monthly quota rejects before provider and failed responses count',async()=>{
-  const now=Date.now(),month=new Date(now+9*3600000).toISOString().slice(0,7);
-  const {services,docs}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiUsage/${month}`]:{count:600}});
+test('successful quota rejects before provider and failed provider calls do not consume quota',async()=>{
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
+  const {services,docs}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiUsage/${month}`]:{successfulCount:600}});
   let calls=0;global.fetch=async()=>{calls++;return {ok:false,status:429};};
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
   assert.equal(calls,0);
-  docs.set(`families/f/aiUsage/${month}`,{count:0});process.env.TWINLY_AI_API_KEY='test-only';
+  docs.set(`families/f/aiUsage/${month}`,{successfulCount:0});
+  process.env.TWINLY_AI_API_KEY='test-only';
   await assert.rejects(services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now})),e=>e.code==='resource-exhausted');
-  assert.equal(calls,1);assert.equal(docs.get(`families/f/aiUsage/${month}`).count,1);
+  assert.equal(calls,1);
+  assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,0);
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
+});
+test('legacy failed-call counters do not block a fresh successful call',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
+  const {services,docs}=setup({'families/f/services/access':{plan:'premium'},[`families/f/aiUsage/${day}`]:{count:40},[`families/f/aiUsage/${month}`]:{count:600}});
+  global.fetch=async()=>({ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({events:[{babyId:'A',type:'milk',milkMl:70,timestamp:now,clarification:''}]})}]}}]})});
+  const result=await services.twinlyAi.run(request({mode:'voice',text:'奏汰70',referenceTime:now}));
+  assert.equal(result.events[0].milkMl,70);
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
+  assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
 });
 test('successful parsing returns candidates without writing any events',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
-  const now=Date.now(),{services,docs}=setup({'families/f/services/access':{plan:'premium'}});
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7),{services,docs}=setup({'families/f/services/access':{plan:'premium'}});
   global.fetch=async(_url,options)=>{
     assert.equal(options.headers['x-goog-api-key'],'test-only');
     return {ok:true,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({events:[{babyId:'B',type:'diaper',diaperKind:'pee',timestamp:null,clarification:'時刻を確認'}]})}]}}]})};
@@ -56,6 +69,8 @@ test('successful parsing returns candidates without writing any events',async()=
   const result=await services.twinlyAi.run(request({mode:'voice',text:'日向、その後おしっこ',referenceTime:now}));
   assert.equal(result.events[0].timestamp,null);
   assert.equal([...docs.keys()].some(k=>k.includes('/events/')),false);
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
+  assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
 });
 test('review uses daily cache without another provider call',async()=>{
   const day=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
