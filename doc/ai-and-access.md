@@ -22,7 +22,7 @@ Google Play・課金処理は実装しない。契約状態と機能権限を分
 
 - Secret `TWINLY_AI_API_KEY`：Gemini APIキー。`VITE_` を付けない。子どもの記録を送るので、無料サービスのデータ利用条件を確認し、原則として有料扱いのAPIを使う。
 - Variable `TWINLY_TRIAL_FAMILY_ID`：試用する既存家族のID。Firestore `users/{自分のuid}.activeFamilyId` をそのまま使う。メールやユーザーIDと決めつけない。空欄なら試用切替は禁止。
-- Variable `TWINLY_AI_MODEL`：省略時 `gemini-3.6-flash`。generateContent・JSON出力・thinkingLevel: minimal対応のモデルを指定する。モデル変更時は実応答を確認する。
+- Variable `TWINLY_AI_MODEL`：省略時 `gemini-3.6-flash`。generateContent・JSON出力・thinkingBudget:0対応のモデルを指定する。モデル変更時は実応答を確認する。
 
 ActionsがAPIキーを標準入力でGoogle Secret Managerの同名Secretへ渡し、twinlyAiだけにバインドする。キーをファイル・CLI引数・ログ・ブラウザへ出さない。実行サービスアカウントには対象Secretを読む権限、CIには対象Secretを作成／更新して関数へ配備する権限が必要。権限は必要な範囲だけ運用者が付与する。
 
