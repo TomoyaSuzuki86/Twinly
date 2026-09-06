@@ -10,11 +10,6 @@ const emailFrom = String(process.env.TWINLY_EMAIL_FROM || '').trim();
 if (!/^[A-Za-z0-9_-]*$/.test(familyId) || !/^[A-Za-z0-9.-]+$/.test(model)) throw new Error('AI設定値が不正です');
 if (emailFrom && (emailFrom.length > 200 || /[\r\n]/.test(emailFrom) || !emailFrom.includes('@'))) throw new Error('メール送信元設定が不正です');
 
-fs.writeFileSync(
-  'functions/.env.twinly-prod',
-  `TWINLY_TRIAL_FAMILY_ID=${familyId}\nTWINLY_AI_MODEL=${model}\nTWINLY_EMAIL_FROM=${JSON.stringify(emailFrom)}\n`
-);
-
 function setSecret(name, value, label) {
   const result = spawnSync(
     'npx',
@@ -42,6 +37,18 @@ const emailApiKey = process.env.TWINLY_EMAIL_API_KEY;
 if (emailApiKey) setSecret('TWINLY_EMAIL_API_KEY', emailApiKey, 'Email');
 const emailSecretAvailable = Boolean(emailApiKey) || secretExists('TWINLY_EMAIL_API_KEY');
 const emailEnabled = Boolean(emailFrom && emailSecretAvailable);
+
+fs.writeFileSync(
+  'functions/.env.twinly-prod',
+  [
+    `TWINLY_TRIAL_FAMILY_ID=${familyId}`,
+    `TWINLY_AI_MODEL=${model}`,
+    `TWINLY_EMAIL_FROM=${JSON.stringify(emailFrom)}`,
+    `TWINLY_EMAIL_DELIVERY_ENABLED=${emailEnabled}`,
+    '',
+  ].join('\n')
+);
+
 fs.appendFileSync(process.env.GITHUB_OUTPUT, `email_enabled=${emailEnabled}\n`);
 console.log(emailEnabled
   ? 'Email delivery configured.'
