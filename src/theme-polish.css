@@ -1,0 +1,72 @@
+/* Weekly timeline colors should follow the active Twinly theme instead of fixed Tailwind colors. */
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="bg-blue-500"] {
+  background-color: hsl(var(--care-milk)) !important;
+  border-color: hsl(var(--care-milk)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="bg-emerald-500"] {
+  background-color: hsl(var(--care-food)) !important;
+  border-color: hsl(var(--care-food)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="bg-cyan-300"] {
+  background-color: hsl(var(--gauge-diaper-fill)) !important;
+  border-color: hsl(var(--gauge-diaper-fill)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="bg-amber-400"] {
+  background-color: hsl(var(--care-diaper)) !important;
+  border-color: hsl(var(--care-diaper)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="from-cyan-300"][class~="to-amber-400"] {
+  background-image: linear-gradient(
+    to bottom right,
+    hsl(var(--gauge-diaper-fill)) 0 50%,
+    hsl(var(--care-diaper)) 50% 100%
+  ) !important;
+  border-color: hsl(var(--gauge-diaper-fill)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="text-violet-300"] {
+  color: hsl(var(--gauge-sleep-fill)) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="bg-violet-600/55"] {
+  background-color: hsl(var(--gauge-sleep-fill) / 0.55) !important;
+}
+
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="border-violet-200/70"] {
+  border-color: hsl(var(--gauge-sleep-fill) / 0.7) !important;
+}
+
+/* The daily sleep total was too pale on light themes. Keep it theme-aware but readable. */
+[role="dialog"]:has([aria-label="7日間24時間タイムライングリッド"]) [class~="text-violet-200"] {
+  color: hsl(var(--gauge-sleep-muted)) !important;
+}
+
+/* Event creator: the initial alone is sufficient; center it optically and hide the repeated nickname. */
+.twinly-member-avatar {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: middle;
+}
+
+.twinly-member-avatar + span {
+  display: none !important;
+}
+
+/* Free mode has no mini gauges, so the two baby tabs should always split the width 50/50. */
+[role="tablist"]:has(.min-h-14):not(:has([data-testid*="mini-gauge"])) {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+/* Free mode hides gauge values. Present the care buttons in their intended full-color state. */
+button[aria-label="食事を記録"] [data-testid="milk-gauge-fill"],
+button[aria-label="おむつを記録"] [data-testid="diaper-gauge-fill"],
+button[aria-label="入眠を記録・長押しで時刻指定"] [data-testid="sleep-gauge-fill"],
+button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sleep-gauge-fill"] {
+  width: 100% !important;
+}
