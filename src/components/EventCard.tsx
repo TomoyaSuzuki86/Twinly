@@ -86,13 +86,13 @@ export function EventCard({
 
   const icon =
     event.type === "milk" ? (
-      <Milk className="h-5 w-5 text-sky-300" />
+      <Milk className="h-5 w-5 [color:hsl(var(--care-milk))]" />
     ) : event.type === "solidFood" ? (
       <Utensils className="h-5 w-5 text-emerald-300" />
     ) : event.type === "diaper" ? (
-      <Droplets className="h-5 w-5 text-amber-300" />
+      <Droplets className="h-5 w-5 [color:hsl(var(--care-diaper))]" />
     ) : event.type === "sleepStart" ? (
-      <Moon className="h-5 w-5 text-indigo-300" />
+      <Moon className="h-5 w-5 [color:hsl(var(--gauge-sleep-fill))]" />
     ) : event.type === "wake" ? (
       <Sun className="h-5 w-5 text-orange-300" />
     ) : event.type === "temperature" ? (

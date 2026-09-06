@@ -445,7 +445,7 @@ export function BabyPanel({
           <span className="relative z-10 flex h-full w-full items-stretch">
             <span
               className={`flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 ${
-                sleeping ? "text-[#F3F0FF]" : "text-[#F1FAF5]"
+                sleeping ? "[color:hsl(var(--gauge-sleep-on))]" : "[color:hsl(var(--gauge-wake-on))]"
               }`}
               data-testid="sleep-state-label"
             >
@@ -459,7 +459,7 @@ export function BabyPanel({
             </span>
             <span
               className={`flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-[15px] font-bold leading-tight ${
-                sleeping ? "text-[#C9C1E6]" : "text-[#C4DDCE]"
+                sleeping ? "[color:hsl(var(--gauge-sleep-muted))]" : "[color:hsl(var(--gauge-wake-muted))]"
               }`}
               data-testid="sleep-detail"
             >
@@ -642,15 +642,15 @@ export function BabyPanel({
               <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-sky-300">{milkTotal}</span>
+                    <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
                     <span className="font-semibold text-muted-foreground">ml</span>
                   </div>
                   {milkProgressSummary ? (
                     <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[900px]:block">
-                      <p className="truncate text-xs font-semibold leading-tight text-sky-100">
+                      <p className="truncate text-xs font-semibold leading-tight [color:hsl(var(--gauge-milk-text))]">
                         {milkProgressSummary.title}
                       </p>
-                      <p className="truncate text-[11px] leading-tight text-sky-100/80">
+                      <p className="truncate text-[11px] leading-tight [color:hsl(var(--gauge-milk-muted))]">
                         {milkProgressSummary.detail}
                       </p>
                     </div>
@@ -683,21 +683,21 @@ export function BabyPanel({
               <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-amber-300">{diaperCount}</span>
+                    <span className="text-3xl font-bold [color:hsl(var(--care-diaper))]">{diaperCount}</span>
                     <span className="font-semibold text-muted-foreground">回</span>
                   </div>
                   {diaperEstimateSummary ? (
                     <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-right min-[900px]:block">
-                      <p className="truncate text-xs font-semibold leading-tight text-amber-100">
+                      <p className="truncate text-xs font-semibold leading-tight [color:hsl(var(--gauge-diaper-text))]">
                         {diaperEstimateSummary.title}
                       </p>
-                      <p className="truncate text-[11px] leading-tight text-amber-100/80">
+                      <p className="truncate text-[11px] leading-tight [color:hsl(var(--gauge-diaper-muted))]">
                         {diaperEstimateSummary.detail}
                       </p>
                     </div>
                   ) : null}
                   {diaperStockManagementEnabled && lowStock ? (
-                    <div className="rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-100">
+                    <div className="rounded-md border border-[hsl(var(--care-diaper)/.3)] bg-[hsl(var(--gauge-diaper-track))] px-2 py-1 text-xs font-semibold [color:hsl(var(--gauge-diaper-text))]">
                       3日以内
                     </div>
                   ) : null}
@@ -729,7 +729,7 @@ export function BabyPanel({
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
                   <div className="flex min-w-0 items-baseline gap-1">
-                    <span className="whitespace-nowrap text-2xl font-bold text-violet-300">{sleepLogTotal}</span>
+                    <span className="whitespace-nowrap text-2xl font-bold [color:hsl(var(--gauge-sleep-fill))]">{sleepLogTotal}</span>
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between gap-2">

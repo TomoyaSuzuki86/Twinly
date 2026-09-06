@@ -31,7 +31,7 @@ describe("SettingsModal", () => {
       />
     );
 
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
   });
 
   it("allows activity limits to be overridden and restored to the age default", () => {
