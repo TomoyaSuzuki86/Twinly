@@ -1,4 +1,4 @@
-﻿@tailwind base;
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -50,10 +50,12 @@
   --gauge-diaper-track: 34 55% 18%; --gauge-diaper-fill: 35 82% 42%; --gauge-diaper-text: 37 85% 95%; --gauge-diaper-muted: 35 49% 78%;
   --gauge-sleep-track: 255 26% 19%; --gauge-sleep-fill: 251 45% 59%; --gauge-wake-track: 151 39% 16%; --gauge-wake-fill: 145 29% 52%;
   --mini-gauge-track: 215 28% 24%;
-  --care-milk: 198 80% 44%; --care-diaper: 35 82% 42%; --care-activity: 145 45% 48%;
+  --care-milk: 198 80% 44%; --care-food: 159 55% 48%; --care-diaper: 35 82% 42%; --care-activity: 145 45% 48%;
   --sleep-badge: 251 45% 38%; --sleep-badge-foreground: 0 0% 100%;
   --gauge-sleep-on: 255 65% 96%; --gauge-sleep-muted: 255 40% 82%;
   --gauge-wake-on: 145 55% 95%; --gauge-wake-muted: 145 35% 78%;
+  --event-milk-bg: 198 50% 20%; --event-food-bg: 159 38% 19%; --event-diaper-bg: 35 46% 20%; --event-sleep-bg: 251 31% 22%; --event-wake-bg: 145 31% 19%;
+  --account-avatar-bg: 252 24% 20%; --account-avatar-fg: 250 36% 76%; --account-avatar-ring: 251 30% 34%;
 }
 
 :root[data-theme='milk'], :root[data-theme='sakura'], :root[data-theme='sun'], :root[data-theme='forest'] {
@@ -61,61 +63,100 @@
   --foreground: 228 24% 17%; --card: 0 0% 100%; --card-foreground: 228 24% 17%;
   --popover: 0 0% 100%; --popover-foreground: 228 24% 17%; --secondary-foreground: 228 24% 17%;
   --muted-foreground: 228 12% 38%; --border: 228 18% 78%; --input: 228 18% 78%;
-  --gauge-milk-track: 204 34% 90%; --gauge-milk-fill: 201 74% 49%; --gauge-milk-text: 207 54% 18%; --gauge-milk-muted: 207 26% 32%;
-  --gauge-diaper-track: 43 53% 89%; --gauge-diaper-fill: 34 88% 46%; --gauge-diaper-text: 32 56% 17%; --gauge-diaper-muted: 31 30% 30%;
-  --gauge-sleep-track: 258 30% 91%; --gauge-sleep-fill: 255 55% 58%; --gauge-wake-track: 151 29% 90%; --gauge-wake-fill: 148 38% 42%;
   --mini-gauge-track: 220 14% 84%;
-  --care-milk: 201 64% 48%; --care-diaper: 34 74% 44%; --care-activity: 148 39% 38%;
-  --sleep-badge: 255 38% 42%; --sleep-badge-foreground: 0 0% 100%;
-  /* Light themes use dark labels on pale gauge tracks, matching meal/diaper controls. */
   --gauge-sleep-on: 228 24% 17%; --gauge-sleep-muted: 228 14% 31%;
   --gauge-wake-on: 228 24% 17%; --gauge-wake-muted: 228 14% 31%;
 }
-:root[data-theme='milk'] { --background: 38 28% 96%; --primary: 25 38% 34%; --primary-foreground: 0 0% 100%; --secondary: 35 22% 89%; --muted: 35 22% 89%; --accent: 32 37% 86%; --accent-foreground: 25 38% 23%; --ring: 25 38% 40%; }
-:root[data-theme='sakura'] { --background: 342 72% 96%; --primary: 342 57% 42%; --primary-foreground: 0 0% 100%; --secondary: 342 48% 90%; --muted: 342 40% 91%; --accent: 341 67% 86%; --accent-foreground: 342 52% 23%; --ring: 342 57% 47%; }
-:root[data-theme='sun'] { --background: 43 88% 94%; --primary: 21 69% 39%; --primary-foreground: 0 0% 100%; --secondary: 42 58% 88%; --muted: 43 46% 89%; --accent: 35 77% 84%; --accent-foreground: 23 60% 22%; --ring: 21 69% 44%; }
-:root[data-theme='forest'] { --background: 143 36% 95%; --primary: 153 41% 31%; --primary-foreground: 0 0% 100%; --secondary: 145 27% 88%; --muted: 145 23% 89%; --accent: 147 39% 84%; --accent-foreground: 154 45% 20%; --ring: 153 41% 37%; }
 
-/* The selected baby's identity tint should stay airy on light themes instead of using the dark Night tint. */
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-violet-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-violet-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-violet-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-violet-900'] { background-color: rgb(237 233 254 / .74) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-sky-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-sky-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-sky-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-sky-900'] { background-color: rgb(224 242 254 / .78) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-emerald-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-emerald-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-emerald-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-emerald-900'] { background-color: rgb(209 250 229 / .76) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-amber-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-amber-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-amber-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-amber-900'] { background-color: rgb(254 243 199 / .78) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-rose-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-rose-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-rose-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-rose-900'] { background-color: rgb(255 228 230 / .78) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-indigo-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-indigo-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-indigo-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-indigo-900'] { background-color: rgb(224 231 255 / .76) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-lime-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-lime-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-lime-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-lime-900'] { background-color: rgb(236 252 203 / .76) !important; }
-:root[data-theme='milk'] .twinly-baby-panel[class*='bg-pink-900'],
-:root[data-theme='sakura'] .twinly-baby-panel[class*='bg-pink-900'],
-:root[data-theme='sun'] .twinly-baby-panel[class*='bg-pink-900'],
-:root[data-theme='forest'] .twinly-baby-panel[class*='bg-pink-900'] { background-color: rgb(252 231 243 / .76) !important; }
+/* Milk: warm oat / caramel with mauve sleep and sage wake. */
+:root[data-theme='milk'] {
+  --background: 38 28% 96%; --primary: 25 38% 34%; --primary-foreground: 0 0% 100%;
+  --secondary: 35 22% 89%; --muted: 35 22% 89%; --accent: 32 37% 86%; --accent-foreground: 25 38% 23%; --ring: 25 38% 40%;
+  --gauge-milk-track: 28 34% 89%; --gauge-milk-fill: 27 50% 55%; --gauge-milk-text: 25 36% 20%; --gauge-milk-muted: 25 25% 34%;
+  --gauge-diaper-track: 43 48% 89%; --gauge-diaper-fill: 40 66% 48%; --gauge-diaper-text: 35 44% 20%; --gauge-diaper-muted: 36 27% 33%;
+  --gauge-sleep-track: 278 25% 91%; --gauge-sleep-fill: 271 33% 58%; --gauge-wake-track: 137 23% 90%; --gauge-wake-fill: 137 28% 45%;
+  --care-milk: 27 50% 52%; --care-food: 15 51% 55%; --care-diaper: 40 61% 44%; --care-activity: 137 32% 40%;
+  --sleep-badge: 271 30% 47%; --sleep-badge-foreground: 0 0% 100%;
+  --event-milk-bg: 28 42% 91%; --event-food-bg: 15 44% 91%; --event-diaper-bg: 43 50% 90%; --event-sleep-bg: 278 28% 91%; --event-wake-bg: 137 25% 90%;
+  --account-avatar-bg: 32 25% 87%; --account-avatar-fg: 25 42% 28%; --account-avatar-ring: 27 28% 69%;
+}
+
+/* Sakura: cherry rose / peach with plum sleep and quiet sage wake. */
+:root[data-theme='sakura'] {
+  --background: 342 72% 96%; --primary: 342 57% 42%; --primary-foreground: 0 0% 100%;
+  --secondary: 342 48% 90%; --muted: 342 40% 91%; --accent: 341 67% 86%; --accent-foreground: 342 52% 23%; --ring: 342 57% 47%;
+  --gauge-milk-track: 343 44% 91%; --gauge-milk-fill: 342 56% 58%; --gauge-milk-text: 342 48% 20%; --gauge-milk-muted: 342 28% 34%;
+  --gauge-diaper-track: 21 54% 90%; --gauge-diaper-fill: 19 67% 57%; --gauge-diaper-text: 18 48% 21%; --gauge-diaper-muted: 19 28% 34%;
+  --gauge-sleep-track: 274 30% 91%; --gauge-sleep-fill: 273 42% 61%; --gauge-wake-track: 155 24% 90%; --gauge-wake-fill: 153 30% 44%;
+  --care-milk: 342 55% 54%; --care-food: 19 61% 54%; --care-diaper: 25 61% 51%; --care-activity: 153 31% 40%;
+  --sleep-badge: 273 36% 49%; --sleep-badge-foreground: 0 0% 100%;
+  --event-milk-bg: 343 48% 91%; --event-food-bg: 20 53% 91%; --event-diaper-bg: 28 52% 90%; --event-sleep-bg: 274 31% 91%; --event-wake-bg: 155 25% 90%;
+  --account-avatar-bg: 342 41% 89%; --account-avatar-fg: 342 58% 34%; --account-avatar-ring: 342 42% 72%;
+}
+
+/* Sun: apricot / honey with dusk purple sleep and olive wake. */
+:root[data-theme='sun'] {
+  --background: 43 88% 94%; --primary: 21 69% 39%; --primary-foreground: 0 0% 100%;
+  --secondary: 42 58% 88%; --muted: 43 46% 89%; --accent: 35 77% 84%; --accent-foreground: 23 60% 22%; --ring: 21 69% 44%;
+  --gauge-milk-track: 31 60% 89%; --gauge-milk-fill: 27 73% 55%; --gauge-milk-text: 24 55% 20%; --gauge-milk-muted: 25 31% 33%;
+  --gauge-diaper-track: 48 65% 88%; --gauge-diaper-fill: 44 70% 47%; --gauge-diaper-text: 40 53% 19%; --gauge-diaper-muted: 41 30% 31%;
+  --gauge-sleep-track: 272 27% 91%; --gauge-sleep-fill: 267 36% 59%; --gauge-wake-track: 86 29% 89%; --gauge-wake-fill: 88 35% 42%;
+  --care-milk: 27 69% 51%; --care-food: 17 67% 53%; --care-diaper: 44 65% 43%; --care-activity: 88 37% 38%;
+  --sleep-badge: 267 32% 48%; --sleep-badge-foreground: 0 0% 100%;
+  --event-milk-bg: 31 62% 89%; --event-food-bg: 19 60% 90%; --event-diaper-bg: 48 63% 88%; --event-sleep-bg: 272 29% 91%; --event-wake-bg: 86 31% 89%;
+  --account-avatar-bg: 39 48% 86%; --account-avatar-fg: 22 62% 31%; --account-avatar-ring: 29 45% 67%;
+}
+
+/* Forest: eucalyptus / moss with blue-grey sleep and deeper green wake. */
+:root[data-theme='forest'] {
+  --background: 143 36% 95%; --primary: 153 41% 31%; --primary-foreground: 0 0% 100%;
+  --secondary: 145 27% 88%; --muted: 145 23% 89%; --accent: 147 39% 84%; --accent-foreground: 154 45% 20%; --ring: 153 41% 37%;
+  --gauge-milk-track: 158 31% 89%; --gauge-milk-fill: 158 42% 45%; --gauge-milk-text: 158 43% 18%; --gauge-milk-muted: 158 25% 31%;
+  --gauge-diaper-track: 49 39% 88%; --gauge-diaper-fill: 48 45% 42%; --gauge-diaper-text: 48 42% 18%; --gauge-diaper-muted: 48 25% 30%;
+  --gauge-sleep-track: 230 25% 91%; --gauge-sleep-fill: 231 32% 57%; --gauge-wake-track: 139 30% 88%; --gauge-wake-fill: 140 34% 39%;
+  --care-milk: 158 42% 42%; --care-food: 169 42% 40%; --care-diaper: 48 44% 39%; --care-activity: 140 36% 36%;
+  --sleep-badge: 231 29% 46%; --sleep-badge-foreground: 0 0% 100%;
+  --event-milk-bg: 158 31% 89%; --event-food-bg: 169 30% 89%; --event-diaper-bg: 49 38% 88%; --event-sleep-bg: 230 26% 91%; --event-wake-bg: 139 30% 88%;
+  --account-avatar-bg: 148 24% 86%; --account-avatar-fg: 153 43% 27%; --account-avatar-ring: 150 30% 66%;
+}
+
+/* Member avatars stay legible without becoming a high-contrast white badge in Night. */
+.twinly-account-avatar,
+.twinly-member-avatar {
+  background-color: hsl(var(--account-avatar-bg)) !important;
+  color: hsl(var(--account-avatar-fg)) !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--account-avatar-ring) / .55);
+}
+.twinly-account-avatar:hover { filter: brightness(1.08); }
+
+/* Blend the baby's identity tint into the selected theme instead of letting it dominate the whole panel. */
+.twinly-baby-panel[class*='bg-violet-900'] { --baby-identity: #8b5cf6; }
+.twinly-baby-panel[class*='bg-sky-900'] { --baby-identity: #38bdf8; }
+.twinly-baby-panel[class*='bg-emerald-900'] { --baby-identity: #34d399; }
+.twinly-baby-panel[class*='bg-amber-900'] { --baby-identity: #f59e0b; }
+.twinly-baby-panel[class*='bg-rose-900'] { --baby-identity: #fb7185; }
+.twinly-baby-panel[class*='bg-indigo-900'] { --baby-identity: #818cf8; }
+.twinly-baby-panel[class*='bg-lime-900'] { --baby-identity: #84cc16; }
+.twinly-baby-panel[class*='bg-pink-900'] { --baby-identity: #f472b6; }
+:root[data-theme='milk'] .twinly-baby-panel,
+:root[data-theme='sakura'] .twinly-baby-panel,
+:root[data-theme='sun'] .twinly-baby-panel,
+:root[data-theme='forest'] .twinly-baby-panel {
+  background-color: color-mix(in srgb, hsl(var(--background)) 88%, var(--baby-identity, #94a3b8) 12%) !important;
+}
 
 /* Night theme swatch uses a dark preview; force its labels to remain readable. */
 button[class*='from-slate-950'][class*='to-indigo-950'] > span:first-child { color: rgb(255 255 255) !important; }
 button[class*='from-slate-950'][class*='to-indigo-950'] > span:nth-child(2) { color: rgb(226 232 240) !important; }
 
 [data-transition] { opacity: 1 !important; }
-[data-transition='sleepStart'] .sleep-transition-message { background: linear-gradient(110deg,#61a77f,#6755a5,#29233e); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }
-[data-transition='wake'] .sleep-transition-message { background: linear-gradient(110deg,#6755a5,#61a77f,#173c2b); background-size: 200% 100%; animation: sleep-switch 2s ease forwards; }
+[data-transition='sleepStart'] .sleep-transition-message {
+  background: linear-gradient(110deg, hsl(var(--gauge-wake-fill)), hsl(var(--gauge-sleep-fill)), hsl(var(--gauge-sleep-track)));
+  background-size: 200% 100%; animation: sleep-switch 2s ease forwards;
+}
+[data-transition='wake'] .sleep-transition-message {
+  background: linear-gradient(110deg, hsl(var(--gauge-sleep-fill)), hsl(var(--gauge-wake-fill)), hsl(var(--gauge-wake-track)));
+  background-size: 200% 100%; animation: sleep-switch 2s ease forwards;
+}
 @keyframes sleep-switch { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
 @media (prefers-reduced-motion: reduce) { .sleep-transition-message { animation: none !important; } }
