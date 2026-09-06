@@ -44,7 +44,7 @@ const MiniGauge = ({
         className="absolute inset-[5px] rounded-full bg-background transition-colors"
         style={isFull ? { backgroundColor: color } : undefined}
       />
-      <span className={`relative transition-colors ${isFull ? "text-primary-foreground" : "text-foreground/80"}`}>
+      <span className={`relative transition-colors ${isFull ? "text-white" : "text-foreground/80"}`}>
         {children}
       </span>
     </span>
