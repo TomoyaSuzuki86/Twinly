@@ -2,6 +2,7 @@ import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {AiTools} from './AiTools';
+import {DailySummaryEmailSettings} from './DailySummaryEmailSettings';
 import {createInitialAppState} from '@/lib/app-state';
 
 const mock=vi.hoisted(()=>({call:vi.fn()}));
@@ -10,6 +11,7 @@ vi.mock('@/lib/ai',async importOriginal=>({...await importOriginal<typeof import
 
 const free={plan:'free',canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
 const premium={plan:'premium',canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
+const emailSettings={enabled:false,hourJst:21,recipients:['family@example.com'],canEdit:true};
 
 function renderTools(){
   render(<AiTools familyId="test" app={createInitialAppState()} onSave={()=>true}/>);
@@ -52,5 +54,20 @@ describe('pricing and plans',()=>{
     expect(await screen.findByRole('button',{name:'Premiumを使用中'})).toBeDisabled();
     expect(screen.getByText(/AIアドバイスはホームから、日次メールは「通知」タブから設定できます/)).toBeInTheDocument();
     expect(screen.getByRole('button',{name:'開発確認用：無料版表示に戻す'})).toBeInTheDocument();
+  });
+
+  it('keeps daily-summary email controls in their own notification settings component',async()=>{
+    mock.call.mockImplementation(async(name,data)=>{
+      if(name==='getFamilyAccess')return premium;
+      if(name==='getDailySummaryEmailSettings')return emailSettings;
+      if(name==='setDailySummaryEmailSettings')return {...emailSettings,...data};
+      throw new Error(`unexpected ${name}`);
+    });
+    render(<DailySummaryEmailSettings/>);
+    expect(await screen.findByText('今日のまとめメール')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox',{name:'毎日メールを送る'}));
+    fireEvent.change(screen.getByLabelText('日次まとめメール送信時刻'),{target:{value:'22'}});
+    fireEvent.click(screen.getByRole('button',{name:'メール設定を保存'}));
+    await waitFor(()=>expect(mock.call.mock.calls.some(([name,data])=>name==='setDailySummaryEmailSettings'&&data.enabled===true&&data.hourJst===22)).toBe(true));
   });
 });
