@@ -32,32 +32,27 @@ describe('AI feature preview',()=>{
     expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeDisabled();
     fireEvent.click(toggle);
     await waitFor(()=>expect(screen.getByRole('switch')).toHaveAttribute('aria-checked','true'));
-    fireEvent.click(screen.getByRole('checkbox',{name:/AIアドバイス・質問時/}));
+    fireEvent.click(screen.getByRole('checkbox',{name:/AIアドバイス生成時/}));
     expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeEnabled();
     fireEvent.click(screen.getByRole('switch'));
     await waitFor(()=>expect(screen.getByRole('button',{name:'AIアドバイスを見る'})).toBeDisabled());
     expect(mock.call.mock.calls.some(([name])=>name==='setFamilyPreviewPlan')).toBe(true);
   });
 
-  it('asks a follow-up only after the daily review is available',async()=>{
+  it('shows cached review content in the plan screen',async()=>{
     const review={observations:'最近は安定しています',checks:'睡眠時間を確認しましょう',generatedAt:Date.now()};
     mock.call.mockImplementation(async(name,data)=>{
       if(name==='getFamilyAccess')return premium;
       if(name==='getDailySummaryEmailSettings')return emailSettings;
       if(name==='twinlyAi'&&data.mode==='review')return review;
-      if(name==='twinlyAi'&&data.mode==='ask')return {answer:'直近の集計では大きな変化はありません。',source:'review',generatedAt:Date.now()};
       return premium;
     });
     renderTools();
     await screen.findByRole('switch');
-    fireEvent.click(screen.getByRole('checkbox',{name:/AIアドバイス・質問時/}));
-    expect(screen.queryByRole('button',{name:'質問する'})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox',{name:/AIアドバイス生成時/}));
     fireEvent.click(screen.getByRole('button',{name:'AIアドバイスを見る'}));
-    await screen.findByText('最近は安定しています');
-    fireEvent.change(screen.getByLabelText('AIへの質問'),{target:{value:'最近、睡眠は減ってる？'}});
-    fireEvent.click(screen.getByRole('button',{name:'質問する'}));
-    expect(await screen.findByText('直近の集計では大きな変化はありません。')).toBeInTheDocument();
-    expect(mock.call.mock.calls.some(([name,data])=>name==='twinlyAi'&&data.mode==='ask')).toBe(true);
+    expect(await screen.findByText('最近は安定しています')).toBeInTheDocument();
+    expect(screen.getByText(/ホームの「AIアドバイス」からは/)).toBeInTheDocument();
   });
 
   it('saves the family daily-summary email hour',async()=>{
