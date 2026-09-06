@@ -42,7 +42,8 @@ export function AiAdviceLauncher() {
         button.parentElement.insertBefore(target, button);
         targetMap.current.set(button, target);
       }
-      setTargets(Array.from(targetMap.current.values()));
+      const next = Array.from(targetMap.current.values());
+      setTargets((current) => current.length === next.length && current.every((target, index) => target === next[index]) ? current : next);
     };
     syncTargets();
     const observer = new MutationObserver(syncTargets);
