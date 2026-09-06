@@ -3,8 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { VoiceCommandButton } from './VoiceCommandButton';
-import type { AiDraft, AiQuestionAnswer, AiReview, DailySummaryEmailSettings, FamilyAccess } from '@/lib/ai';
+import type { AiDraft, AiReview, DailySummaryEmailSettings, FamilyAccess } from '@/lib/ai';
 import { callService } from '@/lib/ai';
 import type { AppState } from '@/types';
 
@@ -24,8 +23,6 @@ export function AiTools({familyId,embedded=false}:AiToolsProps) {
   const [error,setError]=useState('');
   const [consent,setConsent]=useState(false);
   const [review,setReview]=useState<AiReview|null>(null);
-  const [question,setQuestion]=useState('');
-  const [answer,setAnswer]=useState<AiQuestionAnswer|null>(null);
   const [emailSettings,setEmailSettings]=useState<DailySummaryEmailSettings>(defaultEmailSettings);
   const generation=useRef(0), mounted=useRef(true), inFlight=useRef(false);
 
@@ -35,7 +32,7 @@ export function AiTools({familyId,embedded=false}:AiToolsProps) {
     const refresh=()=>{
       const current=++revision;
       generation.current++;
-      setAccess(null);setReview(null);setAnswer(null);
+      setAccess(null);setReview(null);
       callService<FamilyAccess>('getFamilyAccess').then(value=>{
         if(!active||current!==revision)return;
         setAccess(value);
@@ -71,7 +68,7 @@ export function AiTools({familyId,embedded=false}:AiToolsProps) {
 
       <p className="text-sm">現在：{access?(access.plan==='premium'?'有料機能のお試し':'無料モード'):'確認中'}。課金は発生しません。AI APIの利用料は別途かかる場合があります。</p>
       {access?.canPreview && <Button disabled={busy} role="switch" aria-checked={access.plan==='premium'} onClick={()=>run(async()=>{
-        generation.current++;setReview(null);setAnswer(null);
+        generation.current++;setReview(null);
         const next=await callService<FamilyAccess>('setFamilyPreviewPlan',{plan:access.plan==='premium'?'free':'premium'});
         if(mounted.current)setAccess(next);
       })}>有料機能のお試し：{access.plan==='premium'?'ON':'OFF'}</Button>}
@@ -83,36 +80,20 @@ export function AiTools({familyId,embedded=false}:AiToolsProps) {
       ].map(([key,label])=><div key={key} className="rounded border p-2">{label}：{access?.features[key as keyof FamilyAccess['features']]?'開放':'制限中'}</div>)}</div>
       <p className="text-xs">無料でも基本記録・通常音声・在庫数管理・ホワイトノイズを利用でき、有料音楽を12秒試聴できます。複雑な自然文をAIで記録へ変換する機能は提供しません。</p>
       {!aiAllowed && <p className="rounded border p-3 text-sm">AI機能はロック中です。家族のオーナーがお試しをONにすると利用できます。</p>}
-      <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} disabled={!aiAllowed||busy} onChange={e=>setConsent(e.target.checked)}/>AIアドバイス・質問時、登録名・生年月日・直近2週間の育児集計と、質問に必要な場合のみ時系列記録をGoogleのAPIへ送信することに同意する</label>
+      <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} disabled={!aiAllowed||busy} onChange={e=>setConsent(e.target.checked)}/>AIアドバイス生成時、登録名・生年月日・直近2週間の育児集計をGoogleのAPIへ送信することに同意する</label>
 
       <section className="space-y-3 border-t pt-3">
         <h3 className="font-bold">直近2週間のAIアドバイス</h3>
-        <p className="text-xs text-muted-foreground">今日を除く直近14日を中心に、ミルク・おむつ・離乳食・睡眠・体重・メモを双子で比較し、変化と今日見るポイントをまとめます。同じ日の生成結果は家族で共有します。</p>
+        <p className="text-xs text-muted-foreground">今日を除く直近14日を中心に、ミルク・おむつ・離乳食・睡眠・体重・メモを双子で比較し、変化と今日見るポイントをまとめます。ホームの「AIアドバイス」からは、その内容について続けて質問できます。</p>
         <Button disabled={!access?.features.aiReview||!consent||busy} onClick={()=>run(async()=>{
           const current=generation.current;
           const result=await callService<AiReview>('twinlyAi',{mode:'review'});
-          if(mounted.current&&current===generation.current){setReview(result);setAnswer(null);}
+          if(mounted.current&&current===generation.current)setReview(result);
         })}>AIアドバイスを見る</Button>
         {review&&<div className="space-y-2 whitespace-pre-wrap text-sm">
           <h4 className="font-bold">最近の傾向</h4><p>{review.observations}</p>
           <h4 className="font-bold">今日のポイント</h4><p>{review.checks}</p>
           <p className="text-xs">{new Date(review.generatedAt).toLocaleString('ja-JP')}作成。医療上の診断ではありません。</p>
-        </div>}
-
-        {review&&<div className="space-y-2 rounded border p-3">
-          <h4 className="font-bold">AIに質問する</h4>
-          <p className="text-xs text-muted-foreground">まず今日のAIアドバイスと集計済みデータから回答し、時刻や前後関係の確認が必要な質問だけ記録を追加確認します。</p>
-          <div className="flex items-center gap-2">
-            {access?.features.aiChat&&!busy&&<VoiceCommandButton onCommand={()=>{}} onMessage={setError} onTranscript={value=>{setQuestion(value);setAnswer(null);}}/>}
-            <span className="text-xs text-muted-foreground">マイクでも質問できます</span>
-          </div>
-          <textarea aria-label="AIへの質問" className="w-full rounded border bg-background p-2" rows={2} maxLength={500} disabled={!access?.features.aiChat||busy} value={question} placeholder="例：最近、日向の睡眠時間は減ってる？" onChange={e=>{setQuestion(e.target.value);setAnswer(null);}}/>
-          <Button disabled={!access?.features.aiChat||!consent||busy||!question.trim()} onClick={()=>run(async()=>{
-            const current=generation.current;
-            const result=await callService<AiQuestionAnswer>('twinlyAi',{mode:'ask',question});
-            if(mounted.current&&current===generation.current)setAnswer(result);
-          })}>質問する</Button>
-          {answer&&<div className="space-y-1 rounded bg-muted/40 p-3 text-sm"><p className="whitespace-pre-wrap">{answer.answer}</p><p className="text-xs text-muted-foreground">{answer.source==='review+timeline'?'AIアドバイスに加えて必要な時系列記録も確認して回答':'今日のAIアドバイスと集計データから回答'}</p></div>}
         </div>}
       </section>
 
