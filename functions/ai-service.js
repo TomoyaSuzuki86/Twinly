@@ -4,6 +4,7 @@ const { accessFor, validateDrafts, summarize } = require('./ai-policy');
 const key = defineSecret('TWINLY_AI_API_KEY');
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
 const options = { region: 'asia-northeast1', maxInstances: 1, timeoutSeconds: 60, invoker: 'public' };
+const REVIEW_VERSION = 2;
 
 module.exports = function createAiServices(db) {
   async function context(request) {
@@ -55,14 +56,15 @@ module.exports = function createAiServices(db) {
   // Reserve only the short anti-repeat window before contacting the provider.
   // Quota counters are committed after a valid result is ready for the user, so
   // provider/configuration failures never consume the user's daily/monthly quota.
-  async function reserve(ctx, feature) {
+  async function reserve(ctx, feature, reserveOptions = {}) {
     const now = Date.now(), day = new Date(now + 9*3600000).toISOString().slice(0,10), month = day.slice(0,7);
     const daily = ctx.root.collection('aiUsage').doc(day), monthly = ctx.root.collection('aiUsage').doc(month);
     await db.runTransaction(async tx => {
       const [a,d,m] = await Promise.all([tx.get(ctx.ref),tx.get(daily),tx.get(monthly)]);
       if (!accessFor(a.data(),ctx.access.trialAllowed).features[feature]) throw new HttpsError('permission-denied','無料モードではAI機能を利用できません');
       const dv=d.data()||{}, mv=m.data()||{};
-      if ((dv.successfulCount||0)>=40 || (mv.successfulCount||0)>=600 || now-(dv.lastAt||0)<5000 || (feature==='aiReview' && (dv.successfulReviews||0)>=2)) throw new HttpsError('resource-exhausted','AI利用上限に達しました。通常の記録は引き続き使えます');
+      const reviewLimitReached = feature==='aiReview' && (dv.successfulReviews||0)>=2 && !reserveOptions.allowReviewRefresh;
+      if ((dv.successfulCount||0)>=40 || (mv.successfulCount||0)>=600 || now-(dv.lastAt||0)<5000 || reviewLimitReached) throw new HttpsError('resource-exhausted','AI利用上限に達しました。通常の記録は引き続き使えます');
       tx.set(daily,{...dv,lastAt:now});
     });
     return { day, month, feature };
@@ -108,22 +110,22 @@ module.exports = function createAiServices(db) {
         return {events};
       }
       const day=new Date(now+9*3600000).toISOString().slice(0,10);
-      const cache=c.root.collection('aiReviews').doc(day), cached=await cache.get();
-      if(cached.exists) return cached.data();
+      const cache=c.root.collection('aiReviews').doc(day), cached=await cache.get(), cachedData=cached.exists?cached.data():null;
+      if(cachedData?.version===REVIEW_VERSION) return cachedData;
       let events=app.events||[];
       if(state.data()?.schemaVersion===2) {
         const rows=await c.root.collection('events').where('timestamp','>=',now-16*86400000).orderBy('timestamp').limit(3001).get();
         if(rows.size>3000) throw new HttpsError('resource-exhausted','対象期間の記録が多すぎます');
         events=rows.docs.map(d=>d.data());
       }
-      const summary=summarize(events,now);
-      if(!summary.some(b=>b.periods.some(p=>p.milkCount||p.weights.length))) throw new HttpsError('failed-precondition','振り返りには直近2週間のミルクまたは体重の記録が必要です');
-      const reservation=await reserve(c,feature);
-      const result=await generate('育児記録の振り返りを日本語で短く説明する。JSON {observations:string,checks:string} のみ。各フィールド600文字以内。A/Bで子を表す。渡された2週間の集計だけを根拠に事実と確認事項を分ける。記録がない日は摂取ゼロとみなさない。体重の単位はkg。測定不足では増加傾向を断定しない。月齢や診断を推測しない。原因を断定しない。授乳回数・摂取量の変更、メーカー変更、治療・投薬の提案をしない。変化が気になる場合は記録をもとに保健師や小児科へ相談する旨を適宜示す。',summary);
-      if(typeof result.observations!=='string'||typeof result.checks!=='string'||result.observations.length>1000||result.checks.length>1000) throw new HttpsError('data-loss','振り返りの形式が不正です');
+      const summary=summarize(events,now,app.profiles||{});
+      if(!summary.some(b=>b.periods.some(p=>(p.recordCount||0)>0))) throw new HttpsError('failed-precondition','AIアドバイスには直近2週間の育児記録が必要です');
+      const reservation=await reserve(c,feature,{allowReviewRefresh:Boolean(cachedData&&cachedData.version!==REVIEW_VERSION)});
+      const result=await generate('双子育児の直近2週間の記録から、家族が今日確認すると役立つ短いアドバイスを日本語で作る。JSON {observations:string,checks:string} のみ返す。observationsは「最近の傾向」、checksは「今日のポイント」として各800文字以内。入力の各babyにはnameがあるので、回答では必ずその登録名を使い、A・B・赤ちゃんA・赤ちゃんBという呼び方は絶対に使わない。2人を比較する時も登録名で書く。ミルクの量と回数、おむつ交換・おしっこ・うんち、離乳食、総睡眠と夜間睡眠、睡眠回数、体重（十分な測定がある場合のみ）、日ごとの変化、双子同士の差、メモ、就寝前2時間以内のミルク記録を総合して見る。直近7日とその前7日の変化を優先し、急な増減や継続する傾向を簡潔に示す。今日の途中経過はtodaySoFarとして渡されるので、完了した1日と同列に比較しない。メモに吐き戻し等が繰り返しあれば、授乳ペース、げっぷ、授乳後にしばらく縦抱きにする等の一般的な工夫を確認事項として提案してよい。ただし原因を断定しない。就寝前のミルクが多い場合も「飲みすぎ」と断定せず、量やタイミングと吐き戻し・睡眠の変化が重なるかを確認する形にする。月齢の一般的な目安は補助的に使ってよいが個人差が大きいことを前提とし、厳密な正常・異常判定や診断はしない。記録がない日はゼロとみなさない。体重測定が少なければ体重には触れなくてよい。数値の羅列ではなく、変化・比較・次に見るポイントを優先する。治療、投薬、メーカー変更、具体的な授乳量の増減を指示しない。心配な変化や受診が必要そうな兆候については、記録を持って小児科や保健師へ相談するよう穏やかに案内する。',summary);
+      if(typeof result.observations!=='string'||typeof result.checks!=='string'||result.observations.length>1200||result.checks.length>1200) throw new HttpsError('data-loss','AIアドバイスの形式が不正です');
       const latest=await context(request);
       if(!latest.access.features.aiReview) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
-      const review={observations:result.observations,checks:result.checks,summary,generatedAt:now};
+      const review={version:REVIEW_VERSION,observations:result.observations,checks:result.checks,generatedAt:now};
       await commitUsage(c,reservation);
       await cache.set(review);return review;
     })
