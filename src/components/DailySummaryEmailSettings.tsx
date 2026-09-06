@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { BellRing, Crown, Mail } from "lucide-react";
-import type { DailySummaryEmailSettings as EmailSettings, FamilyAccess } from "@/lib/ai";
+import { AlertCircle, BellRing, CheckCircle2, Crown, Mail } from "lucide-react";
+import type {
+  DailySummaryEmailDeliveryStatus as DeliveryStatus,
+  DailySummaryEmailSettings as EmailSettings,
+  FamilyAccess,
+} from "@/lib/ai";
 import { callService } from "@/lib/ai";
 import { Button } from "./ui/button";
 
@@ -11,9 +15,19 @@ const DEFAULT_SETTINGS: EmailSettings = {
   canEdit: false,
 };
 
+const formatSentAt = (timestamp: number) => new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+}).format(new Date(timestamp));
+
 export function DailySummaryEmailSettings() {
   const [access, setAccess] = useState<FamilyAccess | null>(null);
   const [settings, setSettings] = useState<EmailSettings>(DEFAULT_SETTINGS);
+  const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus | null>(null);
+  const [deliveryConfigured, setDeliveryConfigured] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -36,6 +50,21 @@ export function DailySummaryEmailSettings() {
       .finally(() => {
         if (mounted.current) setLoading(false);
       });
+
+    callService<DeliveryStatus>("getDailySummaryDeliveryStatus")
+      .then((status) => {
+        if (!mounted.current) return;
+        setDeliveryConfigured(true);
+        setDeliveryStatus(status);
+      })
+      .catch((error: unknown) => {
+        if (!mounted.current) return;
+        const code = String((error as { code?: unknown } | null)?.code || "");
+        if (code.includes("not-found") || code.includes("unimplemented")) {
+          setDeliveryConfigured(false);
+        }
+      });
+
     return () => {
       mounted.current = false;
     };
@@ -132,6 +161,31 @@ export function DailySummaryEmailSettings() {
               {settings.recipients.length ? settings.recipients.join(" / ") : "メールアドレスが登録された家族メンバーがいません"}
             </div>
           </div>
+
+          {deliveryConfigured === false ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs" role="status">
+              <div className="flex items-center gap-2 font-semibold"><AlertCircle className="h-4 w-4" />メール配送は準備中です</div>
+              <p className="mt-1 text-muted-foreground">設定は保存できますが、運営側のメール配送設定が完了するまで実際のメールは送信されません。</p>
+            </div>
+          ) : null}
+
+          {deliveryConfigured === true && deliveryStatus?.lastDeliveryError ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs" role="status">
+              <div className="flex items-center gap-2 font-semibold"><AlertCircle className="h-4 w-4" />直近のメール送信に失敗しました</div>
+              <p className="mt-1 text-muted-foreground">Twinlyが自動で再試行します。しばらくしても届かない場合は、送信先メールアドレスを確認してください。</p>
+            </div>
+          ) : null}
+
+          {deliveryConfigured === true && !deliveryStatus?.lastDeliveryError ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-xs" role="status">
+              <div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4 text-primary" />メール配送の準備は完了しています</div>
+              {deliveryStatus?.lastSentAt ? (
+                <p className="mt-1 text-muted-foreground">最終送信：{formatSentAt(deliveryStatus.lastSentAt)}</p>
+              ) : (
+                <p className="mt-1 text-muted-foreground">次回の設定時刻から送信します。</p>
+              )}
+            </div>
+          ) : null}
 
           <Button onClick={() => void save()} disabled={!settings.canEdit || busy}>
             {busy ? "保存中…" : "メール設定を保存"}

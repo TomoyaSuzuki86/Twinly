@@ -36,6 +36,12 @@ export type DailySummaryEmailSettings = {
   recipients: string[];
   canEdit: boolean;
 };
+export type DailySummaryEmailDeliveryStatus = {
+  lastSentDate: string|null;
+  lastSentAt: number|null;
+  lastDeliveryAttemptAt: number|null;
+  lastDeliveryError: string;
+};
 
 export async function callService<T>(name: string, data: unknown = {}): Promise<T> {
   if (!functions) throw new Error('サーバー設定がありません');
