@@ -70,3 +70,38 @@ button[aria-label="入眠を記録・長押しで時刻指定"] [data-testid="sl
 button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sleep-gauge-fill"] {
   width: 100% !important;
 }
+
+
+/* Wide twin split layout */
+@media (min-width: 1180px) {
+  html[data-twinly-layout="split"] .twinly-baby-tabs-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-baby-tabs-list [role="tab"] {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    box-shadow: 0 1px 2px hsl(var(--foreground) / 0.08);
+    opacity: 1;
+  }
+
+  html[data-twinly-layout="split"] .twinly-baby-tabs-list [data-testid$="-mini-gauge"] {
+    display: none !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-baby-tabs-panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 0.75rem;
+  }
+
+  html[data-twinly-layout="split"] .twinly-baby-tabs-content {
+    min-width: 0;
+    margin-top: 0.25rem;
+  }
+
+  html[data-twinly-layout="split"] .twinly-baby-tabs-content[data-state="inactive"] {
+    display: block !important;
+  }
+}

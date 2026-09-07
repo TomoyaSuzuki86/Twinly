@@ -211,6 +211,24 @@ export default function App() {
     document.documentElement.dataset.theme = allowed ? theme : "dark";
     return () => { delete document.documentElement.dataset.theme; };
   }, [theme, familyAccess?.features.themes]);
+  const [layoutMode, setLayoutMode] = useState<"single" | "split">("single");
+  useEffect(() => {
+    if (!family?.id) {
+      setLayoutMode("single");
+      return;
+    }
+    try {
+      setLayoutMode(localStorage.getItem(`twinly-layout:${family.id}`) === "split" ? "split" : "single");
+    } catch {
+      setLayoutMode("single");
+    }
+  }, [family?.id]);
+  useEffect(() => {
+    document.documentElement.dataset.twinlyLayout = layoutMode;
+    return () => {
+      delete document.documentElement.dataset.twinlyLayout;
+    };
+  }, [layoutMode]);
   const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
@@ -1299,7 +1317,7 @@ export default function App() {
     <AppContainer>
       <div className="mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
         <main>
-          <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="w-full">
+          <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
             <div className="sticky top-0 z-40 space-y-1 bg-background">
               <header
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
@@ -1360,7 +1378,7 @@ export default function App() {
               </p>
 
               <TabsList
-                className={`grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
+                className={`twinly-baby-tabs-list grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
                     : "grid-cols-[minmax(180px,1.15fr)_minmax(140px,0.85fr)]"
@@ -1407,14 +1425,14 @@ export default function App() {
               </TabsList>
             </div>
             <div
-              className="touch-auto"
+              className="twinly-baby-tabs-panels touch-auto"
               onTouchStart={handleBabyTabTouchStart}
               onTouchEnd={handleBabyTabTouchEnd}
               onTouchCancel={() => {
                 babyTabSwipeStartRef.current = null;
               }}
             >
-            <TabsContent forceMount value="A" className="mt-1 data-[state=inactive]:hidden">
+            <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 profile={app.profiles.A}
                 events={currentEventsByBaby.A}
@@ -1436,7 +1454,7 @@ export default function App() {
                 onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
-                onOpenTimeline={() => setTimelineModalOpen(true)}
+                onOpenTimeline={() => { setSelectedBabyTab("A"); setTimelineModalOpen(true); }}
                 lastWeight={lastWeights.A}
                 lastHeight={lastHeights.A}
                 themeDimmedBgColor={
@@ -1446,7 +1464,7 @@ export default function App() {
                 memberNameByUid={memberNameByUid}
               />
             </TabsContent>
-            <TabsContent forceMount value="B" className="mt-1 data-[state=inactive]:hidden">
+            <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 profile={app.profiles.B}
                 events={currentEventsByBaby.B}
@@ -1468,7 +1486,7 @@ export default function App() {
                 onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
-                onOpenTimeline={() => setTimelineModalOpen(true)}
+                onOpenTimeline={() => { setSelectedBabyTab("B"); setTimelineModalOpen(true); }}
                 lastWeight={lastWeights.B}
                 lastHeight={lastHeights.B}
                 themeDimmedBgColor={
@@ -1559,11 +1577,48 @@ export default function App() {
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}
-        appearance={<section className="space-y-3"><div><h3 className="font-semibold">テーマ</h3><p className="text-sm text-muted-foreground">背景・文字・ゲージをまとめて切り替えます。</p></div><div className="grid grid-cols-2 gap-2">{[
-          ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
-          ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
-          ["forest", "森の朝", "from-emerald-50 to-green-200"]
-        ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div></section>}
+        appearance={
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <div>
+                <h3 className="font-semibold">画面レイアウト</h3>
+                <p className="text-sm text-muted-foreground">横長の端末で、双子の入力画面をどう表示するか選べます。</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLayoutMode("single");
+                    try { localStorage.setItem(`twinly-layout:${family.id}`, "single"); } catch {}
+                  }}
+                  className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "single" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
+                >
+                  <span className="block text-sm font-bold">1人ずつ表示</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">従来どおり、双子タブで切り替えて画面いっぱいに表示</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLayoutMode("split");
+                    try { localStorage.setItem(`twinly-layout:${family.id}`, "split"); } catch {}
+                  }}
+                  className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
+                >
+                  <span className="block text-sm font-bold">左右2人表示</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">横幅1180px以上で2人を同時表示。狭い画面では自動で1人表示</span>
+                </button>
+              </div>
+            </section>
+            <section className="space-y-3">
+              <div><h3 className="font-semibold">テーマ</h3><p className="text-sm text-muted-foreground">背景・文字・ゲージをまとめて切り替えます。</p></div>
+              <div className="grid grid-cols-2 gap-2">{[
+                ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
+                ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
+                ["forest", "森の朝", "from-emerald-50 to-green-200"]
+              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
+            </section>
+          </div>
+        }
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;
           const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
