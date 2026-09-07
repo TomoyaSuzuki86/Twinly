@@ -35,9 +35,7 @@ describe("MilkModal", () => {
     });
   });
 
-  it("changes milk amount in 5ml increments", () => {
-    const onSave = vi.fn();
-
+  it("changes milk amount with -10, -5, +5, and +10ml buttons", () => {
     render(
       <MilkModal
         open
@@ -48,18 +46,24 @@ describe("MilkModal", () => {
           note: "",
           timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
         }}
-        onSave={onSave}
+        onSave={vi.fn()}
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を増やす" }));
-    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+    expect(screen.queryByRole("button", { name: "ミルク量を減らす" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "ミルク量を増やす" })).toBeNull();
 
-    expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({
-        milkMl: 55,
-      })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "ミルク量を10ml減らす" }));
+    expect(screen.getByText("40")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "ミルク量を5ml減らす" }));
+    expect(screen.getByText("35")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "ミルク量を5ml増やす" }));
+    expect(screen.getByText("40")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "ミルク量を10ml増やす" }));
+    expect(screen.getByText("50")).toBeTruthy();
   });
 
   it("does not show bottle or breast choices", () => {
