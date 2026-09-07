@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { ChevronLeft, ChevronRight, Moon } from "lucide-react";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtTime, iconGradients } from "@/lib/utils";
@@ -30,6 +30,9 @@ type WeeklyTimelineModalProps = {
 
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const hourTicks = Array.from({ length: 9 }, (_, index) => index * 3);
+const swipeThresholdPx = 48;
+const starClipPath =
+  "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)";
 
 const formatShortDate = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`;
 
@@ -87,7 +90,7 @@ const getEventPresentation = (event: LogEvent) => {
     return {
       label: "うんち",
       detail: "おむつ交換",
-      selectedClass: "rounded-full border-amber-100 bg-amber-400",
+      selectedClass: "border-0 bg-amber-400",
     };
   }
 
@@ -120,6 +123,7 @@ export function WeeklyTimelineModal({
   );
   const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [selectedBabyId, setSelectedBabyId] = useState<BabyId>(initialBabyId);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const currentWeekStart = useMemo(() => getWeekStart(now), [now]);
 
   useEffect(() => {
@@ -135,6 +139,25 @@ export function WeeklyTimelineModal({
     return days.map((day) => buildSleepDaySummary(analysis, day.date, now));
   }, [days, events, now, selectedBabyId]);
   const isCurrentWeek = weekStart.getTime() === currentWeekStart.getTime();
+
+  const handleTimelineTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTimelineTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    const touch = event.changedTouches[0];
+    touchStartRef.current = null;
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < swipeThresholdPx || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+
+    setSelectedBabyId(deltaX < 0 ? "B" : "A");
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,7 +241,7 @@ export function WeeklyTimelineModal({
               おしっこ
             </span>
             <span className="flex items-center justify-center gap-1">
-              <span className="h-2 w-2 rounded-full border border-amber-100 bg-amber-400" />
+              <span className="h-2.5 w-2.5 bg-amber-400" style={{ clipPath: starClipPath }} />
               うんち
             </span>
             <span className="flex items-center justify-center gap-1">
@@ -229,11 +252,16 @@ export function WeeklyTimelineModal({
         </div>
 
         <div
-          className="grid min-h-0 flex-1 grid-cols-[28px_minmax(0,1fr)] grid-rows-[34px_minmax(0,1fr)_24px] px-1 pb-2 pt-1 sm:grid-cols-[34px_minmax(0,1fr)] sm:px-3"
+          className="grid min-h-0 flex-1 touch-pan-y grid-cols-[28px_minmax(0,1fr)] grid-rows-[34px_minmax(0,1fr)_24px] px-1 pb-2 pt-1 sm:grid-cols-[34px_minmax(0,1fr)] sm:px-3"
           role="group"
           aria-label="7日間24時間タイムライングリッド"
           data-day-count="7"
           data-hour-count="24"
+          onTouchStart={handleTimelineTouchStart}
+          onTouchEnd={handleTimelineTouchEnd}
+          onTouchCancel={() => {
+            touchStartRef.current = null;
+          }}
         >
           <div aria-hidden="true" />
           <div className="grid grid-cols-7 border-b border-border/70">
@@ -321,28 +349,30 @@ export function WeeklyTimelineModal({
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-border/25"
                   />
-                  {day.events.map((event) => {
-                    const profile = profiles[event.babyId];
-                    const presentation = getEventPresentation(event);
-                    const selected = event.babyId === selectedBabyId;
-                    const time = fmtTime(new Date(event.timestamp));
+                  {day.events
+                    .filter((event) => event.babyId === selectedBabyId)
+                    .map((event) => {
+                      const profile = profiles[event.babyId];
+                      const presentation = getEventPresentation(event);
+                      const time = fmtTime(new Date(event.timestamp));
+                      const isPoop = event.type === "diaper" && event.diaperKind === "poop";
 
-                    return (
-                      <span
-                        key={event.id}
-                        role="img"
-                        aria-label={`${profile.displayName}の${presentation.label} ${time}`}
-                        title={`${profile.displayName} ${presentation.label} ${presentation.detail} ${time}`}
-                        data-selected={selected}
-                        className={`absolute z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border shadow-sm min-[390px]:h-3 min-[390px]:w-3 ${
-                          selected
-                            ? presentation.selectedClass
-                            : "rounded-[2px] border-slate-300/40 bg-slate-400 opacity-25 grayscale"
-                        }`}
-                        style={{ top: getMarkerTop(event.timestamp), left: getMarkerLeft(event) }}
-                      />
-                    );
-                  })}
+                      return (
+                        <span
+                          key={event.id}
+                          role="img"
+                          aria-label={`${profile.displayName}の${presentation.label} ${time}`}
+                          title={`${profile.displayName} ${presentation.label} ${presentation.detail} ${time}`}
+                          data-selected="true"
+                          className={`absolute z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 border shadow-sm min-[390px]:h-3 min-[390px]:w-3 ${presentation.selectedClass}`}
+                          style={{
+                            top: getMarkerTop(event.timestamp),
+                            left: getMarkerLeft(event),
+                            ...(isPoop ? { clipPath: starClipPath } : {}),
+                          }}
+                        />
+                      );
+                    })}
                 </div>
               ))}
             </div>
