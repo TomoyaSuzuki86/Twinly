@@ -1,11 +1,9 @@
-const SHELL_CACHE = "twinly-shell-v5";
+const SHELL_CACHE = "twinly-shell-v6";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
-        "/",
-        "/index.html",
         "/manifest.webmanifest",
         "/icons/icon-192.svg",
         "/icons/icon-512.svg"
@@ -33,15 +31,20 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/__/")) return;
 
   if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req).then((response) => {
+    event.respondWith((async () => {
+      try {
+        // Always bypass the browser HTTP cache for app-shell navigation.
+        // Otherwise a cached index.html can keep pointing at an old JS bundle after deploy.
+        const response = await fetch(req, { cache: "no-store" });
         if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
           const copy = response.clone();
           event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy)));
         }
         return response;
-      }).catch(async () => (await caches.match("/index.html")) || new Response("通信状態を確認してください", { status: 503 }))
-    );
+      } catch {
+        return (await caches.match("/index.html")) || new Response("通信状態を確認してください", { status: 503 });
+      }
+    })());
     return;
   }
 
