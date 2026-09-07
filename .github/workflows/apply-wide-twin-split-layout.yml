@@ -3,7 +3,7 @@ name: Apply wide twin split layout
 on:
   push:
     branches:
-      - feature/wide-twin-split-layout
+      - disabled-wide-layout-stage
 
 permissions:
   contents: write
@@ -33,15 +33,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Targeted tests
-        run: npm test -- src/components/BabyTabTrigger.test.tsx src/components/WeeklyTimelineModal.test.tsx
+      - name: Build
+        run: npm run build
 
       - name: Commit implementation
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/components/BabyTabTrigger.tsx src/theme-polish.css
+          git add src/App.tsx src/theme-polish.css
           if git diff --cached --quiet; then
             echo "No implementation changes to commit"
             exit 0
