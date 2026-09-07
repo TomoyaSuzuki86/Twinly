@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
@@ -25,9 +25,36 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((error) => {
+  window.addEventListener("load", async () => {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloadingForUpdate = false;
+
+    if (hadController) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloadingForUpdate) return;
+        reloadingForUpdate = true;
+        window.location.reload();
+      });
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        updateViaCache: "none",
+      });
+
+      const checkForUpdate = () => {
+        registration.update().catch((error) => {
+          console.warn("Service worker update check failed", error);
+        });
+      };
+
+      checkForUpdate();
+      window.addEventListener("focus", checkForUpdate);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      });
+    } catch (error) {
       console.error("Service worker registration failed", error);
-    });
+    }
   });
 }
