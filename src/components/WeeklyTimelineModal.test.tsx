@@ -50,7 +50,7 @@ const events: LogEvent[] = [
 afterEach(cleanup);
 
 describe("WeeklyTimelineModal", () => {
-  it("fits seven days and 24 hours into one grid with compact category markers", () => {
+  it("shows only the selected baby's markers and renders poop as a star", () => {
     render(
       <WeeklyTimelineModal
         open
@@ -65,7 +65,6 @@ describe("WeeklyTimelineModal", () => {
 
     const grid = screen.getByRole("group", { name: "7日間24時間タイムライングリッド" });
     const kanataEvent = screen.getByLabelText("奏汰のミルク 09:00");
-    const hinataEvent = screen.getByLabelText("日向のおしっこ 09:30");
     const poopEvent = screen.getByLabelText("奏汰のうんち 15:00");
 
     expect(grid.dataset.dayCount).toBe("7");
@@ -73,16 +72,50 @@ describe("WeeklyTimelineModal", () => {
     expect(screen.queryByText("食事/おむつ")).toBeNull();
     expect(kanataEvent.className).toContain("bg-blue-500");
     expect(poopEvent.className).toContain("bg-amber-400");
+    expect(poopEvent.style.clipPath).toContain("polygon");
     expect(kanataEvent.dataset.selected).toBe("true");
-    expect(hinataEvent.dataset.selected).toBe("false");
-    expect(hinataEvent.className).toContain("opacity-25");
+    expect(screen.queryByLabelText("日向のおしっこ 09:30")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "日向の記録を強調" }));
 
-    expect(kanataEvent.dataset.selected).toBe("false");
-    expect(hinataEvent.dataset.selected).toBe("true");
-    expect(kanataEvent.className).toContain("opacity-25");
-    expect(hinataEvent.className).toContain("bg-cyan-300");
+    expect(screen.queryByLabelText("奏汰のミルク 09:00")).toBeNull();
+    expect(screen.getByLabelText("日向のおしっこ 09:30").className).toContain("bg-cyan-300");
+  });
+
+  it("switches babies with horizontal swipes while ignoring vertical movement", () => {
+    render(
+      <WeeklyTimelineModal
+        open
+        onOpenChange={() => undefined}
+        events={events}
+        profiles={profiles}
+        initialDate="2026-07-29"
+        initialBabyId="A"
+        now={new Date("2026-07-29T12:00:00+09:00")}
+      />
+    );
+
+    const grid = screen.getByRole("group", { name: "7日間24時間タイムライングリッド" });
+
+    fireEvent.touchStart(grid, { touches: [{ clientX: 240, clientY: 120 }] });
+    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 120, clientY: 126 }] });
+
+    expect(screen.queryByLabelText("奏汰のミルク 09:00")).toBeNull();
+    expect(screen.getByLabelText("日向のおしっこ 09:30")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "日向の記録を強調" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    );
+
+    fireEvent.touchStart(grid, { touches: [{ clientX: 120, clientY: 120 }] });
+    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 235, clientY: 124 }] });
+
+    expect(screen.getByLabelText("奏汰のミルク 09:00")).toBeTruthy();
+    expect(screen.queryByLabelText("日向のおしっこ 09:30")).toBeNull();
+
+    fireEvent.touchStart(grid, { touches: [{ clientX: 200, clientY: 100 }] });
+    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 205, clientY: 180 }] });
+
+    expect(screen.getByLabelText("奏汰のミルク 09:00")).toBeTruthy();
   });
 
   it("keeps two grouped lanes with fixed subtype positions regardless of event order", () => {
@@ -158,7 +191,9 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
-    expect(screen.getByLabelText("奏汰のうんち 15:00").style.left).toBe("80%");
+    const poop = screen.getByLabelText("奏汰のうんち 15:00");
+    expect(poop.style.left).toBe("80%");
+    expect(poop.style.clipPath).toContain("polygon");
   });
 
   it("shows completed sleep as a band and a per-day total", () => {
