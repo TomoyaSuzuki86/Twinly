@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { MilkDraft, stepMilkAmount } from "@/lib/entry-drafts";
+import { MilkDraft } from "@/lib/entry-drafts";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
 
 type MilkModalProps = {
@@ -51,8 +51,8 @@ export function MilkModal({
     setAutoWake(true);
   }, [open, initialDraft]);
 
-  const handleMilkAmountChange = (nextValue: number) => {
-    setMilkMl(nextValue);
+  const handleMilkAmountChange = (delta: -10 | -5 | 5 | 10) => {
+    setMilkMl((current) => Math.min(999, Math.max(0, current + delta)));
   };
 
   const handleSave = () => {
@@ -102,27 +102,45 @@ export function MilkModal({
             <>
               <div className="text-center">
                 <Label className="text-sm font-semibold text-muted-foreground">量 (ml)</Label>
-                <div className="mt-4 flex items-center justify-center gap-6">
+                <div className="mt-4 text-center text-7xl font-extrabold tracking-tight [color:hsl(var(--care-milk))]">
+                  {milkMl}
+                </div>
+                <div className="mt-4 flex items-center justify-center gap-3">
                   <Button
                     variant="outline"
                     size="icon"
                     className="h-16 w-16 rounded-full"
-                    aria-label="ミルク量を減らす"
-                    onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, -1))}
+                    aria-label="ミルク量を10ml減らす"
+                    onClick={() => handleMilkAmountChange(-10)}
                   >
-                    <span className="text-3xl font-semibold">-</span>
+                    <span className="text-2xl font-semibold tracking-[-0.15em]">&lt;&lt;</span>
                   </Button>
-                  <div className="w-32 text-center text-7xl font-extrabold tracking-tight [color:hsl(var(--care-milk))]">
-                    {milkMl}
-                  </div>
                   <Button
                     variant="outline"
                     size="icon"
                     className="h-16 w-16 rounded-full"
-                    aria-label="ミルク量を増やす"
-                    onClick={() => handleMilkAmountChange(stepMilkAmount(milkMl, 1))}
+                    aria-label="ミルク量を5ml減らす"
+                    onClick={() => handleMilkAmountChange(-5)}
                   >
-                    <span className="text-3xl font-semibold">+</span>
+                    <span className="text-3xl font-semibold">&lt;</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-16 w-16 rounded-full"
+                    aria-label="ミルク量を5ml増やす"
+                    onClick={() => handleMilkAmountChange(5)}
+                  >
+                    <span className="text-3xl font-semibold">&gt;</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-16 w-16 rounded-full"
+                    aria-label="ミルク量を10ml増やす"
+                    onClick={() => handleMilkAmountChange(10)}
+                  >
+                    <span className="text-2xl font-semibold tracking-[-0.15em]">&gt;&gt;</span>
                   </Button>
                 </div>
               </div>
