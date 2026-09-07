@@ -123,41 +123,6 @@ if "twinly-layout:" not in app:
     app = app[:appearance_start] + appearance + app[appearance_end:]
     app_path.write_text(app, encoding="utf-8")
 
-
-tab_path = Path("src/components/BabyTabTrigger.tsx")
-tab = tab_path.read_text(encoding="utf-8")
-if "twinly-baby-tab-trigger" not in tab:
-    replacements = [
-        (
-            '<div className="flex min-h-14 w-full min-w-0 items-center gap-1 px-0">',
-            '<div className="twinly-baby-tab-trigger flex min-h-14 w-full min-w-0 items-center gap-1 px-0">',
-        ),
-        (
-            'className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br transition-[filter] ${',
-            'className={`twinly-baby-tab-icon grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br transition-[filter] ${',
-        ),
-        (
-            'className="flex shrink-0 items-center gap-0.5"',
-            'className="twinly-baby-tab-gauges flex shrink-0 items-center gap-0.5"',
-        ),
-    ]
-    for old, new in replacements:
-        if old not in tab:
-            raise SystemExit(f"Baby tab replacement anchor not found: {old[:80]}")
-        tab = tab.replace(old, new, 1)
-
-    old_age = '''          {selected ? (
-            <p className="mt-1 truncate text-[11px] leading-none text-muted-foreground">生後{ageDays}日</p>
-          ) : null}'''
-    new_age = '''          <p className={`twinly-baby-tab-age mt-1 truncate text-[11px] leading-none text-muted-foreground ${selected ? "" : "hidden"}`}>
-            生後{ageDays}日
-          </p>'''
-    if old_age not in tab:
-        raise SystemExit("Baby tab age block not found")
-    tab = tab.replace(old_age, new_age, 1)
-    tab_path.write_text(tab, encoding="utf-8")
-
-
 css_path = Path("src/theme-polish.css")
 css = css_path.read_text(encoding="utf-8")
 marker = "/* Wide twin split layout */"
@@ -177,17 +142,8 @@ if marker not in css:
     opacity: 1;
   }
 
-  html[data-twinly-layout="split"] .twinly-baby-tab-gauges {
+  html[data-twinly-layout="split"] .twinly-baby-tabs-list [data-testid$="-mini-gauge"] {
     display: none !important;
-  }
-
-  html[data-twinly-layout="split"] .twinly-baby-tab-age {
-    display: block !important;
-  }
-
-  html[data-twinly-layout="split"] .twinly-baby-tab-icon {
-    opacity: 1 !important;
-    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--background));
   }
 
   html[data-twinly-layout="split"] .twinly-baby-tabs-panels {
