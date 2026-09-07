@@ -3,7 +3,7 @@ name: Apply wide twin split layout
 on:
   push:
     branches:
-      - disabled-wide-layout-stage
+      - feature/wide-twin-split-layout
 
 permissions:
   contents: write
