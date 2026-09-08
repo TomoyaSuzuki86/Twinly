@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { AppStore } from "./app-store";
+import { AppStore, type StoreStatus } from "./app-store";
 import { applyMutation, createMutation, type AppRepository, type AppSnapshot } from "./app-repository";
 import { createInitialAppState } from "@/lib/app-state";
 import { appendEvents, removeEvents } from "@/lib/event-mutations";
@@ -19,12 +19,50 @@ function setup() {
     loadAll: async () => remote,
   };
   let view = remote;
-  const listener = (app: AppState) => { view = app; };
+  let latestStatus: StoreStatus = { pending: 0, error: null, ready: false, fromCache: true };
+  const listener = (app: AppState, status: StoreStatus) => { view = app; latestStatus = status; };
   const store = new AppStore(repository, remote, persistence, "user:family", listener);
-  return { store, repository, persistence, storage, listener, callback: () => callback, view: () => view };
+  return { store, repository, persistence, storage, listener, callback: () => callback, view: () => view, status: () => latestStatus };
 }
 
 describe("durable app storage", () => {
+  it("does not mark cached startup data ready until the server snapshot arrives", () => {
+    const cached = createInitialAppState();
+    const server = appendEvents(createInitialAppState(), [milk]);
+    let callback: (snapshot: AppSnapshot) => void = () => {};
+    let view = cached;
+    let status: StoreStatus = { pending: 0, error: null, ready: false, fromCache: true };
+    const repository: AppRepository = {
+      subscribe: (listener) => {
+        callback = listener;
+        listener({ app: cached, fromCache: true, completeHistory: true });
+        return () => {};
+      },
+      commit: vi.fn(async (mutation) => mutation),
+      loadAll: async () => server,
+    };
+    const persistence = {
+      length: 0,
+      key: () => null,
+      removeItem: () => {},
+      getItem: () => null,
+      setItem: () => {},
+    };
+    const store = new AppStore(repository, cached, persistence, "startup", (app, nextStatus) => {
+      view = app;
+      status = nextStatus;
+    });
+
+    store.start();
+    expect(status.ready).toBe(false);
+    expect(status.fromCache).toBe(true);
+
+    callback({ app: server, fromCache: false, completeHistory: true });
+    expect(status.ready).toBe(true);
+    expect(status.fromCache).toBe(false);
+    expect(view.events).toEqual([milk]);
+  });
+
   it("keeps create/edit/delete in order across an offline reload", async () => {
     const context = setup();
     vi.mocked(context.repository.commit).mockRejectedValue(new Error("offline"));
