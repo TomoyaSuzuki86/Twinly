@@ -5,6 +5,7 @@ import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
 import { FamilyAccountIconEnhancer } from "./components/FamilyAccountIconEnhancer";
 import "./index.css";
 import "./theme-polish.css";
+import "./sync-status.css";
 
 const preventDefault = (event: Event) => event.preventDefault();
 const preventMultiTouchZoom = (event: TouchEvent) => {
