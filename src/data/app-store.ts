@@ -40,7 +40,14 @@ export class AppStore {
     const stop = this.repository.subscribe((snapshot: AppSnapshot) => {
       if (this.running) { this.buffered = snapshot; return; }
       this.base = snapshot.app;
-      this.status = { ...this.status, ready: true, fromCache: snapshot.fromCache };
+      // A Firestore cache snapshot can be stale relative to another device. Keep it behind
+      // the startup skeleton and do not flush queued mutations until the server has confirmed
+      // the current family state at least once in this session.
+      this.status = {
+        ...this.status,
+        ready: this.status.ready || !snapshot.fromCache,
+        fromCache: snapshot.fromCache,
+      };
       if (!this.queue.length) this.status.error = null;
       this.emit();
       if (!this.status.error) void this.flush();
