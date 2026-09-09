@@ -15,6 +15,36 @@ type HistoryMode = {
   allHistory: boolean;
 };
 
+const SYNC_CHECKING_STYLE_ID = "twinly-sync-checking-style";
+const ensureSyncCheckingStyle = () => {
+  if (document.getElementById(SYNC_CHECKING_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = SYNC_CHECKING_STYLE_ID;
+  style.textContent = `
+    html[data-twinly-sync-checking='true'] body::before {
+      content: '同期確認中';
+      position: fixed;
+      top: max(.5rem, env(safe-area-inset-top));
+      right: 3.75rem;
+      z-index: 70;
+      pointer-events: none;
+      border: 1px solid hsl(var(--border));
+      border-radius: 9999px;
+      background: hsl(var(--card) / .94);
+      color: hsl(var(--card-foreground));
+      box-shadow: 0 2px 10px rgb(0 0 0 / .14);
+      padding: .22rem .5rem;
+      font: 600 11px/1.25 'DM Sans', 'Noto Sans JP', sans-serif;
+      letter-spacing: .01em;
+      backdrop-filter: blur(8px);
+    }
+    html[data-twinly-sync-checking='true'] header + [role='status'] {
+      display: none !important;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
 export function useAppStore(userId: string | undefined, familyId: string | undefined, allHistory: boolean,
   setApp: React.Dispatch<React.SetStateAction<AppState>>, setLoading: (value: boolean) => void) {
   const store = useRef<AppStore | null>(null);
@@ -40,6 +70,14 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   }, [identity, allHistory]);
 
   useEffect(() => {
+    ensureSyncCheckingStyle();
+    const show = Boolean(status.ready && status.checking && !status.error && status.pending === 0);
+    if (show) document.documentElement.dataset.twinlySyncChecking = "true";
+    else delete document.documentElement.dataset.twinlySyncChecking;
+    return () => { delete document.documentElement.dataset.twinlySyncChecking; };
+  }, [status.ready, status.checking, status.error, status.pending]);
+
+  useEffect(() => {
     if (!db || !userId || !familyId) return;
 
     if (initialLoadIdentity.current !== identity) {
@@ -48,8 +86,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     }
 
     // The full-screen skeleton is only for the first authoritative bootstrap. A later
-    // subscription change (for example opening settings/history/timeline) must keep the
-    // already-rendered main UI mounted while Firestore refreshes in the background.
+    // subscription change or reconnect keeps the already-rendered main UI mounted.
     setLoading(!initialLoadComplete.current);
 
     let stopped = false;
@@ -98,17 +135,34 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
       initialLoadComplete.current = true;
       setLoading(false);
     }
-    const retry = () => { void store.current?.flush(); };
+
+    const recheck = (reason: "online" | "visibility" | "pageshow") => {
+      store.current?.recheck(reason);
+      void store.current?.flush();
+    };
+    const onOnline = () => recheck("online");
+    const onVisible = () => { if (document.visibilityState === "visible") recheck("visibility"); };
+    const onPageShow = () => recheck("pageshow");
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (store.current?.hasPending) { event.preventDefault(); event.returnValue = ""; }
     };
     const refresh = () => store.current?.refresh();
     window.addEventListener("storage", refresh);
-    window.addEventListener("online", retry);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("beforeunload", beforeUnload);
-    return () => { stopped = true; stop(); stopAccessBootstrap(); store.current = null;
+    return () => {
+      stopped = true;
+      stop();
+      stopAccessBootstrap();
+      store.current = null;
       window.removeEventListener("storage", refresh);
-      window.removeEventListener("online", retry); window.removeEventListener("beforeunload", beforeUnload); };
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("beforeunload", beforeUnload);
+    };
   }, [userId, familyId, identity, effectiveAllHistory, setApp, setLoading]);
   return { store, status };
 }
