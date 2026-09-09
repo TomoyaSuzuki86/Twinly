@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type TouchEventHandler } from "react";
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
 import { callService } from "@/lib/ai";
+import { detectHorizontalSwipe, type SwipePoint } from "@/lib/horizontal-swipe";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { VoiceCommandButton } from "./VoiceCommandButton";
@@ -28,6 +29,8 @@ export function AiAdviceLauncher() {
   });
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
+  const launcherSwipeStartRef = useRef<SwipePoint | null>(null);
+  const suppressLauncherClickUntilRef = useRef(0);
 
   useEffect(() => {
     const syncTargets = () => {
@@ -139,13 +142,58 @@ export function AiAdviceLauncher() {
     void loadReview();
   };
 
+  const handleLauncherTouchStart: TouchEventHandler<HTMLButtonElement> = (event) => {
+    const touch = event.touches[0];
+    launcherSwipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  };
+
+  const handleLauncherTouchEnd: TouchEventHandler<HTMLButtonElement> = (event) => {
+    const start = launcherSwipeStartRef.current;
+    launcherSwipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+
+    const direction = detectHorizontalSwipe(start, { x: touch.clientX, y: touch.clientY });
+    if (!direction) return;
+
+    const splitLayoutActive =
+      document.documentElement.dataset.twinlyLayout === "split" &&
+      window.matchMedia("(min-width: 1180px)").matches;
+    if (splitLayoutActive) return;
+
+    const tabs = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.twinly-baby-tabs-list [role="tab"]')
+    );
+    const selectedIndex = tabs.findIndex(
+      (tab) => tab.getAttribute("data-state") === "active" || tab.getAttribute("aria-selected") === "true"
+    );
+    if (selectedIndex < 0) return;
+
+    const nextIndex = direction === "left" ? selectedIndex + 1 : selectedIndex - 1;
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) return;
+
+    suppressLauncherClickUntilRef.current = Date.now() + 500;
+    nextTab.click();
+  };
+
   const launcher = (
     <Button
       type="button"
       variant="outline"
       size="sm"
-      className="h-8 gap-1 px-2 text-xs"
-      onClick={openAdvice}
+      className="h-8 touch-pan-y select-none gap-1 px-2 text-xs"
+      onTouchStart={handleLauncherTouchStart}
+      onTouchEnd={handleLauncherTouchEnd}
+      onTouchCancel={() => { launcherSwipeStartRef.current = null; }}
+      onClick={(event) => {
+        if (Date.now() < suppressLauncherClickUntilRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        openAdvice();
+      }}
       aria-label="AIアドバイスを見る"
     >
       <Sparkles className="h-4 w-4" />
@@ -219,7 +267,7 @@ export function AiAdviceLauncher() {
                     maxLength={500}
                     disabled={busy}
                     value={question}
-                    placeholder="例：最近、日向の睡眠時間は減ってる？"
+                    placeholder="例：最近、片方の睡眠時間は減ってる？"
                     onChange={(event)=>{setQuestion(event.target.value);setAnswer(null);}}
                   />
                   <Button disabled={busy||!question.trim()} onClick={()=>void askQuestion()}>質問する</Button>
