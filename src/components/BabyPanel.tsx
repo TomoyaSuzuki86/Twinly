@@ -601,7 +601,7 @@ export function BabyPanel({
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
         <div className="flex w-full items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-muted-foreground">ログ</h3>
+          <h3 data-tutorial="logs" className="text-sm font-semibold text-muted-foreground">ログ</h3>
           <Button
             variant="outline"
             size="sm"
@@ -775,3 +775,4 @@ export function BabyPanel({
     </Card>
   );
 }
+

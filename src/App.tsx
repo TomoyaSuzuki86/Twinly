@@ -1,3 +1,4 @@
+import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Baby, Check, ChevronLeft, ChevronRight, Settings, Undo2 } from "lucide-react";
@@ -191,6 +192,7 @@ function SnackbarUndo({
 }
 
 export default function App() {
+  const [tutorialReplay, setTutorialReplay] = useState(0);
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const [now, setNow] = useState(() => new Date());
@@ -1320,6 +1322,7 @@ export default function App() {
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
             <div className="sticky top-0 z-40 space-y-1 bg-background">
               <header
+                data-tutorial="header"
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
                 onPointerDown={() => beginVoiceLongPress()}
@@ -1378,6 +1381,7 @@ export default function App() {
               </p>
 
               <TabsList
+                data-tutorial="babies"
                 className={`twinly-baby-tabs-list grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
@@ -1386,6 +1390,7 @@ export default function App() {
               >
                 <TabsTrigger
                   value="A"
+                  data-tutorial="baby-A"
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("A")}
                   onPointerDown={() => beginVoiceLongPress("A")}
@@ -1552,7 +1557,16 @@ export default function App() {
         type={modal?.kind === "sleepTime" ? modal.type : "sleepStart"}
         onSave={saveSleepEventAt}
       />
+      <IntroTutorial
+        key={`tutorial:${authUser.uid}`}
+        uid={authUser.uid}
+        ready={syncStatus.ready && Boolean(familyAccess)}
+        blocked={Boolean(modal) || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
+        replay={tutorialReplay}
+        names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+      />
       <SettingsModal
+        onReplayTutorial={() => { setModal(null); setTutorialReplay(value => value + 1); }}
         open={modal?.kind === "settings"}
         onOpenChange={(open) => !open && setModal(null)}
         app={app}
@@ -1680,3 +1694,4 @@ export default function App() {
     </AppContainer>
   );
 }
+
