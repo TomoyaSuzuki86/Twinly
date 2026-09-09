@@ -7,6 +7,7 @@ import type { AppMutation, AppRepository, AppSnapshot } from "./app-repository";
 
 const localMilk: LogEvent = { id: "local", babyId: "A", type: "milk", timestamp: 2_000, milkMl: 120 };
 const remoteMilk: LogEvent = { id: "remote", babyId: "B", type: "milk", timestamp: 3_000, milkMl: 160 };
+const localDiaper: LogEvent = { id: "local-diaper", babyId: "A", type: "diaper", timestamp: 4_000, diaperSizeUsed: "新生児" };
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -68,6 +69,38 @@ describe("AppStore resilient synchronization", () => {
     pending.resolve();
     await vi.waitFor(() => expect(context.status().pending).toBe(0));
     expect(context.view().events.map((event) => event.id)).toEqual(expect.arrayContaining(["local", "remote"]));
+    stop();
+  });
+
+  it("does not apply an in-flight relative stock change twice when its listener snapshot arrives first", async () => {
+    const initial = createInitialAppState();
+    const serverAfter = appendEvents(initial, [localDiaper]);
+    let listener: (snapshot: AppSnapshot) => void = () => {};
+    const pending = deferredCommit();
+    const repository: AppRepository = {
+      subscribe: (next) => {
+        listener = next;
+        next({ app: initial, fromCache: false, completeHistory: true });
+        return () => {};
+      },
+      commit: pending.commit,
+      loadAll: async () => serverAfter,
+    };
+    const context = createStore(repository, initial);
+    const stop = context.store.start();
+
+    context.store.update((app) => appendEvents(app, [localDiaper]));
+    await vi.waitFor(() => expect(pending.commit).toHaveBeenCalledTimes(1));
+    listener({ app: serverAfter, fromCache: false, completeHistory: true });
+
+    expect(context.view().profiles.A.diaperStockBySize).toEqual(serverAfter.profiles.A.diaperStockBySize);
+    expect(context.view().profiles.B.diaperStockBySize).toEqual(serverAfter.profiles.B.diaperStockBySize);
+    expect(context.status().pending).toBe(1);
+
+    pending.resolve();
+    await vi.waitFor(() => expect(context.status().pending).toBe(0));
+    expect(context.view().profiles.A.diaperStockBySize).toEqual(serverAfter.profiles.A.diaperStockBySize);
+    expect(context.view().profiles.B.diaperStockBySize).toEqual(serverAfter.profiles.B.diaperStockBySize);
     stop();
   });
 
