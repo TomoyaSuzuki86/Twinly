@@ -1,7 +1,7 @@
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, ChevronLeft, ChevronRight, Settings, Undo2 } from "lucide-react";
+import { Baby, Check, ChevronLeft, ChevronRight, HelpCircle, Settings, Undo2 } from "lucide-react";
 import {
   GoogleAuthProvider,
   isSignInWithEmailLink,
@@ -33,6 +33,7 @@ import { SleepRecordModal } from "./components/SleepRecordModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
+import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { AiTools } from "./components/AiTools";
@@ -258,6 +259,7 @@ export default function App() {
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [timelineModalOpen, setTimelineModalOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{
     babyId: BabyId;
     type: "milk" | "diaper" | "sleep";
@@ -419,6 +421,7 @@ export default function App() {
         setFamilyMembers([]);
         setApp(createEmptyState());
         setModal(null);
+        setHelpModalOpen(false);
         setHistoryModal(null);
         setUndo({ open: false });
         setAuthUser(user);
@@ -938,6 +941,7 @@ export default function App() {
   const handleSignOut = async () => {
     if (!auth) return;
     setAccountModalOpen(false);
+    setHelpModalOpen(false);
     await removePushSubscriptionFromFirestore(authUser);
     await signOut(auth);
   };
@@ -1347,6 +1351,18 @@ export default function App() {
                     onCommand={handleVoiceCommand}
                     onMessage={showVoiceMessage}
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(event) => { event.stopPropagation(); setHelpModalOpen(true); }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    aria-label="help"
+                    title="使い方・ヘルプ"
+                  >
+                    <HelpCircle className="h-5 w-5" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                     <Settings className="h-5 w-5" />
                   </Button>
@@ -1561,12 +1577,20 @@ export default function App() {
         key={`tutorial:${authUser.uid}`}
         uid={authUser.uid}
         ready={syncStatus.ready && Boolean(familyAccess)}
-        blocked={Boolean(modal) || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
+        blocked={Boolean(modal) || helpModalOpen || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
         replay={tutorialReplay}
         names={[app.profiles.A.displayName, app.profiles.B.displayName]}
       />
+      <HelpModal
+        open={helpModalOpen}
+        onOpenChange={setHelpModalOpen}
+        names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+        onReplayTutorial={() => {
+          setHelpModalOpen(false);
+          setTutorialReplay((value) => value + 1);
+        }}
+      />
       <SettingsModal
-        onReplayTutorial={() => { setModal(null); setTutorialReplay(value => value + 1); }}
         open={modal?.kind === "settings"}
         onOpenChange={(open) => !open && setModal(null)}
         app={app}
@@ -1694,4 +1718,3 @@ export default function App() {
     </AppContainer>
   );
 }
-
