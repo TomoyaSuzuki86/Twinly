@@ -293,7 +293,7 @@ export const parseVoiceCommand = (
     "poop",
   ]);
   const isWake = includesAny(normalizedText, ["起床", "起きました", "起きた", "覚醒", "おはよう"]);
-  const isSleepStart = includesAny(normalizedText, ["入眠", "寝ました", "寝た", "お休み", "おやすみ"]);
+  const isSleepStart = includesAny(normalizedText, ["入眠", "睡眠", "寝ました", "寝た", "お休み", "おやすみ"]);
 
   if (isDailyNote) {
     if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
