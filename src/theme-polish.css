@@ -71,6 +71,17 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
   width: 100% !important;
 }
 
+/* Keep the compact sleep percentage readable on both wake and sleep colors, including Night. */
+.twinly-primary-action-dock-button[data-dock-action="sleep"][aria-checked="true"] .twinly-primary-action-dock-meta {
+  color: hsl(var(--gauge-sleep-on)) !important;
+  opacity: 0.9;
+}
+
+.twinly-primary-action-dock-button[data-dock-action="sleep"][aria-checked="false"] .twinly-primary-action-dock-meta {
+  color: hsl(var(--gauge-wake-on)) !important;
+  opacity: 0.9;
+}
+
 /* Keep morphing care buttons visually beneath the sticky header/twin tabs while they move upward. */
 .twinly-primary-action-morph-layer {
   z-index: 35 !important;

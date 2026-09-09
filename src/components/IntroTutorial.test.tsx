@@ -42,7 +42,7 @@ const LiveUi = ({ onLiveSleep }: { onLiveSleep?: () => void }) => <>
   <div className="twinly-baby-tabs-content" data-state="active">
     <button aria-label="食事を記録">食事</button>
     <button role="switch" aria-checked="false" onClick={onLiveSleep}>実画面の睡眠</button>
-    <button data-tutorial="baby-A">奏汰</button>
+    <button data-tutorial="baby-A">1人目</button>
     <div data-tutorial="logs">ログ</div>
   </div>
   <header data-tutorial="header">Twinly</header>
@@ -92,7 +92,7 @@ describe("IntroTutorial", () => {
     next();
 
     openTutorialSleepTime();
-    expect(screen.getByText("奏汰: 入眠時刻")).toBeTruthy();
+    expect(screen.getByText("赤ちゃん: 入眠時刻")).toBeTruthy();
     fireEvent.click(screen.getByText("記録する"));
 
     expect(screen.getByText("時刻設定まで完了")).toBeTruthy();
@@ -119,17 +119,24 @@ describe("IntroTutorial", () => {
     expect(screen.getByText(/実際のログは一切変更されていません/)).toBeTruthy();
   });
 
-  it("allows replay after skipping and supports users who already completed", async () => {
+  it("skips only the current step", async () => {
+    setup();
+    await screen.findByText("まずは、記録する子を選ぶ");
+
+    fireEvent.click(screen.getByText("スキップ"));
+
+    expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
+    expect(screen.getByText("2 / 11")).toBeTruthy();
+    expect(finishTutorial).not.toHaveBeenCalled();
+  });
+
+  it("allows replay after completion", async () => {
     vi.mocked(shouldShowTutorial).mockResolvedValue(false);
     const view = render(<IntroTutorial {...props} />);
     await waitFor(() => expect(shouldShowTutorial).toHaveBeenCalled());
     expect(screen.queryByRole("dialog")).toBeNull();
 
     view.rerender(<IntroTutorial {...props} replay={1} />);
-    fireEvent.click(await screen.findByText("スキップ"));
-    expect(finishTutorial).toHaveBeenCalledWith("parent-one", "skipped");
-
-    view.rerender(<IntroTutorial {...props} replay={2} />);
     expect(await screen.findByText("まずは、記録する子を選ぶ")).toBeTruthy();
   });
 });
