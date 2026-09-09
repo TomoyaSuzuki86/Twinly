@@ -71,6 +71,10 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
   width: 100% !important;
 }
 
+/* Keep morphing care buttons visually beneath the sticky header/twin tabs while they move upward. */
+.twinly-primary-action-morph-layer {
+  z-index: 35 !important;
+}
 
 /* Wide twin split layout */
 @media (min-width: 1180px) {

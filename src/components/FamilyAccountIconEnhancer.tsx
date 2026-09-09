@@ -15,12 +15,16 @@ type PrimaryActionSource = {
   button: HTMLButtonElement;
   fill: HTMLElement | null;
 };
-
-type MorphRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+type MorphRect = { left: number; top: number; width: number; height: number };
+type MorphGroup = {
+  id: string;
+  panel: HTMLElement;
+  sources: PrimaryActionSource[];
+};
+type MorphEntry = {
+  groupId: string;
+  source: PrimaryActionSource;
+  clone: HTMLButtonElement;
 };
 
 const actionTestIds: Record<PrimaryActionKey, string> = {
@@ -29,19 +33,26 @@ const actionTestIds: Record<PrimaryActionKey, string> = {
   sleep: "sleep-gauge-fill",
 };
 
-const getPrimaryActionSources = (): PrimaryActionSource[] => {
-  const activePanel = document.querySelector<HTMLElement>(
-    '.twinly-baby-tabs-content[data-state="active"]'
-  );
-  if (!activePanel) return [];
-
-  return (Object.entries(actionTestIds) as [PrimaryActionKey, string][])
+const getPanelSources = (panel: HTMLElement): PrimaryActionSource[] =>
+  (Object.entries(actionTestIds) as [PrimaryActionKey, string][])
     .map(([key, testId]) => {
-      const fill = activePanel.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+      const fill = panel.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
       const button = fill?.closest("button");
       return button instanceof HTMLButtonElement ? { key, button, fill } : null;
     })
     .filter((source): source is PrimaryActionSource => Boolean(source));
+
+const getMorphGroups = (splitLayoutActive: boolean): MorphGroup[] => {
+  const panels = Array.from(document.querySelectorAll<HTMLElement>(".twinly-baby-tabs-content"));
+  return panels
+    .map((panel, index) => ({ panel, index }))
+    .filter(({ panel }) => splitLayoutActive || panel.dataset.state === "active")
+    .map(({ panel, index }) => ({
+      id: `panel-${index}`,
+      panel,
+      sources: getPanelSources(panel),
+    }))
+    .filter((group) => group.sources.length >= 2);
 };
 
 const stripTestIds = (element: Element) => {
@@ -80,8 +91,8 @@ const prepareMorphClone = (source: PrimaryActionSource) => {
   const ariaLabel = source.button.getAttribute("aria-label") ?? "";
   const percentMatch = ariaLabel.match(/(\d+)%/);
 
-  // 無料版はゲージ情報そのものを提供しないため、コンパクト表示では
-  // 「空ゲージ」に見せずボタン面を満タンとして扱う。
+  // Free mode deliberately hides gauge values. Its compact button should therefore
+  // look fully filled rather than looking like a zero-percent gauge.
   if (clonedFill && !percentMatch) clonedFill.style.width = "100%";
 
   if (source.key === "sleep") {
@@ -115,7 +126,6 @@ const prepareMorphClone = (source: PrimaryActionSource) => {
   stripTestIds(clone);
   clone.tabIndex = -1;
   clone.style.pointerEvents = "none";
-
   clone.addEventListener("contextmenu", (event) => event.preventDefault());
 
   if (source.key === "sleep") {
@@ -144,12 +154,10 @@ const prepareMorphClone = (source: PrimaryActionSource) => {
     event.preventDefault();
     source.button.click();
   });
-
   return clone;
 };
 
 const primaryActionMorphCss = `
-/* The previous prototype stays installed in main.tsx, but this morph supersedes it. */
 .twinly-primary-action-dock { display: none !important; }
 
 .twinly-primary-action-morph-layer {
@@ -263,6 +271,23 @@ const primaryActionMorphCss = `
   opacity: .72;
 }
 
+@media (min-width: 1180px) {
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] {
+    font-size: 12px !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="care-content"] > :first-child,
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="sleep-state"] > :first-child {
+    font-size: 12px !important;
+    gap: 3px !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .twinly-primary-action-morph-button [data-morph-secondary="true"],
   .twinly-primary-action-morph-percent {
@@ -281,7 +306,6 @@ export function FamilyAccountIconEnhancer() {
 
     let unsubscribeUser = () => {};
     let unsubscribeMember = () => {};
-
     const unsubscribeAuth = onAuthStateChanged(currentAuth, (user) => {
       unsubscribeUser();
       unsubscribeMember();
@@ -295,7 +319,6 @@ export function FamilyAccountIconEnhancer() {
           setLabel("");
           return;
         }
-
         unsubscribeMember = onSnapshot(doc(currentDb, "families", familyId, "members", user.uid), (memberSnapshot) => {
           setLabel(initialFromNickname(memberSnapshot.data()?.nickname) || "?");
         });
@@ -311,7 +334,6 @@ export function FamilyAccountIconEnhancer() {
 
   useEffect(() => {
     if (!label) return;
-
     const sync = () => {
       const button = document.querySelector<HTMLButtonElement>('button[aria-label="アカウントと家族を開く"]');
       if (!button) return;
@@ -346,83 +368,79 @@ export function FamilyAccountIconEnhancer() {
     layer.setAttribute("aria-hidden", "true");
     document.body.appendChild(layer);
 
-    let sources: PrimaryActionSource[] = [];
-    let clones = new Map<PrimaryActionKey, HTMLButtonElement>();
+    let entries = new Map<string, MorphEntry>();
     let signature = "";
     let frame = 0;
 
+    const entryKey = (groupId: string, key: PrimaryActionKey) => `${groupId}:${key}`;
+
     const restoreSources = () => {
-      sources.forEach(({ button }) => {
-        button.style.removeProperty("opacity");
-        button.style.removeProperty("pointer-events");
+      entries.forEach(({ source }) => {
+        source.button.style.removeProperty("opacity");
+        source.button.style.removeProperty("pointer-events");
       });
     };
 
     const clearMorph = () => {
       restoreSources();
-      clones.forEach((clone) => clone.remove());
-      clones = new Map();
-      sources = [];
+      entries.forEach(({ clone }) => clone.remove());
+      entries = new Map();
       signature = "";
     };
 
-    const sourceSignature = (nextSources: PrimaryActionSource[]) =>
-      nextSources
-        .map((source) =>
-          [
-            source.key,
-            source.button.getAttribute("aria-label") ?? "",
-            source.button.className,
-            source.button.disabled ? "1" : "0",
-            source.fill?.getAttribute("style") ?? "",
-            source.button.textContent?.replace(/\s+/g, " ").trim() ?? "",
-          ].join("|")
+    const groupsSignature = (groups: MorphGroup[]) =>
+      groups
+        .flatMap((group) =>
+          group.sources.map((source) =>
+            [
+              group.id,
+              source.key,
+              source.button.getAttribute("aria-label") ?? "",
+              source.button.className,
+              source.button.disabled ? "1" : "0",
+              source.fill?.getAttribute("style") ?? "",
+              source.button.textContent?.replace(/\s+/g, " ").trim() ?? "",
+            ].join("|")
+          )
         )
         .join("||");
 
-    const rebuildIfNeeded = (nextSources: PrimaryActionSource[]) => {
-      const nextSignature = sourceSignature(nextSources);
-      if (
-        nextSignature === signature &&
-        sources.length === nextSources.length &&
-        sources.every((source, index) => source.button === nextSources[index]?.button)
-      ) {
-        return;
-      }
+    const rebuildIfNeeded = (groups: MorphGroup[]) => {
+      const nextSignature = groupsSignature(groups);
+      const flattened = groups.flatMap((group) => group.sources.map((source) => ({ groupId: group.id, source })));
+      const sameSources =
+        flattened.length === entries.size &&
+        flattened.every(({ groupId, source }) => entries.get(entryKey(groupId, source.key))?.source.button === source.button);
+      if (nextSignature === signature && sameSources) return;
 
-      restoreSources();
-      clones.forEach((clone) => clone.remove());
-      clones = new Map();
-      sources = nextSources;
+      clearMorph();
       signature = nextSignature;
-
-      nextSources.forEach((source) => {
+      flattened.forEach(({ groupId, source }) => {
         const clone = prepareMorphClone(source);
+        clone.dataset.morphGroup = groupId;
         clone.style.opacity = "0";
         layer.appendChild(clone);
-        clones.set(source.key, clone);
+        entries.set(entryKey(groupId, source.key), { groupId, source, clone });
       });
     };
 
     const hideSource = (source: PrimaryActionSource | undefined, hidden: boolean) => {
       if (!source) return;
-      if (hidden) {
-        source.button.style.opacity = "0";
-        source.button.style.pointerEvents = "none";
-      } else {
-        source.button.style.removeProperty("opacity");
-        source.button.style.removeProperty("pointer-events");
-      }
+      const nextOpacity = hidden ? "0" : "";
+      const nextPointerEvents = hidden ? "none" : "";
+      if (source.button.style.opacity !== nextOpacity) source.button.style.opacity = nextOpacity;
+      if (source.button.style.pointerEvents !== nextPointerEvents) source.button.style.pointerEvents = nextPointerEvents;
     };
 
     const setCloneState = (
+      groupId: string,
       key: PrimaryActionKey,
       rect: MorphRect,
       progress: number,
       compactProgress: number,
       interactive: boolean
     ) => {
-      const clone = clones.get(key);
+      const clone = entries.get(entryKey(groupId, key))?.clone;
       if (!clone) return;
       applyRect(clone, rect);
       clone.style.opacity = progress > 0.015 ? "1" : "0";
@@ -434,99 +452,94 @@ export function FamilyAccountIconEnhancer() {
     const refresh = () => {
       const stickyShell = document.querySelector<HTMLElement>(".twinly-baby-tabs > .sticky");
       const tabs = document.querySelector<HTMLElement>(".twinly-baby-tabs");
-      const nextSources = getPrimaryActionSources();
+      if (!stickyShell || !tabs) {
+        clearMorph();
+        return;
+      }
+
       const splitLayoutActive =
         document.documentElement.dataset.twinlyLayout === "split" &&
         window.matchMedia("(min-width: 1180px)").matches;
-
-      if (!stickyShell || !tabs || nextSources.length < 2 || splitLayoutActive) {
+      const groups = getMorphGroups(splitLayoutActive);
+      if (!groups.length) {
         clearMorph();
         return;
       }
 
-      rebuildIfNeeded(nextSources);
-
-      const byKey = new Map(nextSources.map((source) => [source.key, source]));
-      const food = byKey.get("food");
-      const diaper = byKey.get("diaper");
-      const sleep = byKey.get("sleep");
-      if (!food || !diaper) {
-        clearMorph();
-        return;
-      }
-
-      const foodRect = rectFromDomRect(food.button.getBoundingClientRect());
-      const diaperRect = rectFromDomRect(diaper.button.getBoundingClientRect());
-      const sleepRect = sleep ? rectFromDomRect(sleep.button.getBoundingClientRect()) : null;
+      rebuildIfNeeded(groups);
       const stickyBottom = stickyShell.getBoundingClientRect().bottom;
       const tabsRect = tabs.getBoundingClientRect();
 
-      // Phase 1: 食事・おむつが上へ移動しながら縮小。
-      // Phase 2: 2つを左へ詰め、睡眠が右側へ合流して3等分になる。
-      const intrusion = stickyBottom - foodRect.top;
-      const phase1 = clamp01((intrusion + 4) / 88);
-      const phase2 = sleep ? clamp01((intrusion - 34) / 102) : 0;
+      groups.forEach((group) => {
+        const byKey = new Map(group.sources.map((source) => [source.key, source]));
+        const food = byKey.get("food");
+        const diaper = byKey.get("diaper");
+        const sleep = byKey.get("sleep");
+        if (!food || !diaper) return;
 
-      const horizontalPadding = 6;
-      const gap = 6;
-      const availableWidth = Math.max(180, tabsRect.width - horizontalPadding * 2);
-      const halfWidth = (availableWidth - gap) / 2;
-      const thirdWidth = (availableWidth - gap * 2) / 3;
-      const targetTop = stickyBottom + 3;
+        const foodRect = rectFromDomRect(food.button.getBoundingClientRect());
+        const diaperRect = rectFromDomRect(diaper.button.getBoundingClientRect());
+        const sleepRect = sleep ? rectFromDomRect(sleep.button.getBoundingClientRect()) : null;
+        const bounds = splitLayoutActive ? group.panel.getBoundingClientRect() : tabsRect;
 
-      const phase1FoodTarget: MorphRect = {
-        left: tabsRect.left + horizontalPadding,
-        top: targetTop,
-        width: halfWidth,
-        height: 64,
-      };
-      const phase1DiaperTarget: MorphRect = {
-        left: tabsRect.left + horizontalPadding + halfWidth + gap,
-        top: targetTop,
-        width: halfWidth,
-        height: 64,
-      };
+        // Phase 1: food + diaper move upward and shrink.
+        // Phase 2: they move left while sleep rises into the third slot.
+        const intrusion = stickyBottom - foodRect.top;
+        const phase1 = clamp01((intrusion + 4) / 88);
+        const phase2 = sleep ? clamp01((intrusion - 34) / 102) : phase1;
 
-      const finalTargets: Record<PrimaryActionKey, MorphRect> = {
-        food: {
-          left: tabsRect.left + horizontalPadding,
+        const horizontalPadding = splitLayoutActive ? 4 : 6;
+        const gap = splitLayoutActive ? 4 : 6;
+        const availableWidth = Math.max(150, bounds.width - horizontalPadding * 2);
+        const halfWidth = (availableWidth - gap) / 2;
+        const thirdWidth = (availableWidth - gap * 2) / 3;
+        const targetTop = stickyBottom + 3;
+        const left = bounds.left + horizontalPadding;
+
+        const phase1FoodTarget: MorphRect = { left, top: targetTop, width: halfWidth, height: 64 };
+        const phase1DiaperTarget: MorphRect = {
+          left: left + halfWidth + gap,
+          top: targetTop,
+          width: halfWidth,
+          height: 64,
+        };
+
+        const finalFood: MorphRect = {
+          left,
+          top: targetTop,
+          width: sleep ? thirdWidth : halfWidth,
+          height: 58,
+        };
+        const finalDiaper: MorphRect = {
+          left: left + (sleep ? thirdWidth : halfWidth) + gap,
+          top: targetTop,
+          width: sleep ? thirdWidth : halfWidth,
+          height: 58,
+        };
+        const finalSleep: MorphRect = {
+          left: left + (thirdWidth + gap) * 2,
           top: targetTop,
           width: thirdWidth,
           height: 58,
-        },
-        diaper: {
-          left: tabsRect.left + horizontalPadding + thirdWidth + gap,
-          top: targetTop,
-          width: thirdWidth,
-          height: 58,
-        },
-        sleep: {
-          left: tabsRect.left + horizontalPadding + (thirdWidth + gap) * 2,
-          top: targetTop,
-          width: thirdWidth,
-          height: 58,
-        },
-      };
+        };
 
-      const foodPhase1Rect = interpolateRect(foodRect, phase1FoodTarget, phase1);
-      const diaperPhase1Rect = interpolateRect(diaperRect, phase1DiaperTarget, phase1);
-      const foodMorphRect = interpolateRect(foodPhase1Rect, finalTargets.food, phase2);
-      const diaperMorphRect = interpolateRect(diaperPhase1Rect, finalTargets.diaper, phase2);
-      const sleepMorphRect = sleepRect
-        ? interpolateRect(sleepRect, finalTargets.sleep, phase2)
-        : finalTargets.sleep;
+        const foodPhase1Rect = interpolateRect(foodRect, phase1FoodTarget, phase1);
+        const diaperPhase1Rect = interpolateRect(diaperRect, phase1DiaperTarget, phase1);
+        const foodMorphRect = interpolateRect(foodPhase1Rect, finalFood, phase2);
+        const diaperMorphRect = interpolateRect(diaperPhase1Rect, finalDiaper, phase2);
+        const sleepMorphRect = sleepRect ? interpolateRect(sleepRect, finalSleep, phase2) : finalSleep;
+        const finalInteractive = phase2 >= 0.96;
 
-      const finalInteractive = phase2 >= 0.96;
+        setCloneState(group.id, "food", foodMorphRect, phase1, Math.max(phase1, phase2), finalInteractive);
+        setCloneState(group.id, "diaper", diaperMorphRect, phase1, Math.max(phase1, phase2), finalInteractive);
+        if (sleep && sleepRect) {
+          setCloneState(group.id, "sleep", sleepMorphRect, phase2, phase2, finalInteractive);
+        }
 
-      setCloneState("food", foodMorphRect, phase1, Math.max(phase1, phase2), finalInteractive);
-      setCloneState("diaper", diaperMorphRect, phase1, Math.max(phase1, phase2), finalInteractive);
-      if (sleep && sleepRect) {
-        setCloneState("sleep", sleepMorphRect, phase2, phase2, finalInteractive);
-      }
-
-      hideSource(food, phase1 > 0.015);
-      hideSource(diaper, phase1 > 0.015);
-      hideSource(sleep, phase2 > 0.015);
+        hideSource(food, phase1 > 0.015);
+        hideSource(diaper, phase1 > 0.015);
+        hideSource(sleep, phase2 > 0.015);
+      });
     };
 
     const scheduleRefresh = () => {
