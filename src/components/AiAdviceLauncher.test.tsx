@@ -36,4 +36,26 @@ describe('AI advice follow-up',()=>{
     expect(await screen.findByText('直近の集計では大きな変化はありません。')).toBeInTheDocument();
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
+
+  it('switches twins when a horizontal swipe starts on the AI advice launcher',async()=>{
+    mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
+    const switchToSecond=vi.fn();
+
+    render(<div>
+      <div className="twinly-baby-tabs-list">
+        <button role="tab" data-state="active">1人目</button>
+        <button role="tab" data-state="inactive" onClick={switchToSecond}>2人目</button>
+      </div>
+      <div className="twinly-baby-tabs-content" data-state="active">
+        <div><button aria-label="週間タイムラインを開く">timeline</button></div>
+      </div>
+      <AiAdviceLauncher/>
+    </div>);
+
+    const launcher=await screen.findByRole('button',{name:'AIアドバイスを見る'});
+    fireEvent.touchStart(launcher,{touches:[{clientX:140,clientY:30}]});
+    fireEvent.touchEnd(launcher,{changedTouches:[{clientX:50,clientY:34}]});
+
+    expect(switchToSecond).toHaveBeenCalledTimes(1);
+  });
 });
