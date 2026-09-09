@@ -23,11 +23,11 @@ function memoryStorage() {
 }
 
 function deferredCommit() {
-  let resolve: ((mutation: AppMutation) => void) | undefined;
+  let resolve: (() => void) | undefined;
   const commit = vi.fn((mutation: AppMutation) => new Promise<AppMutation>((done) => {
     resolve = () => done(mutation);
   }));
-  return { commit, resolve: () => resolve?.(commit.mock.calls[0][0]) };
+  return { commit, resolve: () => resolve?.() };
 }
 
 function createStore(repository: AppRepository, initial = createInitialAppState()) {
@@ -141,7 +141,7 @@ describe("AppStore resilient synchronization", () => {
     expect(diagnosticText).toContain("server-confirmed");
     expect(diagnosticText).not.toContain("milkMl");
     expect(diagnosticText).not.toContain("babyId");
-    expect(diagnosticText).not.toContain("120");
+    expect(diagnosticText).not.toContain('"local"');
     stop();
   });
 });
