@@ -34,12 +34,21 @@ const targetResolvers: Array<() => HTMLElement | null> = [
   () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
   () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
   () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="logs"]') ?? null,
+  () => null,
+  () => null,
   () => document.querySelector<HTMLElement>('[aria-label="settings"]'),
 ];
 
 const TOTAL_STEPS = targetResolvers.length;
 const scrollTargetIntoView = new Set([1, 7]);
 const voiceSteps = new Set([4, 5]);
+
+const premiumShots = [
+  { src: "/tutorial/premium-theme.webp", label: "テーマ", alt: "Twinlyのテーマ画面" },
+  { src: "/tutorial/premium-ai.webp", label: "AIアドバイス", alt: "TwinlyのAIアドバイス画面" },
+  { src: "/tutorial/premium-sakura.webp", label: "さくら", alt: "Twinlyのさくらテーマ画面" },
+  { src: "/tutorial/premium-sun.webp", label: "ひだまり", alt: "Twinlyのひだまりテーマ画面" },
+] as const;
 
 const formatClock = (timestamp: number) =>
   new Intl.DateTimeFormat("ja-JP", {
@@ -389,6 +398,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "ヘッダーから、2人へまとめて入力",
     "声では、いろいろな記録ができます",
     "記録は、あとから直せます",
+    "タイムラインで、1週間を見渡す",
+    "もっと便利に使いたいときは",
     "最後に、設定を確認",
   ];
 
@@ -400,7 +411,9 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     `${names[0]}の名前を長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。${names[0]}だけに入る結果を画面上で確認しますが、実際のログには保存しません。`,
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。名前を言わなくても、同じ内容が2人へ同時に入ることと、相対時刻も一緒に指定できることを練習します。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応し、「30分前」「8時30分」のように時刻まで一緒に話せます。",
-    "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。タイムラインでも左右スワイプで表示する子を切り替えられます。",
+    "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。",
+    "タイムラインでは、1週間のミルク・離乳食・おむつ・睡眠を24時間軸でまとめて確認できます。生活リズムをざっと振り返りたいときに便利です。",
+    "Twinlyには、画面テーマの追加やAIアドバイスなどの有料機能もあります。必要になったときに試せる程度に覚えておけば大丈夫です。",
     "設定では、2人の表示名・音声入力名・生年月日・アイコン・ミルクや睡眠の目安などを自分たちに合わせられます。最後にプロフィール設定を一度確認しておきましょう。",
   ];
 
@@ -415,13 +428,13 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   ];
 
   const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5;
-  const interactiveSpotlight = step === 4 || step === 5 || step === 8;
+  const interactiveSpotlight = step === 4 || step === 5 || step === 10;
   const isVoiceStep = voiceSteps.has(step);
 
   const spotlightLabel =
     step === 4 ? `${names[0]}の音声入力を練習` :
     step === 5 ? "2人同時の音声入力を練習" :
-    step === 8 ? "設定を開く" :
+    step === 10 ? "設定を開く" :
     "チュートリアル対象";
 
   const skipPractice = () => {
@@ -432,7 +445,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   };
 
   const completeAndOpenSettings = () => {
-    const settingsButton = targetResolvers[8]?.();
+    const settingsButton = targetResolvers[10]?.();
     finish("completed", () => {
       window.setTimeout(() => settingsButton?.click(), 0);
     });
@@ -473,7 +486,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               voiceLastTapRef.current = 0;
             }}
             onClick={() => {
-              if (step === 8) completeAndOpenSettings();
+              if (step === 10) completeAndOpenSettings();
             }}
             onContextMenu={(event) => event.preventDefault()}
           />}
@@ -631,6 +644,47 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               </p>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
+                <div className="overflow-hidden rounded-xl border bg-[#020817] shadow-sm">
+                  <img
+                    src="/tutorial/timeline.webp"
+                    alt="1週間の育児記録を24時間軸で表示したタイムライン"
+                    className="mx-auto block max-h-[44vh] w-auto max-w-full object-contain"
+                  />
+                </div>
+                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                  <div className="rounded-lg border bg-muted/40 px-3 py-2">
+                    <span className="block font-bold">紫の帯 = 睡眠</span>
+                    <span className="mt-1 block text-muted-foreground">睡眠と起床の流れを1週間で確認</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/40 px-3 py-2">
+                    <span className="block font-bold">下部 = 1日の睡眠合計</span>
+                    <span className="mt-1 block text-muted-foreground">「12時間6分」など日ごとの合計を表示</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/40 px-3 py-2">
+                    <span className="block font-bold">左右スワイプ</span>
+                    <span className="mt-1 block text-muted-foreground">{names[0]}と{names[1]}をすぐ切り替え</span>
+                  </div>
+                </div>
+              </div>}
+
+              {step === 9 && <div className="twinly-tutorial-demo">
+                <div className="grid grid-cols-2 gap-2">
+                  {premiumShots.map((shot) => <figure key={shot.src} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <div className="aspect-[0.7] overflow-hidden bg-muted">
+                      <img src={shot.src} alt={shot.alt} className="h-full w-full object-cover object-top" />
+                    </div>
+                    <figcaption className="px-2 py-1.5 text-center text-[11px] font-semibold">{shot.label}</figcaption>
+                  </figure>)}
+                </div>
+                <div className="mt-3 rounded-xl border bg-muted/40 p-3 text-sm leading-relaxed">
+                  <span className="font-bold">テーマ変更やAI機能も使えます。</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    気になったら、設定の「料金とプラン」から1週間無料で試せます。今すぐ登録する必要はありません。
+                  </span>
+                </div>
+              </div>}
+
+              {step === 10 && <div className="twinly-tutorial-demo">
                 <div className="flex items-center justify-center gap-2 text-sm font-semibold">
                   <SettingsIcon size={16} aria-hidden="true" />プロフィール設定を仕上げる
                 </div>
