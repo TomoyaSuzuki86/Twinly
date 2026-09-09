@@ -1,5 +1,14 @@
-import type { AppState } from "@/types";
-import { applyMutation, createMutation, sameValue, type AppMutation, type AppRepository, type AppSnapshot } from "./app-repository";
+import type { AppState, LogEvent } from "@/types";
+import {
+  applyMutation,
+  createMutation,
+  isCommitResult,
+  sameValue,
+  type AppMutation,
+  type AppRepository,
+  type AppSnapshot,
+  type SyncConflict,
+} from "./app-repository";
 
 export type SyncConnectionState = "connecting" | "online" | "retrying";
 export type StoreStatus = {
@@ -10,6 +19,7 @@ export type StoreStatus = {
   checking?: boolean;
   connection?: SyncConnectionState;
   lastServerConfirmedAt?: number | null;
+  conflicts?: SyncConflict[];
 };
 
 type SyncCheckReason = "start" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
@@ -18,23 +28,41 @@ type DiagnosticEntry = {
   event: string;
   connection: SyncConnectionState;
   pending: number;
+  conflictCount: number;
   pendingWaitMs: number;
   fromCache: boolean;
   checking: boolean;
   lastServerConfirmedAt: number | null;
 };
+type ConflictRecord = {
+  id: string;
+  mutation: AppMutation;
+  conflicts: SyncConflict[];
+  createdAt: number;
+};
 
 const SERVER_CHECK_TIMEOUT_MS = 12_000;
 const RECONNECT_MAX_MS = 30_000;
 const DIAGNOSTIC_LIMIT = 80;
+const USER_EVENT_FIELDS: (keyof LogEvent)[] = [
+  "babyId", "type", "timestamp", "milkMl", "milkMethod", "diaperKind", "diaperSizeUsed",
+  "temperature", "weight", "height", "note",
+];
+
+const mutationHasChanges = (mutation: AppMutation | undefined) => Boolean(mutation && (mutation.events.length || mutation.settings.length));
+const setEventValue = (event: LogEvent, field: string, value: unknown) => {
+  const target = event as unknown as Record<string, unknown>;
+  if (value === undefined || value === null) delete target[field];
+  else target[field] = value;
+};
+const userEventChanged = (before: LogEvent, after: LogEvent) =>
+  USER_EVENT_FIELDS.some((field) => !sameValue(before[field], after[field]));
 
 function mutationReflected(state: AppState, mutation: AppMutation) {
   const events = new Map(state.events.map((event) => [event.id, event]));
   for (const change of mutation.events) {
     const current = events.get(change.id);
     if (!change.before && change.after) {
-      // Event IDs are unique. A newly-created ID appearing remotely means this creation landed;
-      // server-side reconciliation may legitimately adjust some fields such as stock consumption.
       if (!current) return false;
     } else if (change.before && !change.after) {
       if (current) return false;
@@ -42,8 +70,6 @@ function mutationReflected(state: AppState, mutation: AppMutation) {
   }
   for (const change of mutation.settings) {
     if (change.delta !== undefined) {
-      // Relative settings are committed atomically with their event changes. Once those events
-      // are reflected, do not apply the local delta a second time over the received base.
       if (!mutation.events.length) return false;
       continue;
     }
@@ -58,6 +84,7 @@ function mutationReflected(state: AppState, mutation: AppMutation) {
 // Persistence MUST succeed before the UI claims to accept a change.
 export class AppStore {
   private queue: AppMutation[];
+  private conflicts: ConflictRecord[];
   private base: AppState;
   private running = false;
   private stopped = false;
@@ -77,6 +104,7 @@ export class AppStore {
     checking: true,
     connection: "connecting",
     lastServerConfirmedAt: null,
+    conflicts: [],
   };
 
   constructor(private repository: AppRepository, initial: AppState,
@@ -84,23 +112,40 @@ export class AppStore {
     private onChange: (app: AppState, status: StoreStatus) => void) {
     this.base = initial;
     this.queue = this.readQueue();
+    this.conflicts = this.readConflictRecords();
     if (!Array.isArray(this.queue) || this.queue.some((item) => !item.id || !Array.isArray(item.events) || !Array.isArray(item.settings))) {
-      throw new Error("端末の未同期データを読み取れません。ブラウザのデータを消さずにバックアップしてください。");
+      throw new Error("端末の未保存データを読み取れません。ブラウザのデータを消さずに再度お試しください。");
     }
   }
 
   private readQueue(): AppMutation[] {
     const mutations: AppMutation[] = [];
     for (let i = 0; i < this.storage.length; i++) {
-      const key = this.storage.key(i);
-      if (!key?.startsWith(`${this.key}:`)) continue;
-      const raw = this.storage.getItem(key);
+      const storageKey = this.storage.key(i);
+      if (!storageKey?.startsWith(`${this.key}:`)) continue;
+      const raw = this.storage.getItem(storageKey);
       if (raw) mutations.push(JSON.parse(raw));
     }
     return mutations.sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
   }
 
+  private readConflictRecords(): ConflictRecord[] {
+    const records: ConflictRecord[] = [];
+    const prefix = `${this.key}.conflict:`;
+    for (let i = 0; i < this.storage.length; i++) {
+      const storageKey = this.storage.key(i);
+      if (!storageKey?.startsWith(prefix)) continue;
+      const raw = this.storage.getItem(storageKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as ConflictRecord;
+      if (parsed?.id && parsed.mutation && Array.isArray(parsed.conflicts)) records.push(parsed);
+    }
+    return records.sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  private conflictKey(id: string) { return `${this.key}.conflict:${id}`; }
   private syncError() { this.status.error = this.saveError ?? this.receiveError; }
+  private flattenedConflicts() { return this.conflicts.flatMap((record) => record.conflicts); }
 
   private logDiagnostic(event: string) {
     const oldest = this.queue[0]?.queuedAt;
@@ -109,6 +154,7 @@ export class AppStore {
       event,
       connection: this.status.connection ?? "connecting",
       pending: this.queue.length,
+      conflictCount: this.flattenedConflicts().length,
       pendingWaitMs: oldest ? Math.max(0, Date.now() - oldest) : 0,
       fromCache: this.status.fromCache,
       checking: Boolean(this.status.checking),
@@ -128,6 +174,7 @@ export class AppStore {
 
   refresh() {
     this.queue = this.readQueue();
+    this.conflicts = this.readConflictRecords();
     this.emit();
     this.logDiagnostic("outbox-refresh");
     void this.flush();
@@ -135,14 +182,19 @@ export class AppStore {
 
   private view() {
     const reflectedInFlight = this.inFlight && mutationReflected(this.base, this.inFlight) ? this.inFlight.id : null;
-    return this.queue.reduce((state, mutation) => {
-      if (mutation.id === reflectedInFlight) return state;
-      return applyMutation(state, mutation);
-    }, this.base);
+    const overlays = [
+      ...this.conflicts.map((record) => record.mutation),
+      ...this.queue.filter((mutation) => mutation.id !== reflectedInFlight),
+    ].sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
+    return overlays.reduce((state, mutation) => applyMutation(state, mutation), this.base);
   }
 
   private emit() {
-    if (!this.stopped) this.onChange(this.view(), { ...this.status, pending: this.queue.length });
+    if (!this.stopped) this.onChange(this.view(), {
+      ...this.status,
+      pending: this.queue.length,
+      conflicts: this.flattenedConflicts(),
+    });
   }
 
   private clearReconnectTimer() {
@@ -189,9 +241,6 @@ export class AppStore {
 
     const stop = this.repository.subscribe((snapshot: AppSnapshot) => {
       if (this.stopped) return;
-      // Receiving is independent from saving: update the remote base immediately and keep every
-      // durable local mutation overlaid until its commit succeeds (except an in-flight mutation
-      // that is already visible in the received authoritative state).
       this.base = snapshot.app;
       this.status.ready = this.status.ready || !snapshot.fromCache;
       this.status.fromCache = snapshot.fromCache;
@@ -212,7 +261,7 @@ export class AppStore {
       if (!this.saveError) void this.flush();
     }, (error) => {
       if (this.stopped) return;
-      this.receiveError = error instanceof Error ? error.message : "記録の受信接続が切れました。自動で再接続します。";
+      this.receiveError = error instanceof Error ? error.message : "通信が切れました。自動で再接続します。";
       this.status.checking = true;
       this.status.connection = "retrying";
       this.syncError();
@@ -257,14 +306,15 @@ export class AppStore {
   update(updater: (state: AppState) => AppState, options: { absoluteSettings?: boolean } = {}) {
     if (!this.status.ready) throw new Error("記録を読み込んでいます。");
     this.queue = this.readQueue();
+    this.conflicts = this.readConflictRecords();
     const before = this.view();
     const mutation = createMutation(before, updater(before), crypto.randomUUID(), {
       relativeStock: !options.absoluteSettings,
     });
     if (!mutation.events.length && !mutation.settings.length) return;
     this.repository.validate?.(mutation);
-    mutation.queuedAt = Math.max(Date.now(), ...this.queue.map((item) => (item.queuedAt ?? 0) + 1));
-    // Each operation owns a key: tabs cannot overwrite each other's entire queue.
+    const allQueuedAt = [...this.queue.map((item) => item.queuedAt ?? 0), ...this.conflicts.map((item) => item.mutation.queuedAt ?? 0)];
+    mutation.queuedAt = Math.max(Date.now(), ...allQueuedAt.map((value) => value + 1));
     this.storage.setItem(`${this.key}:${mutation.id}`, JSON.stringify(mutation));
     this.queue = this.readQueue();
     this.emit();
@@ -284,11 +334,25 @@ export class AppStore {
         const mutation = this.queue[0];
         this.inFlight = mutation;
         this.logDiagnostic("save-start");
-        const confirmed = await this.repository.commit(mutation);
+        const response = await this.repository.commit(mutation);
         if (this.stopped) return;
-        if (!mutationReflected(this.base, confirmed)) this.base = applyMutation(this.base, confirmed);
+        const result = isCommitResult(response) ? response : { confirmed: response, conflicts: [] as SyncConflict[] };
+        if (mutationHasChanges(result.confirmed) && !mutationReflected(this.base, result.confirmed)) {
+          this.base = applyMutation(this.base, result.confirmed);
+        }
         this.storage.removeItem(`${this.key}:${mutation.id}`);
+        if (result.conflicts.length && mutationHasChanges(result.unresolved)) {
+          const record: ConflictRecord = {
+            id: mutation.id,
+            mutation: { ...result.unresolved!, queuedAt: mutation.queuedAt },
+            conflicts: result.conflicts,
+            createdAt: Date.now(),
+          };
+          this.storage.setItem(this.conflictKey(record.id), JSON.stringify(record));
+          this.logDiagnostic("conflict-isolated");
+        }
         this.queue = this.readQueue();
+        this.conflicts = this.readConflictRecords();
         this.inFlight = null;
         this.saveError = null;
         this.syncError();
@@ -296,7 +360,7 @@ export class AppStore {
         this.emit();
       }
     } catch (error) {
-      this.saveError = error instanceof Error ? error.message : "保存できませんでした。通信回復後に再試行してください。";
+      this.saveError = error instanceof Error ? error.message : "保存できませんでした。通信回復後に自動で再試行します。";
       this.syncError();
       this.logDiagnostic("save-error");
       this.emit();
@@ -306,13 +370,60 @@ export class AppStore {
     }
   }
 
-  async exportAll() {
-    // Include unsynced changes in an explicit user backup, without losing remote history.
-    return this.queue.reduce((state, mutation) => applyMutation(state, mutation), await this.repository.loadAll());
+  resolveConflict(conflictId: string, choice: "local" | "remote") {
+    this.conflicts = this.readConflictRecords();
+    const record = this.conflicts.find((item) => item.conflicts.some((conflict) => conflict.id === conflictId));
+    if (!record) return;
+    const conflict = record.conflicts.find((item) => item.id === conflictId)!;
+    const mutation = structuredClone(record.mutation);
+
+    if (choice === "remote") {
+      if (conflict.kind === "event" && conflict.eventId) {
+        const index = mutation.events.findIndex((change) => change.id === conflict.eventId);
+        if (index >= 0) {
+          const change = mutation.events[index];
+          if (conflict.field === "__record__") {
+            mutation.events.splice(index, 1);
+          } else if (change.before && change.after) {
+            setEventValue(change.after, conflict.field, (change.before as unknown as Record<string, unknown>)[conflict.field]);
+            if (!userEventChanged(change.before, change.after)) mutation.events.splice(index, 1);
+          } else {
+            mutation.events.splice(index, 1);
+          }
+        }
+      } else if (conflict.kind === "setting" && conflict.path) {
+        mutation.settings = mutation.settings.filter((change) => change.path.join(".") !== conflict.path!.join("."));
+      }
+    }
+
+    const remaining = record.conflicts.filter((item) => item.id !== conflictId);
+    if (remaining.length) {
+      const updated: ConflictRecord = { ...record, mutation, conflicts: remaining };
+      this.storage.setItem(this.conflictKey(record.id), JSON.stringify(updated));
+    } else {
+      this.storage.removeItem(this.conflictKey(record.id));
+      if (mutationHasChanges(mutation)) {
+        const next: AppMutation = { ...mutation, id: crypto.randomUUID(), queuedAt: Math.max(Date.now(), (mutation.queuedAt ?? 0) + 1) };
+        this.storage.setItem(`${this.key}:${next.id}`, JSON.stringify(next));
+      }
+    }
+
+    this.queue = this.readQueue();
+    this.conflicts = this.readConflictRecords();
+    this.emit();
+    this.logDiagnostic(`conflict-resolved:${choice}`);
+    void this.flush();
   }
 
-  get hasPending() { return this.queue.length > 0; }
-  exportPending() { return { app: this.view(), pendingMutations: this.queue }; }
+  async exportAll() {
+    const remote = await this.repository.loadAll();
+    const overlays = [...this.conflicts.map((record) => record.mutation), ...this.queue]
+      .sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
+    return overlays.reduce((state, mutation) => applyMutation(state, mutation), remote);
+  }
+
+  get hasPending() { return this.queue.length > 0 || this.conflicts.length > 0; }
+  exportPending() { return { app: this.view(), pendingMutations: this.queue, conflicts: this.conflicts }; }
   exportDiagnostics() {
     try {
       const raw = this.storage.getItem(`${this.key}.diagnostics`);
@@ -320,9 +431,11 @@ export class AppStore {
     } catch { return []; }
   }
   discardPending() {
-    if (this.running) throw new Error("同期処理が完了してから再度お試しください。");
+    if (this.running) throw new Error("保存処理が完了してから再度お試しください。");
     for (const mutation of this.readQueue()) this.storage.removeItem(`${this.key}:${mutation.id}`);
+    for (const conflict of this.readConflictRecords()) this.storage.removeItem(this.conflictKey(conflict.id));
     this.queue = [];
+    this.conflicts = [];
     this.saveError = null;
     this.syncError();
     this.emit();
