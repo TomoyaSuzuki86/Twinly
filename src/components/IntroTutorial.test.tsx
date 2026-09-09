@@ -64,7 +64,7 @@ const openTutorialSleepTime = () => {
 };
 
 describe("IntroTutorial", () => {
-  it("waits for readiness and starts the nine-step tutorial", async () => {
+  it("waits for readiness and starts the eleven-step tutorial", async () => {
     const view = render(<IntroTutorial {...props} ready={false} />);
     expect(shouldShowTutorial).not.toHaveBeenCalled();
 
@@ -73,7 +73,7 @@ describe("IntroTutorial", () => {
 
     view.rerender(<IntroTutorial {...props} />);
     await screen.findByText("まずは、記録する子を選ぶ");
-    expect(screen.getByText("1 / 9")).toBeTruthy();
+    expect(screen.getByText("1 / 11")).toBeTruthy();
   });
 
   it("explains the basic record controls before practice", async () => {
@@ -81,7 +81,7 @@ describe("IntroTutorial", () => {
     await screen.findByText("まずは、記録する子を選ぶ");
     next();
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 9")).toBeTruthy();
+    expect(screen.getByText("2 / 11")).toBeTruthy();
   });
 
   it("uses a tutorial-only sleep button and never touches the live sleep control", async () => {
