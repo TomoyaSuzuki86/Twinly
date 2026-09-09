@@ -28,11 +28,22 @@ const SERVER_CHECK_TIMEOUT_MS = 12_000;
 const RECONNECT_MAX_MS = 30_000;
 const DIAGNOSTIC_LIMIT = 80;
 
-function mutationAlreadyApplied(state: AppState, mutation: AppMutation) {
+function mutationReflected(state: AppState, mutation: AppMutation) {
   const events = new Map(state.events.map((event) => [event.id, event]));
-  if (!mutation.events.every((change) => sameValue(events.get(change.id), change.after))) return false;
+  for (const change of mutation.events) {
+    const current = events.get(change.id);
+    if (!change.before && change.after) {
+      // Event IDs are unique. A newly-created ID appearing remotely means this creation landed;
+      // server-side reconciliation may legitimately adjust some fields such as stock consumption.
+      if (!current) return false;
+    } else if (change.before && !change.after) {
+      if (current) return false;
+    } else if (!sameValue(current, change.after)) return false;
+  }
   for (const change of mutation.settings) {
     if (change.delta !== undefined) {
+      // Relative settings are committed atomically with their event changes. Once those events
+      // are reflected, do not apply the local delta a second time over the received base.
       if (!mutation.events.length) return false;
       continue;
     }
@@ -50,6 +61,7 @@ export class AppStore {
   private base: AppState;
   private running = false;
   private stopped = false;
+  private inFlight: AppMutation | null = null;
   private stopSubscription: (() => void) | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private serverCheckTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,7 +134,11 @@ export class AppStore {
   }
 
   private view() {
-    return this.queue.reduce((state, mutation) => applyMutation(state, mutation), this.base);
+    const reflectedInFlight = this.inFlight && mutationReflected(this.base, this.inFlight) ? this.inFlight.id : null;
+    return this.queue.reduce((state, mutation) => {
+      if (mutation.id === reflectedInFlight) return state;
+      return applyMutation(state, mutation);
+    }, this.base);
   }
 
   private emit() {
@@ -174,7 +190,8 @@ export class AppStore {
     const stop = this.repository.subscribe((snapshot: AppSnapshot) => {
       if (this.stopped) return;
       // Receiving is independent from saving: update the remote base immediately and keep every
-      // durable local mutation overlaid until its commit succeeds.
+      // durable local mutation overlaid until its commit succeeds (except an in-flight mutation
+      // that is already visible in the received authoritative state).
       this.base = snapshot.app;
       this.status.ready = this.status.ready || !snapshot.fromCache;
       this.status.fromCache = snapshot.fromCache;
@@ -265,14 +282,14 @@ export class AppStore {
       this.queue = this.readQueue();
       while (this.queue.length && !this.stopped) {
         const mutation = this.queue[0];
+        this.inFlight = mutation;
         this.logDiagnostic("save-start");
         const confirmed = await this.repository.commit(mutation);
         if (this.stopped) return;
-        // commit() returns absolute confirmed settings. If the listener already contains this
-        // transaction, skip it; otherwise promote it locally so the optimistic UI never disappears.
-        if (!mutationAlreadyApplied(this.base, confirmed)) this.base = applyMutation(this.base, confirmed);
+        if (!mutationReflected(this.base, confirmed)) this.base = applyMutation(this.base, confirmed);
         this.storage.removeItem(`${this.key}:${mutation.id}`);
         this.queue = this.readQueue();
+        this.inFlight = null;
         this.saveError = null;
         this.syncError();
         this.logDiagnostic("save-confirmed");
@@ -285,6 +302,7 @@ export class AppStore {
       this.emit();
     } finally {
       this.running = false;
+      this.inFlight = null;
     }
   }
 
