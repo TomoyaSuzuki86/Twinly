@@ -291,7 +291,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
         type: "milk",
         timestamp: command.timestamp,
         milkMl: 180,
-        note: "チュートリアルの練習結果（未保存）",
+        note: "チュートリアルの練習結果",
       }]);
       setPracticed(true);
       setStatus(`「${transcript}」を認識しました。${names[0]}だけに180mlが追加される動きを確認できます。実際には保存されません。`);
@@ -317,7 +317,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       type: "diaper" as const,
       timestamp: command.timestamp,
       diaperKind: "pee" as const,
-      note: "チュートリアルの練習結果（未保存）",
+      note: "チュートリアルの練習結果",
     };
     setVoicePreviewEvents([
       { id: "tutorial-voice-A", babyId: "A", ...previewBase },
@@ -605,7 +605,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
                   <div className="twinly-tutorial-result mt-3">
                     <span className="flex items-center justify-center gap-1 text-sm font-bold">
                       <Check size={14} aria-hidden="true" />
-                      {step === 4 ? `${names[0]}だけに追加（未保存）` : "2人それぞれに追加（未保存）"}
+                      {step === 4 ? `${names[0]}だけに追加` : "2人それぞれに追加"}
                     </span>
                   </div>
                 </div>}
