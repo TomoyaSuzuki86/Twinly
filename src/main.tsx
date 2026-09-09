@@ -12,10 +12,26 @@ const preventMultiTouchZoom = (event: TouchEvent) => {
   if (event.touches.length > 1) event.preventDefault();
 };
 
+const scrollExcludedSelector = ".twinly-baby-tabs > .sticky > header, .twinly-baby-tabs-list";
+const preventScrollFromExcludedArea = (event: TouchEvent) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest(scrollExcludedSelector)) event.preventDefault();
+};
+
+const scrollExcludedStyle = document.createElement("style");
+scrollExcludedStyle.textContent = `
+${scrollExcludedSelector} {
+  touch-action: none;
+}
+`;
+document.head.appendChild(scrollExcludedStyle);
+
 document.addEventListener("selectstart", preventDefault);
 document.addEventListener("dblclick", preventDefault, { passive: false });
 document.addEventListener("gesturestart", preventDefault, { passive: false });
 document.addEventListener("touchmove", preventMultiTouchZoom, { passive: false });
+document.addEventListener("touchmove", preventScrollFromExcludedArea, { passive: false });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
