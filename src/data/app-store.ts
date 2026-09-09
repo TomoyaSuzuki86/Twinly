@@ -33,8 +33,6 @@ function mutationAlreadyApplied(state: AppState, mutation: AppMutation) {
   if (!mutation.events.every((change) => sameValue(events.get(change.id), change.after))) return false;
   for (const change of mutation.settings) {
     if (change.delta !== undefined) {
-      // Relative stock changes are always coupled to an event mutation. If that event is already
-      // visible in the authoritative snapshot, the transaction applied the stock delta atomically too.
       if (!mutation.events.length) return false;
       continue;
     }
@@ -52,7 +50,6 @@ export class AppStore {
   private base: AppState;
   private running = false;
   private stopped = false;
-  private inFlight: AppMutation | null = null;
   private stopSubscription: (() => void) | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private serverCheckTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,11 +122,7 @@ export class AppStore {
   }
 
   private view() {
-    const inFlightAlreadyInBase = this.inFlight ? mutationAlreadyApplied(this.base, this.inFlight) : false;
-    return this.queue.reduce((state, mutation) => {
-      if (inFlightAlreadyInBase && mutation.id === this.inFlight?.id) return state;
-      return applyMutation(state, mutation);
-    }, this.base);
+    return this.queue.reduce((state, mutation) => applyMutation(state, mutation), this.base);
   }
 
   private emit() {
@@ -180,8 +173,8 @@ export class AppStore {
 
     const stop = this.repository.subscribe((snapshot: AppSnapshot) => {
       if (this.stopped) return;
-      // Receiving is deliberately independent from saving. Remote changes update the base
-      // immediately; durable local mutations stay overlaid until their commits are confirmed.
+      // Receiving is independent from saving: update the remote base immediately and keep every
+      // durable local mutation overlaid until its commit succeeds.
       this.base = snapshot.app;
       this.status.ready = this.status.ready || !snapshot.fromCache;
       this.status.fromCache = snapshot.fromCache;
@@ -272,17 +265,14 @@ export class AppStore {
       this.queue = this.readQueue();
       while (this.queue.length && !this.stopped) {
         const mutation = this.queue[0];
-        this.inFlight = mutation;
         this.logDiagnostic("save-start");
         const confirmed = await this.repository.commit(mutation);
         if (this.stopped) return;
-        // A listener can win the race and already contain this transaction. Avoid re-applying
-        // relative stock deltas in that case; otherwise promote the confirmed change locally
-        // so the optimistic UI never disappears while waiting for the listener callback.
+        // commit() returns absolute confirmed settings. If the listener already contains this
+        // transaction, skip it; otherwise promote it locally so the optimistic UI never disappears.
         if (!mutationAlreadyApplied(this.base, confirmed)) this.base = applyMutation(this.base, confirmed);
         this.storage.removeItem(`${this.key}:${mutation.id}`);
         this.queue = this.readQueue();
-        this.inFlight = null;
         this.saveError = null;
         this.syncError();
         this.logDiagnostic("save-confirmed");
@@ -295,7 +285,6 @@ export class AppStore {
       this.emit();
     } finally {
       this.running = false;
-      this.inFlight = null;
     }
   }
 
