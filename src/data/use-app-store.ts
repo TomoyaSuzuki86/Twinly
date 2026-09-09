@@ -146,7 +146,10 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (store.current?.hasPending) { event.preventDefault(); event.returnValue = ""; }
     };
-    const refresh = () => store.current?.refresh();
+    const outboxPrefix = `twinly-outbox:${userId}:${familyId}:`;
+    const refresh = (event: StorageEvent) => {
+      if (event.key === null || event.key.startsWith(outboxPrefix)) store.current?.refresh();
+    };
     window.addEventListener("storage", refresh);
     window.addEventListener("online", onOnline);
     window.addEventListener("pageshow", onPageShow);
