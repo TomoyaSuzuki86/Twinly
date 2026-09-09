@@ -201,7 +201,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       setStatus("このボタンはチュートリアル専用です。長押しして時刻を指定してみてください。");
     }
     if (step === 3 && !fakeSleepEvent) {
-      setStatus("前の手順で作った練習記録がありません。戻って睡眠の長押しを試してください。");
+      setStatus("前の手順で作った練習記録がありません。必要ならこのステップをスキップできます。");
     }
     if (step === 4) {
       setStatus("「ミルク180」と話してみてください。実際に認識しますが、育児ログには保存しません。");
@@ -290,7 +290,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       if (command.type !== "milk" || command.babyId !== "A" || milkMl !== 180) {
         setPracticed(false);
         setVoicePreviewEvents([]);
-        setStatus(`「${transcript}」と認識しました。ここでは「ミルク180」と話して、${names[0]}だけに入る練習をしてみましょう。`);
+        setStatus(`「${transcript}」と認識しました。ここでは「ミルク180」と話して、選択中の赤ちゃん1人だけに入る練習をしてみましょう。`);
         return;
       }
 
@@ -303,7 +303,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
         note: "チュートリアルの練習結果",
       }]);
       setPracticed(true);
-      setStatus(`「${transcript}」を認識しました。${names[0]}だけに180mlが追加される動きを確認できます。実際には保存されません。`);
+      setStatus(`「${transcript}」を認識しました。選択中の赤ちゃん1人だけに180mlが追加される動きを確認できます。実際には保存されません。`);
       return;
     }
 
@@ -333,7 +333,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       { id: "tutorial-voice-B", babyId: "B", ...previewBase },
     ]);
     setPracticed(true);
-    setStatus(`「${transcript}」を認識しました。10分前のおしっこが、${names[0]}と${names[1]}の2人へ同時に展開されます。実際には保存されません。`);
+    setStatus(`「${transcript}」を認識しました。10分前のおしっこが、2人へ同時に展開されます。実際には保存されません。`);
   };
 
   const handleTutorialVoiceMessage = (message: string) => {
@@ -408,7 +408,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "食事・おむつはボタンを押して内容を選び、保存します。睡眠は1回押すと現在時刻、長押しすると時刻を指定して記録できます。ゲージや前回時刻は、次の記録タイミングの目安です。",
     "下の睡眠ボタンは本番と同じ見た目・操作の練習用です。約0.5秒長押しすると時刻設定が開きます。「記録する」まで進めてみてください。ここでの操作は実際の育児ログには保存されません。",
     "さっき作った練習用の睡眠ログを開き、「削除」→「削除する」と進んでみてください。本番と同じ編集画面ですが、この練習ログはチュートリアル内にしか存在しません。",
-    `${names[0]}の名前を長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。${names[0]}だけに入る結果を画面上で確認しますが、実際のログには保存しません。`,
+    "赤ちゃんの名前タブを長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。選択中の赤ちゃん1人だけに入る結果を画面上で確認しますが、実際のログには保存しません。",
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。名前を言わなくても、同じ内容が2人へ同時に入ることと、相対時刻も一緒に指定できることを練習します。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応し、「30分前」「8時30分」のように時刻まで一緒に話せます。",
     "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。",
@@ -432,16 +432,26 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const isVoiceStep = voiceSteps.has(step);
 
   const spotlightLabel =
-    step === 4 ? `${names[0]}の音声入力を練習` :
+    step === 4 ? "選択中の赤ちゃんの音声入力を練習" :
     step === 5 ? "2人同時の音声入力を練習" :
     step === 10 ? "設定を開く" :
     "チュートリアル対象";
 
-  const skipPractice = () => {
+  const skipCurrentStep = () => {
+    clearVoiceLongPress();
     setVoiceListening(false);
-    setPracticed(true);
     setVoicePreviewEvents([]);
-    setStatus("この手順はスキップしました。音声入力はあとからいつでも試せます。");
+    setRecognizedVoiceText("");
+    setPracticed(false);
+    setStatus("");
+    voiceLongPressTriggeredRef.current = false;
+    voiceLastTapRef.current = 0;
+
+    if (step >= TOTAL_STEPS - 1) {
+      finish("completed");
+      return;
+    }
+    setStep((value) => Math.min(TOTAL_STEPS - 1, value + 1));
   };
 
   const completeAndOpenSettings = () => {
@@ -454,12 +464,13 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const tutorialModalOpen = sleepModalOpen || fakeEditOpen;
 
   return <>
-    <Dialog.Root open={open} onOpenChange={(value) => { if (!value) finish("skipped"); }}>
+    <Dialog.Root open={open} onOpenChange={() => {}}>
       {!tutorialModalOpen && <Dialog.Portal>
         <Dialog.Overlay className="twinly-tutorial-backdrop" />
         <Dialog.Content
           className="twinly-tutorial"
           onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
           aria-describedby="tutorial-description"
         >
           {rect && <button
@@ -496,7 +507,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
                 使い方 <span className="ml-2">{step + 1} / {TOTAL_STEPS}</span>
               </span>
-              <Button variant="ghost" size="sm" onClick={() => finish("skipped")}>スキップ</Button>
+              <Button variant="ghost" size="sm" onClick={skipCurrentStep}>スキップ</Button>
             </div>
 
             <div key={step} className="twinly-tutorial-copy">
@@ -600,10 +611,12 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
 
                   <div className={`grid gap-2 ${step === 5 ? "grid-cols-2" : "grid-cols-1"}`}>
                     {voicePreviewEvents.map((event) => {
-                      const babyName = event.babyId === "A" ? names[0] : names[1];
+                      const babyLabel = step === 4
+                        ? "選択中の赤ちゃん"
+                        : event.babyId === "A" ? "1人目" : "2人目";
                       return <div key={event.id} className="rounded-xl border bg-card p-3 text-left shadow-sm">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-xs font-bold">{babyName}</span>
+                          <span className="truncate text-xs font-bold">{babyLabel}</span>
                           <span className="text-[11px] tabular-nums text-muted-foreground">{formatClock(event.timestamp)}</span>
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-sm font-bold">
@@ -618,14 +631,11 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
                   <div className="twinly-tutorial-result mt-3">
                     <span className="flex items-center justify-center gap-1 text-sm font-bold">
                       <Check size={14} aria-hidden="true" />
-                      {step === 4 ? `${names[0]}だけに追加` : "2人それぞれに追加"}
+                      {step === 4 ? "1人だけに追加" : "2人それぞれに追加"}
                     </span>
                   </div>
                 </div>}
 
-                {!practiced && !voiceListening && <Button className="mt-2 w-full" variant="ghost" size="sm" onClick={skipPractice}>
-                  この端末では今は試さない
-                </Button>}
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
                   マイクと解析処理だけ本番と同じです。育児ログへの保存処理は呼びません。
                 </p>
@@ -662,7 +672,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
                   </div>
                   <div className="rounded-lg border bg-muted/40 px-3 py-2">
                     <span className="block font-bold">左右スワイプ</span>
-                    <span className="mt-1 block text-muted-foreground">{names[0]}と{names[1]}をすぐ切り替え</span>
+                    <span className="mt-1 block text-muted-foreground">双子の表示をすぐ切り替え</span>
                   </div>
                 </div>
               </div>}
@@ -724,7 +734,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     <SleepRecordModal
       open={sleepModalOpen}
       onOpenChange={setSleepModalOpen}
-      displayName={names[0]}
+      displayName="赤ちゃん"
       type={sleepModalType}
       onSave={saveTutorialSleepTime}
     />
