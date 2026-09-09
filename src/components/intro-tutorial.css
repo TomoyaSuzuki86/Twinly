@@ -1,0 +1,12 @@
+.twinly-tutorial-backdrop { position: fixed; inset: 0; z-index: 100; background: transparent; }
+.twinly-tutorial { position: fixed; inset: 0; z-index: 101; outline: none; color: hsl(var(--foreground)); overflow: hidden; }
+.twinly-tutorial::before { content: ''; position: absolute; inset: 0; background: rgb(0 0 0 / .60); }
+.twinly-tutorial:has(.twinly-tutorial-spotlight)::before { display: none; }
+.twinly-tutorial-spotlight { position: absolute; padding: 0; border: 2px solid hsl(var(--primary)); border-radius: 14px; background: transparent; box-shadow: 0 0 0 9999px rgb(0 0 0 / .60), 0 0 0 5px hsl(var(--primary) / .2); touch-action: none; user-select: none; -webkit-touch-callout: none; outline-offset: 5px; }
+.twinly-tutorial-card { position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(460px, calc(100% - 24px)); max-height: calc(100dvh - 180px); overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 20px; border: 1px solid hsl(var(--border)); border-radius: 22px; background: hsl(var(--background)); box-shadow: 0 16px 64px rgb(0 0 0 / .28); }
+.twinly-tutorial-copy { margin-top: 8px; animation: tutorial-enter 180ms ease-out; }
+.twinly-tutorial-demo { margin-top: 16px; padding: 14px; border: 1px solid hsl(var(--border)); border-radius: 14px; background: hsl(var(--muted) / .5); }
+.twinly-tutorial-result { min-width: 0; border: 1px solid hsl(var(--primary) / .25); border-radius: 10px; padding: 10px; background: hsl(var(--primary) / .08); text-align: center; animation: tutorial-enter 220ms ease-out; }
+@keyframes tutorial-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .twinly-tutorial-copy, .twinly-tutorial-result { animation: none; } }
+@media (max-height: 500px) { .twinly-tutorial-card { bottom: 8px; max-height: calc(100dvh - 120px); padding: 10px 16px; } }

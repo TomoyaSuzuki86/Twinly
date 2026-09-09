@@ -1,6 +1,7 @@
+import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, ChevronLeft, ChevronRight, Settings, Undo2 } from "lucide-react";
+import { Baby, Check, ChevronLeft, ChevronRight, HelpCircle, Settings, Undo2 } from "lucide-react";
 import {
   GoogleAuthProvider,
   isSignInWithEmailLink,
@@ -32,6 +33,7 @@ import { SleepRecordModal } from "./components/SleepRecordModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
+import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { AiTools } from "./components/AiTools";
@@ -191,6 +193,7 @@ function SnackbarUndo({
 }
 
 export default function App() {
+  const [tutorialReplay, setTutorialReplay] = useState(0);
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const [now, setNow] = useState(() => new Date());
@@ -256,6 +259,7 @@ export default function App() {
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [timelineModalOpen, setTimelineModalOpen] = useState(false);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [historyModal, setHistoryModal] = useState<{
     babyId: BabyId;
     type: "milk" | "diaper" | "sleep";
@@ -417,6 +421,7 @@ export default function App() {
         setFamilyMembers([]);
         setApp(createEmptyState());
         setModal(null);
+        setHelpModalOpen(false);
         setHistoryModal(null);
         setUndo({ open: false });
         setAuthUser(user);
@@ -936,6 +941,7 @@ export default function App() {
   const handleSignOut = async () => {
     if (!auth) return;
     setAccountModalOpen(false);
+    setHelpModalOpen(false);
     await removePushSubscriptionFromFirestore(authUser);
     await signOut(auth);
   };
@@ -1320,6 +1326,7 @@ export default function App() {
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
             <div className="sticky top-0 z-40 space-y-1 bg-background">
               <header
+                data-tutorial="header"
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
                 onPointerDown={() => beginVoiceLongPress()}
@@ -1344,6 +1351,18 @@ export default function App() {
                     onCommand={handleVoiceCommand}
                     onMessage={showVoiceMessage}
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(event) => { event.stopPropagation(); setHelpModalOpen(true); }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onPointerUp={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    aria-label="help"
+                    title="使い方・ヘルプ"
+                  >
+                    <HelpCircle className="h-5 w-5" />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
                     <Settings className="h-5 w-5" />
                   </Button>
@@ -1378,6 +1397,7 @@ export default function App() {
               </p>
 
               <TabsList
+                data-tutorial="babies"
                 className={`twinly-baby-tabs-list grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
@@ -1386,6 +1406,7 @@ export default function App() {
               >
                 <TabsTrigger
                   value="A"
+                  data-tutorial="baby-A"
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("A")}
                   onPointerDown={() => beginVoiceLongPress("A")}
@@ -1551,6 +1572,23 @@ export default function App() {
         displayName={modal?.kind === "sleepTime" ? app.profiles[modal.babyId].displayName : ""}
         type={modal?.kind === "sleepTime" ? modal.type : "sleepStart"}
         onSave={saveSleepEventAt}
+      />
+      <IntroTutorial
+        key={`tutorial:${authUser.uid}`}
+        uid={authUser.uid}
+        ready={syncStatus.ready && Boolean(familyAccess)}
+        blocked={Boolean(modal) || helpModalOpen || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
+        replay={tutorialReplay}
+        names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+      />
+      <HelpModal
+        open={helpModalOpen}
+        onOpenChange={setHelpModalOpen}
+        names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+        onReplayTutorial={() => {
+          setHelpModalOpen(false);
+          setTutorialReplay((value) => value + 1);
+        }}
       />
       <SettingsModal
         open={modal?.kind === "settings"}

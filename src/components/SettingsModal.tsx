@@ -43,6 +43,7 @@ type SettingsModalProps = {
   onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onResetAll: () => void;
+  onReplayTutorial?: () => void;
   appearance?: React.ReactNode;
   planAi?: React.ReactNode;
 };
@@ -83,6 +84,7 @@ export function SettingsModal({
   onExport,
   onImport,
   onResetAll,
+  onReplayTutorial,
   appearance,
   planAi,
 }: SettingsModalProps) {
@@ -180,6 +182,7 @@ export function SettingsModal({
               プロフィール、通知、データ、デザイン、料金とプランをまとめて管理できます。
             </DialogComponents.DialogDescription>
           </DialogComponents.DialogHeader>
+          {onReplayTutorial && <Button variant="outline" className="w-full" onClick={onReplayTutorial}>使い方をもう一度見る</Button>}
 
           <Tabs defaultValue="profile" className="py-4">
             <TabsList className="flex flex-wrap justify-between">
@@ -671,3 +674,4 @@ export function SettingsModal({
     </>
   );
 }
+
