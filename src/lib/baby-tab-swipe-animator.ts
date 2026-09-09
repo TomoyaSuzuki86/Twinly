@@ -172,14 +172,17 @@ export const installBabyTabSwipeAnimator = () => {
       list.prepend(indicator);
     }
 
+    const currentIndicator = indicator;
+    if (!currentIndicator) return false;
+
     if (isSplitLayoutActive()) {
       list.classList.remove(READY_CLASS);
-      indicator.style.display = "none";
+      currentIndicator.style.display = "none";
       return false;
     }
 
     list.classList.add(READY_CLASS);
-    indicator.style.display = "block";
+    currentIndicator.style.display = "block";
     return true;
   };
 
