@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, Clock3, Mic, Moon, Settings as SettingsIcon, Sun, Trash2 } from "lucide-react";
+import { Check, Clock3, Droplets, Mic, Milk, Moon, Settings as SettingsIcon, Sun, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { SleepRecordModal } from "./SleepRecordModal";
 import { VoiceCommandButton, type VoiceCommandButtonHandle } from "./VoiceCommandButton";
@@ -41,6 +41,13 @@ const TOTAL_STEPS = targetResolvers.length;
 const scrollTargetIntoView = new Set([1, 7]);
 const voiceSteps = new Set([4, 5]);
 
+const formatClock = (timestamp: number) =>
+  new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(timestamp));
+
 export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -56,6 +63,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const [fakeEditOpen, setFakeEditOpen] = useState(false);
 
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voicePreviewEvents, setVoicePreviewEvents] = useState<LogEvent[]>([]);
+  const [recognizedVoiceText, setRecognizedVoiceText] = useState("");
 
   const checked = useRef(false);
   const replaySeen = useRef(0);
@@ -97,6 +106,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     setFakeSleepEvent(null);
     setFakeEditOpen(false);
     setVoiceListening(false);
+    setVoicePreviewEvents([]);
+    setRecognizedVoiceText("");
     sleepLongPressTriggeredRef.current = false;
     voiceLongPressTriggeredRef.current = false;
     voiceLastTapRef.current = 0;
@@ -172,6 +183,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     setPracticed(false);
     setStatus("");
     setVoiceListening(false);
+    setVoicePreviewEvents([]);
+    setRecognizedVoiceText("");
     voiceLastTapRef.current = 0;
     clearVoiceLongPress();
 
@@ -181,8 +194,11 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     if (step === 3 && !fakeSleepEvent) {
       setStatus("前の手順で作った練習記録がありません。戻って睡眠の長押しを試してください。");
     }
-    if (voiceSteps.has(step)) {
-      setStatus("実際にマイクを使って認識しますが、育児ログには保存しません。");
+    if (step === 4) {
+      setStatus("「ミルク180」と話してみてください。実際に認識しますが、育児ログには保存しません。");
+    }
+    if (step === 5) {
+      setStatus("「10分前 おしっこ」と話してみてください。相対時刻と2人同時入力をまとめて練習します。");
     }
   }, [step, open]);
 
@@ -252,17 +268,68 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const voiceTranscript = (command: VoiceCommand) =>
     command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
 
-  const voiceTargetLabel = (command: VoiceCommand) =>
-    command.babyId === "both" ? `${names[0]}・${names[1]}` : command.babyId === "A" ? names[0] : names[1];
-
   const handleTutorialVoiceCommand = (command: VoiceCommand) => {
     setVoiceListening(false);
+    const transcript = voiceTranscript(command);
+    setRecognizedVoiceText(transcript);
+
+    if (step === 4) {
+      const milkMl = command.type === "milk"
+        ? command.milkMlByBaby?.A ?? command.milkMl
+        : undefined;
+
+      if (command.type !== "milk" || command.babyId !== "A" || milkMl !== 180) {
+        setPracticed(false);
+        setVoicePreviewEvents([]);
+        setStatus(`「${transcript}」と認識しました。ここでは「ミルク180」と話して、${names[0]}だけに入る練習をしてみましょう。`);
+        return;
+      }
+
+      setVoicePreviewEvents([{
+        id: "tutorial-voice-A",
+        babyId: "A",
+        type: "milk",
+        timestamp: command.timestamp,
+        milkMl: 180,
+        note: "チュートリアルの練習結果（未保存）",
+      }]);
+      setPracticed(true);
+      setStatus(`「${transcript}」を認識しました。${names[0]}だけに180mlが追加される動きを確認できます。実際には保存されません。`);
+      return;
+    }
+
+    const minutesAgo = Math.round((Date.now() - command.timestamp) / 60000);
+    const isExpectedTwinPractice =
+      command.type === "diaper" &&
+      command.diaperKind === "pee" &&
+      command.babyId === "both" &&
+      minutesAgo >= 8 &&
+      minutesAgo <= 12;
+
+    if (!isExpectedTwinPractice) {
+      setPracticed(false);
+      setVoicePreviewEvents([]);
+      setStatus(`「${transcript}」と認識しました。ここでは「10分前 おしっこ」と話して、時刻指定と2人同時入力を試してみましょう。`);
+      return;
+    }
+
+    const previewBase = {
+      type: "diaper" as const,
+      timestamp: command.timestamp,
+      diaperKind: "pee" as const,
+      note: "チュートリアルの練習結果（未保存）",
+    };
+    setVoicePreviewEvents([
+      { id: "tutorial-voice-A", babyId: "A", ...previewBase },
+      { id: "tutorial-voice-B", babyId: "B", ...previewBase },
+    ]);
     setPracticed(true);
-    setStatus(`「${voiceTranscript(command)}」を認識しました。対象: ${voiceTargetLabel(command)}。練習なので実際の記録には保存されません。`);
+    setStatus(`「${transcript}」を認識しました。10分前のおしっこが、${names[0]}と${names[1]}の2人へ同時に展開されます。実際には保存されません。`);
   };
 
   const handleTutorialVoiceMessage = (message: string) => {
     setVoiceListening(false);
+    setVoicePreviewEvents([]);
     setStatus(`${message}。実際の記録は作成されていません。`);
   };
 
@@ -275,7 +342,13 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     }
 
     setVoiceListening(true);
-    setStatus("聞き取り中です。「ミルク180」などと話してください。認識しても保存はしません。");
+    setVoicePreviewEvents([]);
+    setRecognizedVoiceText("");
+    setStatus(
+      step === 4
+        ? "聞き取り中です。「ミルク180」と話してください。"
+        : "聞き取り中です。「10分前 おしっこ」と話してください。"
+    );
     voice.startListening(step === 4 ? "A" : undefined);
   };
 
@@ -313,8 +386,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "睡眠は、長押しで時刻を指定",
     "練習ログを、削除してみる",
     "この子だけに、声で入力",
-    "2人分も、声でまとめて入力",
-    "声では、時刻までまとめて言えます",
+    "ヘッダーから、2人へまとめて入力",
+    "声では、いろいろな記録ができます",
     "記録は、あとから直せます",
     "最後に、設定を確認",
   ];
@@ -324,8 +397,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "食事・おむつはボタンを押して内容を選び、保存します。睡眠は1回押すと現在時刻、長押しすると時刻を指定して記録できます。ゲージや前回時刻は、次の記録タイミングの目安です。",
     "下の睡眠ボタンは本番と同じ見た目・操作の練習用です。約0.5秒長押しすると時刻設定が開きます。「記録する」まで進めてみてください。ここでの操作は実際の育児ログには保存されません。",
     "さっき作った練習用の睡眠ログを開き、「削除」→「削除する」と進んでみてください。本番と同じ編集画面ですが、この練習ログはチュートリアル内にしか存在しません。",
-    `${names[0]}の名前を長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」などと話してみてください。認識結果だけ確認し、ログには保存しません。`,
-    "画面上部のTwinlyを長押し、またはダブルタップすると、2人同時入力の練習です。名前を言わずに「ミルク180」と話すと、2人が対象として認識されますが、実際のログは作りません。",
+    `${names[0]}の名前を長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。${names[0]}だけに入る結果を画面上で確認しますが、実際のログには保存しません。`,
+    "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。名前を言わなくても、同じ内容が2人へ同時に入ることと、相対時刻も一緒に指定できることを練習します。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応し、「30分前」「8時30分」のように時刻まで一緒に話せます。",
     "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。タイムラインでも左右スワイプで表示する子を切り替えられます。",
     "設定では、2人の表示名・音声入力名・生年月日・アイコン・ミルクや睡眠の目安などを自分たちに合わせられます。最後にプロフィール設定を一度確認しておきましょう。",
@@ -334,9 +407,9 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const voiceExamples = [
     "ミルク180",
     "おしっこ",
-    "うんち",
     "離乳食",
     "寝た / 起きた",
+    "10分前におしっこ",
     "30分前にミルク180",
     "8時30分におしっこ",
   ];
@@ -354,6 +427,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const skipPractice = () => {
     setVoiceListening(false);
     setPracticed(true);
+    setVoicePreviewEvents([]);
     setStatus("この手順はスキップしました。音声入力はあとからいつでも試せます。");
   };
 
@@ -494,17 +568,48 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
 
               {isVoiceStep && <div className="twinly-tutorial-demo" aria-live="polite">
                 <div className="flex items-center justify-center gap-2 text-sm font-semibold">
-                  <Mic size={16} aria-hidden="true" />例：「ミルク180」
+                  <Mic size={16} aria-hidden="true" />
+                  {step === 4 ? "「ミルク180」" : "「10分前 おしっこ」"}
                 </div>
                 <Button className="mt-3 w-full" variant="outline" size="sm" onClick={startTutorialVoice} disabled={voiceListening}>
                   {voiceListening ? "音声入力中…" : "マイクを起動して試す"}
                 </Button>
                 <p className="mt-3 text-center text-xs text-muted-foreground">{status}</p>
-                {practiced && <div className="twinly-tutorial-result mt-3">
-                  <span className="flex items-center justify-center gap-1 text-sm font-bold">
-                    <Check size={14} aria-hidden="true" />音声を認識できました（未保存）
-                  </span>
+
+                {practiced && voicePreviewEvents.length > 0 && <div className="mt-4">
+                  {recognizedVoiceText && <div className="rounded-lg border bg-muted/40 px-3 py-2 text-center text-xs font-semibold">
+                    認識：「{recognizedVoiceText}」
+                  </div>}
+
+                  {step === 5 && <div className="my-2 text-center text-[11px] font-semibold text-muted-foreground">
+                    1回の音声入力 → 2人に同時追加
+                  </div>}
+
+                  <div className={`grid gap-2 ${step === 5 ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {voicePreviewEvents.map((event) => {
+                      const babyName = event.babyId === "A" ? names[0] : names[1];
+                      return <div key={event.id} className="rounded-xl border bg-card p-3 text-left shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-bold">{babyName}</span>
+                          <span className="text-[11px] tabular-nums text-muted-foreground">{formatClock(event.timestamp)}</span>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 text-sm font-bold">
+                          {event.type === "milk" ? <Milk className="h-4 w-4 shrink-0" /> : <Droplets className="h-4 w-4 shrink-0" />}
+                          <span>{event.type === "milk" ? "180ml・ミルク" : "おむつ・おしっこ"}</span>
+                        </div>
+                        {step === 5 && <div className="mt-1 text-[11px] font-semibold text-muted-foreground">10分前の時刻で追加</div>}
+                      </div>;
+                    })}
+                  </div>
+
+                  <div className="twinly-tutorial-result mt-3">
+                    <span className="flex items-center justify-center gap-1 text-sm font-bold">
+                      <Check size={14} aria-hidden="true" />
+                      {step === 4 ? `${names[0]}だけに追加（未保存）` : "2人それぞれに追加（未保存）"}
+                    </span>
+                  </div>
                 </div>}
+
                 {!practiced && !voiceListening && <Button className="mt-2 w-full" variant="ghost" size="sm" onClick={skipPractice}>
                   この端末では今は試さない
                 </Button>}
