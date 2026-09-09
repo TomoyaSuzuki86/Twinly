@@ -160,3 +160,15 @@ button[class*='from-slate-950'][class*='to-indigo-950'] > span:nth-child(2) { co
 }
 @keyframes sleep-switch { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
 @media (prefers-reduced-motion: reduce) { .sleep-transition-message { animation: none !important; } }
+
+/* Framer Motion owns transform while animating y, so translateX(-50%) cannot be used for centering. */
+div[class*='w-[min(720px,calc(100%-16px))]'][class*='left-1/2'],
+div[class*='w-[min(520px,calc(100%-16px))]'][class*='left-1/2'] {
+  left: .5rem !important;
+  right: .5rem !important;
+  width: auto !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+div[class*='w-[min(720px,calc(100%-16px))]'][class*='left-1/2'] { max-width: 720px; }
+div[class*='w-[min(520px,calc(100%-16px))]'][class*='left-1/2'] { max-width: 520px; }
