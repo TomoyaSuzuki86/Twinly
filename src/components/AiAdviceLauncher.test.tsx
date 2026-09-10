@@ -2,6 +2,7 @@ import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {AiAdviceLauncher} from './AiAdviceLauncher';
+import {Tabs,TabsContent,TabsList,TabsTrigger} from './ui/tabs';
 
 const mock=vi.hoisted(()=>({service:vi.fn()}));
 vi.mock('@/lib/ai',()=>({callService:mock.service}));
@@ -37,7 +38,7 @@ describe('AI advice follow-up',()=>{
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
 
-  it('switches twins promptly while a short horizontal swipe is still moving on the AI advice launcher',async()=>{
+  it('switches twins from a native DOM swipe that starts on the AI advice launcher',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
     const switchToSecond=vi.fn();
 
@@ -53,14 +54,44 @@ describe('AI advice follow-up',()=>{
     </div>);
 
     const launcher=await screen.findByRole('button',{name:'AIアドバイスを見る'});
-    fireEvent.touchStart(launcher,{touches:[{clientX:140,clientY:30}]});
-    fireEvent.touchMove(launcher,{touches:[{clientX:102,clientY:34}]});
+    fireEvent.touchStart(launcher,{touches:[{identifier:1,clientX:140,clientY:30}],changedTouches:[{identifier:1,clientX:140,clientY:30}]});
+    fireEvent.touchMove(launcher,{touches:[{identifier:1,clientX:102,clientY:34}]});
 
     expect(switchToSecond).toHaveBeenCalledTimes(1);
 
-    fireEvent.touchEnd(launcher,{changedTouches:[{clientX:102,clientY:34}]});
+    fireEvent.touchEnd(launcher,{changedTouches:[{identifier:1,clientX:102,clientY:34}]});
     fireEvent.click(launcher);
     expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
     expect(switchToSecond).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches the real Radix baby tab when the swipe starts inside the portaled launcher',async()=>{
+    mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
+
+    render(<>
+      <Tabs defaultValue="A">
+        <TabsList className="twinly-baby-tabs-list">
+          <TabsTrigger value="A">1人目</TabsTrigger>
+          <TabsTrigger value="B">2人目</TabsTrigger>
+        </TabsList>
+        <TabsContent forceMount value="A" className="twinly-baby-tabs-content">
+          <div><button aria-label="週間タイムラインを開く">timeline A</button></div>
+        </TabsContent>
+        <TabsContent forceMount value="B" className="twinly-baby-tabs-content">
+          <div><button aria-label="週間タイムラインを開く">timeline B</button></div>
+        </TabsContent>
+      </Tabs>
+      <AiAdviceLauncher/>
+    </>);
+
+    await waitFor(()=>expect(document.querySelectorAll('[data-twinly-ai-advice-target="true"] button[aria-label="AIアドバイスを見る"]').length).toBe(2));
+    const activePanel=document.querySelector<HTMLElement>('.twinly-baby-tabs-content[data-state="active"]');
+    const launcher=activePanel?.querySelector<HTMLButtonElement>('button[aria-label="AIアドバイスを見る"]');
+    expect(launcher).not.toBeNull();
+
+    fireEvent.touchStart(launcher!,{touches:[{identifier:2,clientX:150,clientY:40}],changedTouches:[{identifier:2,clientX:150,clientY:40}]});
+    fireEvent.touchMove(launcher!,{touches:[{identifier:2,clientX:108,clientY:43}]});
+
+    await waitFor(()=>expect(screen.getByRole('tab',{name:'2人目'})).toHaveAttribute('data-state','active'));
   });
 });
