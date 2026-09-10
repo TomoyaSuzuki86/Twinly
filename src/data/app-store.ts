@@ -7,6 +7,7 @@ import {
   type AppMutation,
   type AppRepository,
   type AppSnapshot,
+  type CommitResult,
   type SyncConflict,
 } from "./app-repository";
 
@@ -336,7 +337,9 @@ export class AppStore {
         this.logDiagnostic("save-start");
         const response = await this.repository.commit(mutation);
         if (this.stopped) return;
-        const result = isCommitResult(response) ? response : { confirmed: response, conflicts: [] as SyncConflict[] };
+        const result: CommitResult = isCommitResult(response)
+          ? response
+          : { confirmed: response, conflicts: [], unresolved: undefined };
         if (mutationHasChanges(result.confirmed) && !mutationReflected(this.base, result.confirmed)) {
           this.base = applyMutation(this.base, result.confirmed);
         }
