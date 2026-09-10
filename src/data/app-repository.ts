@@ -1,16 +1,41 @@
-import type { AppState, LogEvent } from "@/types";
+import type { AppState, BabyId, EventType, LogEvent } from "@/types";
 
 // No provider SDK types cross this boundary. A native/SQL adapter can implement it.
 export type EventChange = { before?: LogEvent; after?: LogEvent; id: string };
 export type SettingChange = { path: string[]; before: unknown; after: unknown; delta?: number };
 export type AppMutation = { id: string; queuedAt?: number; events: EventChange[]; settings: SettingChange[] };
 export type AppSnapshot = { app: AppState; fromCache: boolean; completeHistory: boolean };
+
+export type SyncConflict = {
+  id: string;
+  mutationId: string;
+  kind: "event" | "setting";
+  field: string;
+  eventId?: string;
+  babyId?: BabyId;
+  eventType?: EventType;
+  path?: string[];
+  localValue: unknown;
+  remoteValue: unknown;
+};
+
+export type CommitResult = {
+  confirmed: AppMutation;
+  conflicts: SyncConflict[];
+  unresolved?: AppMutation;
+};
+
+export type CommitResponse = AppMutation | CommitResult;
+
 export interface AppRepository {
   subscribe(onChange: (snapshot: AppSnapshot) => void, onError: (error: unknown) => void): () => void;
-  commit(mutation: AppMutation): Promise<AppMutation>;
+  commit(mutation: AppMutation): Promise<CommitResponse>;
   validate?(mutation: AppMutation): void;
   loadAll(): Promise<AppState>;
 }
+
+export const isCommitResult = (value: CommitResponse): value is CommitResult =>
+  Boolean(value && typeof value === "object" && "confirmed" in value && "conflicts" in value);
 
 export const sameValue = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -55,7 +80,7 @@ export function applyMutation(state: AppState, mutation: AppMutation, checkConfl
   const events = new Map(result.events.map((event) => [event.id, event]));
   for (const change of mutation.events) {
     if (checkConflicts && !sameValue(events.get(change.id), change.before)) {
-      throw new Error("別の端末で同じ記録が変更されています。未同期データを書き出してから確認してください。");
+      throw new Error("別の端末で同じ記録が変更されています。");
     }
     if (change.after) events.set(change.id, change.after);
     else events.delete(change.id);
@@ -66,7 +91,7 @@ export function applyMutation(state: AppState, mutation: AppMutation, checkConfl
     for (const key of change.path.slice(0, -1)) target = target[key] as Record<string, unknown>;
     const key = change.path[change.path.length - 1];
     if (checkConflicts && change.delta === undefined && !sameValue(target[key], change.before)) {
-      throw new Error("別の端末で同じ設定が変更されています。未同期データを書き出してから確認してください。");
+      throw new Error("別の端末で同じ設定が変更されています。");
     }
     if (change.delta !== undefined) target[key] = Math.max(0, Number(target[key] ?? 0) + change.delta);
     else if (change.after === undefined) delete target[key];

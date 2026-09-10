@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Firestore } from "firebase/firestore";
 import { createInitialAppState, toSharedAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
-import { createMutation } from "./app-repository";
+import { createMutation, isCommitResult } from "./app-repository";
 
 const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[] }));
 vi.mock("firebase/firestore", () => {
@@ -39,6 +39,7 @@ vi.mock("firebase/firestore", () => {
 import { createFirestoreAppRepository } from "./firestore-app-repository";
 
 const statePath = "families/family/app/state";
+const eventPath = "families/family/events/event";
 const record = { id: "event", babyId: "A" as const, type: "milk" as const, timestamp: Date.now(), milkMl: 120 };
 const repository = () => createFirestoreAppRepository({} as Firestore, "family", "user");
 beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; });
@@ -48,9 +49,10 @@ describe("Firestore adapter contract", () => {
     const initial = createInitialAppState();
     memory.docs.set(statePath, { schemaVersion: 2, app: { ...toSharedAppState(initial), events: undefined } });
     await repository().commit(createMutation(initial, appendEvents(initial, [record]), "op"));
-    expect(memory.writes).toEqual(["families/family/events/event", "families/family/mutations/op"]);
+    expect(memory.writes).toEqual([eventPath, "families/family/mutations/op"]);
     expect(memory.reads).toHaveLength(3);
   });
+
   it("uses a receipt to make repeated stock consumption idempotent", async () => {
     const initial = createInitialAppState();
     memory.docs.set(statePath, { schemaVersion: 2, app: { ...toSharedAppState(initial), events: undefined } });
@@ -61,6 +63,47 @@ describe("Firestore adapter contract", () => {
     expect(memory.writes).toHaveLength(writeCount);
     expect(memory.docs.get(statePath).app.profiles.A.diaperStockBySize.新生児).toBe(79);
   });
+
+  it("automatically merges edits to different fields of the same record", async () => {
+    const baseEvent = { ...record, note: "before" };
+    const initial = appendEvents(createInitialAppState(), [baseEvent]);
+    const local = { ...initial, events: [{ ...baseEvent, milkMl: 140 }] };
+    const remote = { ...baseEvent, note: "別端末のメモ" };
+    memory.docs.set(statePath, { schemaVersion: 2, app: { ...toSharedAppState(initial), events: undefined } });
+    memory.docs.set(eventPath, remote);
+
+    const result = await repository().commit(createMutation(initial, local, "merge"));
+
+    expect(isCommitResult(result) ? result.conflicts : []).toEqual([]);
+    expect(memory.docs.get(eventPath).milkMl).toBe(140);
+    expect(memory.docs.get(eventPath).note).toBe("別端末のメモ");
+  });
+
+  it("returns only the same-field conflict with concrete local and remote values", async () => {
+    const baseEvent = { ...record, milkMl: 120 };
+    const initial = appendEvents(createInitialAppState(), [baseEvent]);
+    const local = { ...initial, events: [{ ...baseEvent, milkMl: 140 }] };
+    memory.docs.set(statePath, { schemaVersion: 2, app: { ...toSharedAppState(initial), events: undefined } });
+    memory.docs.set(eventPath, { ...baseEvent, milkMl: 160 });
+
+    const result = await repository().commit(createMutation(initial, local, "conflict"));
+
+    expect(isCommitResult(result)).toBe(true);
+    if (!isCommitResult(result)) throw new Error("expected structured conflict");
+    expect(result.conflicts).toEqual([expect.objectContaining({
+      field: "milkMl",
+      localValue: 140,
+      remoteValue: 160,
+      babyId: "A",
+      eventType: "milk",
+    })]);
+    expect(result.unresolved?.events[0]).toEqual(expect.objectContaining({
+      before: expect.objectContaining({ milkMl: 160 }),
+      after: expect.objectContaining({ milkMl: 140 }),
+    }));
+    expect(memory.docs.get(eventPath).milkMl).toBe(160);
+  });
+
   it("preserves legacy history without silently migrating or truncating it", async () => {
     const initial = appendEvents(createInitialAppState(), [{ ...record, id: "old" }]);
     memory.docs.set(statePath, { app: toSharedAppState(initial) });
@@ -68,12 +111,14 @@ describe("Firestore adapter contract", () => {
     expect(memory.docs.get(statePath).app.events).toHaveLength(2);
     expect(memory.docs.get(statePath).schemaVersion).toBeUndefined();
   });
-  it("does not write during a migration or after a conflicting remote edit", async () => {
+
+  it("does not write during a migration", async () => {
     const initial = createInitialAppState();
     memory.docs.set(statePath, { schemaVersion: 2, migrationState: "copying", app: toSharedAppState(initial) });
     await expect(repository().commit(createMutation(initial, appendEvents(initial, [record]), "op"))).rejects.toThrow("更新中");
     expect(memory.writes).toEqual([]);
   });
+
   it("bounds normal history and uses only limit-one queries for prior state", () => {
     memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
     repository().subscribe(() => {}, () => {});
@@ -82,6 +127,7 @@ describe("Firestore adapter contract", () => {
     expect(window).toHaveLength(1);
     expect(memory.queries.filter((q) => q.constraints.some((c: any) => c.kind === "limit" && c.value === 1))).toHaveLength(14);
   });
+
   it("reconciles simultaneous consumption of the last diaper", async () => {
     const initial = createInitialAppState();
     initial.profiles.A.diaperStockBySize.新生児 = 1;
