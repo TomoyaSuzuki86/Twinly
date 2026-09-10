@@ -81,8 +81,6 @@ function mutationReflected(state: AppState, mutation: AppMutation) {
   return true;
 }
 
-// Durable, ordered changes include edits/deletes/settings, not only added events.
-// Persistence MUST succeed before the UI claims to accept a change.
 export class AppStore {
   private queue: AppMutation[];
   private conflicts: ConflictRecord[];
@@ -399,6 +397,10 @@ export class AppStore {
       }
     }
 
+    // Relative stock deltas are coupled to an event operation. If the user keeps the remote
+    // record and no local event operation remains, never replay the stock delta on its own.
+    if (!mutation.events.length) mutation.settings = mutation.settings.filter((change) => change.delta === undefined);
+
     const remaining = record.conflicts.filter((item) => item.id !== conflictId);
     if (remaining.length) {
       const updated: ConflictRecord = { ...record, mutation, conflicts: remaining };
@@ -425,7 +427,7 @@ export class AppStore {
     return overlays.reduce((state, mutation) => applyMutation(state, mutation), remote);
   }
 
-  get hasPending() { return this.queue.length > 0 || this.conflicts.length > 0; }
+  get hasPending() { return this.queue.length > 0; }
   exportPending() { return { app: this.view(), pendingMutations: this.queue, conflicts: this.conflicts }; }
   exportDiagnostics() {
     try {
