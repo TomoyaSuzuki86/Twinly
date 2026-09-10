@@ -37,7 +37,7 @@ describe('AI advice follow-up',()=>{
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
 
-  it('switches twins when a horizontal swipe starts on the AI advice launcher',async()=>{
+  it('switches twins promptly while a short horizontal swipe is still moving on the AI advice launcher',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
     const switchToSecond=vi.fn();
 
@@ -54,8 +54,13 @@ describe('AI advice follow-up',()=>{
 
     const launcher=await screen.findByRole('button',{name:'AIアドバイスを見る'});
     fireEvent.touchStart(launcher,{touches:[{clientX:140,clientY:30}]});
-    fireEvent.touchEnd(launcher,{changedTouches:[{clientX:50,clientY:34}]});
+    fireEvent.touchMove(launcher,{touches:[{clientX:102,clientY:34}]});
 
+    expect(switchToSecond).toHaveBeenCalledTimes(1);
+
+    fireEvent.touchEnd(launcher,{changedTouches:[{clientX:102,clientY:34}]});
+    fireEvent.click(launcher);
+    expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
     expect(switchToSecond).toHaveBeenCalledTimes(1);
   });
 });

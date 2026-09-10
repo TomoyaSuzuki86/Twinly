@@ -14,6 +14,14 @@ describe("detectHorizontalSwipe", () => {
     expect(detectHorizontalSwipe({ x: 100, y: 100 }, { x: 140, y: 102 })).toBeNull();
   });
 
+  it("supports a smaller threshold for compact swipe targets", () => {
+    expect(detectHorizontalSwipe(
+      { x: 100, y: 100 },
+      { x: 62, y: 104 },
+      { minDistancePx: 36, horizontalDominanceRatio: 1.15 }
+    )).toBe("left");
+  });
+
   it("ignores mostly vertical scrolling", () => {
     expect(detectHorizontalSwipe({ x: 100, y: 100 }, { x: 160, y: 180 })).toBeNull();
   });
