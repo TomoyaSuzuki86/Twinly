@@ -11,6 +11,7 @@ import { VoiceCommandButton } from "./VoiceCommandButton";
 const TARGET_SELECTOR = 'button[aria-label="週間タイムラインを開く"]';
 const CONSENT_KEY = "twinly-ai-review-consent-v3";
 const JST = 9 * 60 * 60 * 1000;
+const LAUNCHER_SWIPE_OPTIONS = { minDistancePx: 36, horizontalDominanceRatio: 1.15 } as const;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
 export function AiAdviceLauncher() {
@@ -147,19 +148,16 @@ export function AiAdviceLauncher() {
     launcherSwipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
   };
 
-  const handleLauncherTouchEnd: TouchEventHandler<HTMLButtonElement> = (event) => {
+  const tryLauncherSwipe = (end: SwipePoint) => {
     const start = launcherSwipeStartRef.current;
-    launcherSwipeStartRef.current = null;
-    const touch = event.changedTouches[0];
-    if (!start || !touch) return;
-
-    const direction = detectHorizontalSwipe(start, { x: touch.clientX, y: touch.clientY });
-    if (!direction) return;
+    if (!start) return false;
+    const direction = detectHorizontalSwipe(start, end, LAUNCHER_SWIPE_OPTIONS);
+    if (!direction) return false;
 
     const splitLayoutActive =
       document.documentElement.dataset.twinlyLayout === "split" &&
       window.matchMedia("(min-width: 1180px)").matches;
-    if (splitLayoutActive) return;
+    if (splitLayoutActive) return false;
 
     const tabs = Array.from(
       document.querySelectorAll<HTMLButtonElement>('.twinly-baby-tabs-list [role="tab"]')
@@ -167,14 +165,25 @@ export function AiAdviceLauncher() {
     const selectedIndex = tabs.findIndex(
       (tab) => tab.getAttribute("data-state") === "active" || tab.getAttribute("aria-selected") === "true"
     );
-    if (selectedIndex < 0) return;
+    if (selectedIndex < 0) return false;
 
-    const nextIndex = direction === "left" ? selectedIndex + 1 : selectedIndex - 1;
-    const nextTab = tabs[nextIndex];
-    if (!nextTab) return;
-
+    launcherSwipeStartRef.current = null;
     suppressLauncherClickUntilRef.current = Date.now() + 500;
-    nextTab.click();
+    const nextIndex = direction === "left" ? selectedIndex + 1 : selectedIndex - 1;
+    tabs[nextIndex]?.click();
+    return true;
+  };
+
+  const handleLauncherTouchMove: TouchEventHandler<HTMLButtonElement> = (event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    tryLauncherSwipe({ x: touch.clientX, y: touch.clientY });
+  };
+
+  const handleLauncherTouchEnd: TouchEventHandler<HTMLButtonElement> = (event) => {
+    const touch = event.changedTouches[0];
+    if (touch && tryLauncherSwipe({ x: touch.clientX, y: touch.clientY })) return;
+    launcherSwipeStartRef.current = null;
   };
 
   const launcher = (
@@ -184,6 +193,7 @@ export function AiAdviceLauncher() {
       size="sm"
       className="h-8 touch-pan-y select-none gap-1 px-2 text-xs"
       onTouchStart={handleLauncherTouchStart}
+      onTouchMove={handleLauncherTouchMove}
       onTouchEnd={handleLauncherTouchEnd}
       onTouchCancel={() => { launcherSwipeStartRef.current = null; }}
       onClick={(event) => {
