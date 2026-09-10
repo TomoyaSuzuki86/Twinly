@@ -92,9 +92,11 @@ service cloud.firestore {
 
       match /mutations/{mutationId} {
         allow read: if canUseFamilyData(familyId);
+        // The current client stores a structured commit result for idempotent retries.
+        // Keep legacy settings/consumption keys allowed so older clients can still finish queued writes.
         allow create: if canUseFamilyData(familyId)
           && request.resource.data.uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['uid', 'settings', 'consumption', 'createdAt']);
+          && request.resource.data.keys().hasOnly(['uid', 'settings', 'consumption', 'result', 'createdAt']);
         allow update, delete: if false;
       }
     }
