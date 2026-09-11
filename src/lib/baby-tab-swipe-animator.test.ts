@@ -9,27 +9,22 @@ describe("baby tab swipe animator", () => {
     vi.restoreAllMocks();
   });
 
-  it("switches directly to the right twin when a touch swipe starts on AI advice", () => {
+  it("does not imperatively change tabs when a swipe starts on the AI advice area", () => {
     document.body.innerHTML = `
       <div class="twinly-baby-tabs-list">
         <button role="tab" data-state="active" aria-selected="true">A</button>
         <button role="tab" data-state="inactive" aria-selected="false">B</button>
       </div>
       <div class="twinly-baby-tabs-panels">
-        <div data-twinly-ai-advice-target="true">
-          <button aria-label="AIアドバイスを見る">AIアドバイス</button>
-        </div>
+        <button aria-label="AIアドバイスを見る">AIアドバイス</button>
       </div>
     `;
 
     const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    const aiButton = document.querySelector<HTMLButtonElement>('button[aria-label="AIアドバイスを見る"]')!;
-    const onSecondClick = vi.fn(() => {
-      tabs[0].dataset.state = "inactive";
-      tabs[0].setAttribute("aria-selected", "false");
-      tabs[1].dataset.state = "active";
-      tabs[1].setAttribute("aria-selected", "true");
-    });
+    const aiButton = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="AIアドバイスを見る"]'
+    )!;
+    const onSecondClick = vi.fn();
     tabs[1].addEventListener("click", onSecondClick);
 
     fireEvent.touchStart(aiButton, {
@@ -37,11 +32,12 @@ describe("baby tab swipe animator", () => {
       changedTouches: [{ identifier: 1, clientX: 140, clientY: 30 }],
     });
     fireEvent.touchMove(aiButton, {
-      touches: [{ identifier: 1, clientX: 115, clientY: 32 }],
-      changedTouches: [{ identifier: 1, clientX: 115, clientY: 32 }],
+      touches: [{ identifier: 1, clientX: 90, clientY: 32 }],
+      changedTouches: [{ identifier: 1, clientX: 90, clientY: 32 }],
     });
 
-    expect(onSecondClick).toHaveBeenCalledTimes(1);
-    expect(tabs[1]).toHaveAttribute("data-state", "active");
+    expect(onSecondClick).not.toHaveBeenCalled();
+    expect(tabs[0]).toHaveAttribute("data-state", "active");
+    expect(tabs[1]).toHaveAttribute("data-state", "inactive");
   });
 });
