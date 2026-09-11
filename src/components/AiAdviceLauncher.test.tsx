@@ -38,14 +38,14 @@ describe('AI advice follow-up',()=>{
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
 
-  it('captures the gesture on the AI advice button itself and switches after a short left swipe',async()=>{
+  it('activates the target tab through the mousedown path after a short left swipe',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
     const switchToSecond=vi.fn();
 
     render(<div>
       <div className="twinly-baby-tabs-list">
         <button role="tab">1人目</button>
-        <button role="tab" onClick={switchToSecond}>2人目</button>
+        <button role="tab" onMouseDown={switchToSecond}>2人目</button>
       </div>
       <div className="twinly-baby-tabs-content" data-state="active">
         <div><button aria-label="週間タイムラインを開く">timeline</button></div>
@@ -67,7 +67,7 @@ describe('AI advice follow-up',()=>{
     expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
   });
 
-  it('switches the real Radix baby tab from the portaled AI button using the button-local gesture handler',async()=>{
+  it('switches the real Radix baby tab through its mousedown selection path',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
 
     render(<>
