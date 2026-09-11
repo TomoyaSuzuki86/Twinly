@@ -366,7 +366,7 @@ describe("BabyPanel", () => {
     expect(sleepSummaryButton.parentElement?.parentElement?.className).toContain("overflow-x-auto");
   });
 
-  it("shows activity time since the latest completed wake", () => {
+  it("shows actual wake time while the gauge reflects sleep recovery", () => {
     const events: LogEvent[] = [
       {
         id: "sleep",
@@ -385,9 +385,9 @@ describe("BabyPanel", () => {
     renderPanel({ events, latestEvents: events });
 
     expect(screen.getByText("活動 50分 / 2時間30分")).toBeTruthy();
-    expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("33");
+    expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("60");
     expect(screen.getByTestId("sleep-gauge-fill").className).toContain("left-0");
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("33%");
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("60%");
     expect(screen.queryByText(/前回入眠/)).toBeNull();
   });
 
