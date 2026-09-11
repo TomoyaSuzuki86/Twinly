@@ -149,34 +149,50 @@ describe("sleep helpers", () => {
     expect(gauge.remainingPercent).toBe(50);
   });
 
-  it("empties the activity gauge from the latest wake without resetting at midnight", () => {
-    const firstStart = new Date("2026-08-23T22:00:00+09:00").getTime();
-    const firstWake = new Date("2026-08-23T23:30:00+09:00").getTime();
-    const analysis = analyzeSleepEvents(
-      [event("start", "sleepStart", firstStart), event("wake", "wake", firstWake)],
-      "A"
-    );
-
-    const gauge = buildActivityGauge(analysis, new Date("2026-08-24T00:30:00+09:00"), 150);
-    expect(gauge.elapsedMinutes).toBe(60);
-    expect(gauge.elapsedPercent).toBe(40);
-    expect(buildActivityGauge(analysis, new Date("2026-08-24T03:00:00+09:00"), 150).elapsedPercent).toBe(100);
-  });
-
-  it("freezes the activity gauge at sleep start while the baby is sleeping", () => {
+  it("reduces the activity gauge only by the recovery from a short nap", () => {
     const minute = 60 * 1000;
     const analysis = analyzeSleepEvents(
-      [
-        event("start", "sleepStart", 0),
-        event("wake", "wake", 90 * minute),
-        event("sleep-again", "sleepStart", 147 * minute),
-      ],
+      [event("start", "sleepStart", 0), event("wake", "wake", 5 * minute)],
       "A"
     );
 
-    const gauge = buildActivityGauge(analysis, new Date(300 * minute), 120);
-    expect(gauge.elapsedMinutes).toBe(57);
-    expect(gauge.elapsedPercent).toBe(48);
+    const atWake = buildActivityGauge(analysis, new Date(5 * minute), 120);
+    expect(atWake.remainingMinutes).toBe(5);
+    expect(atWake.elapsedMinutes).toBe(115);
+    expect(atWake.elapsedPercent).toBe(96);
+
+    const afterThirtyMinutes = buildActivityGauge(analysis, new Date(35 * minute), 120);
+    expect(afterThirtyMinutes.remainingMinutes).toBeCloseTo(3.75);
+    expect(afterThirtyMinutes.elapsedMinutes).toBeCloseTo(116.25);
+    expect(afterThirtyMinutes.elapsedPercent).toBe(97);
+
+    expect(buildActivityGauge(analysis, new Date(125 * minute), 120).elapsedPercent).toBe(100);
+  });
+
+  it("uses the current activity limit for both recovery decay and gauge capacity", () => {
+    const minute = 60 * 1000;
+    const analysis = analyzeSleepEvents(
+      [event("start", "sleepStart", 0), event("wake", "wake", 60 * minute)],
+      "A"
+    );
+    const now = new Date(90 * minute);
+
+    const twoHourGauge = buildActivityGauge(analysis, now, 120);
+    expect(twoHourGauge.remainingMinutes).toBe(45);
+    expect(twoHourGauge.elapsedMinutes).toBe(75);
+    expect(twoHourGauge.elapsedPercent).toBe(63);
+
+    const threeHourGauge = buildActivityGauge(analysis, now, 180);
+    expect(threeHourGauge.remainingMinutes).toBe(50);
+    expect(threeHourGauge.elapsedMinutes).toBe(130);
+    expect(threeHourGauge.elapsedPercent).toBe(72);
+  });
+
+  it("keeps the activity gauge unknown until the first completed sleep", () => {
+    const analysis = analyzeSleepEvents([], "A");
+    const gauge = buildActivityGauge(analysis, new Date("2026-08-24T03:00:00+09:00"), 150);
+    expect(gauge.elapsedMinutes).toBe(0);
+    expect(gauge.elapsedPercent).toBe(0);
   });
 
   it("calculates the recent average from completed activity periods", () => {
