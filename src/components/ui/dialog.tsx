@@ -28,32 +28,99 @@ const preloadHistoryModals = () => {
 
 const historyLabels = ["食事履歴", "おむつ履歴", "睡眠履歴"] as const
 
-const switchHistoryBabyFromSwipe = (
-  dialogContent: HTMLElement,
-  direction: "left" | "right"
-) => {
+const getHeadingTextWithoutBabyMarker = (heading: HTMLElement | null) => {
+  if (!heading) return ""
+  return Array.from(heading.childNodes)
+    .filter(
+      (node) =>
+        !(node instanceof Element && node.hasAttribute("data-history-baby-marker"))
+    )
+    .map((node) => node.textContent ?? "")
+    .join("")
+    .trim()
+}
+
+const getHistoryHeadingContext = (dialogContent: HTMLElement) => {
   const heading = dialogContent.querySelector<HTMLElement>(
     "[role='heading'], h1, h2, h3"
   )
-  const headingText = heading?.textContent?.trim() ?? ""
+  const headingText = getHeadingTextWithoutBabyMarker(heading)
   const historyLabel = historyLabels.find((label) => headingText.endsWith(label))
-  if (!historyLabel) return false
+  if (!heading || !historyLabel) return null
 
   const buttons = Array.from(
     document.querySelectorAll<HTMLButtonElement>(
       `.twinly-baby-tabs-content button[aria-label$="の${historyLabel}を開く"]`
     )
   )
-  if (buttons.length < 2) return false
+  if (buttons.length < 2) return null
 
   const currentIndex = buttons.findIndex((button) => {
     const ariaLabel = button.getAttribute("aria-label") ?? ""
     return ariaLabel.replace(/を開く$/, "") === headingText
   })
-  if (currentIndex < 0) return false
+  if (currentIndex < 0) return null
 
-  const targetIndex = direction === "left" ? currentIndex + 1 : currentIndex - 1
-  const target = buttons[targetIndex]
+  return { heading, headingText, historyLabel, buttons, currentIndex }
+}
+
+const syncHistoryBabyMarker = (dialogContent: HTMLElement) => {
+  const context = getHistoryHeadingContext(dialogContent)
+  const existing = dialogContent.querySelector<HTMLElement>(
+    "[data-history-baby-marker]"
+  )
+
+  if (!context) {
+    existing?.remove()
+    return
+  }
+
+  const babyId = context.currentIndex === 0 ? "A" : "B"
+  if (existing?.dataset.historyBabyMarker === babyId) return
+  existing?.remove()
+
+  const source = document.querySelector<HTMLElement>(
+    `[data-twinly-baby-icon="${babyId}"]`
+  )
+  if (!source) return
+
+  const marker = source.cloneNode(true) as HTMLElement
+  marker.removeAttribute("data-twinly-baby-icon")
+  marker.dataset.historyBabyMarker = babyId
+  marker.setAttribute("aria-hidden", "true")
+  marker.classList.remove(
+    "ring-2",
+    "ring-ring",
+    "ring-offset-2",
+    "ring-offset-background",
+    "opacity-85"
+  )
+  marker.classList.add("shrink-0", "opacity-100")
+  marker.style.width = "1.75rem"
+  marker.style.height = "1.75rem"
+  marker.style.boxShadow = "none"
+
+  const emoji = marker.querySelector<HTMLElement>("span")
+  if (emoji) emoji.style.fontSize = "1.1rem"
+
+  const nameNode = Array.from(context.heading.children).find(
+    (child) =>
+      child.tagName === "SPAN" &&
+      !child.hasAttribute("data-history-baby-marker")
+  )
+  context.heading.insertBefore(marker, nameNode ?? null)
+}
+
+const switchHistoryBabyFromSwipe = (
+  dialogContent: HTMLElement,
+  direction: "left" | "right"
+) => {
+  const context = getHistoryHeadingContext(dialogContent)
+  if (!context) return false
+
+  const targetIndex =
+    direction === "left" ? context.currentIndex + 1 : context.currentIndex - 1
+  const target = context.buttons[targetIndex]
   if (!target) return false
 
   target.click()
@@ -112,10 +179,35 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onTouchStart, onTouchEnd, onTouchCancel, ...props }, ref) => {
   const swipeStartRef = React.useRef<SwipePoint | null>(null)
+  const contentRef = React.useRef<React.ElementRef<typeof DialogPrimitive.Content> | null>(null)
+
+  const setContentRef = React.useCallback(
+    (node: React.ElementRef<typeof DialogPrimitive.Content> | null) => {
+      contentRef.current = node
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref]
+  )
 
   React.useEffect(() => {
     const timerId = window.setTimeout(preloadHistoryModals, 0)
     return () => window.clearTimeout(timerId)
+  }, [])
+
+  React.useEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+
+    const sync = () => syncHistoryBabyMarker(content)
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(content, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    })
+    return () => observer.disconnect()
   }, [])
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
@@ -154,7 +246,7 @@ const DialogContent = React.forwardRef<
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={ref}
+        ref={setContentRef}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] touch-pan-y gap-4 border bg-background text-foreground p-6 shadow-lg duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 sm:rounded-lg",
           className
