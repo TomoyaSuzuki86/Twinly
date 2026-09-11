@@ -26,6 +26,7 @@ import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
+import { AiAdviceTrigger } from "./AiAdviceLauncher";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
@@ -602,16 +603,19 @@ export function BabyPanel({
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
         <div className="flex w-full items-center justify-between gap-3">
           <h3 data-tutorial="logs" className="text-sm font-semibold text-muted-foreground">ログ</h3>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={onOpenTimeline}
-            aria-label="週間タイムラインを開く"
-          >
-            <CalendarRange className="h-4 w-4" />
-            <span className="hidden min-[380px]:inline">タイムライン</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <AiAdviceTrigger />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={onOpenTimeline}
+              aria-label="週間タイムラインを開く"
+            >
+              <CalendarRange className="h-4 w-4" />
+              <span className="hidden min-[380px]:inline">タイムライン</span>
+            </Button>
+          </div>
         </div>
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
@@ -775,4 +779,3 @@ export function BabyPanel({
     </Card>
   );
 }
-

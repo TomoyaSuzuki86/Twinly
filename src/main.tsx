@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
+import { AiAdviceProvider } from "./components/AiAdviceLauncher";
 import { FamilyAccountIconEnhancer } from "./components/FamilyAccountIconEnhancer";
 import "./index.css";
 import "./theme-polish.css";
@@ -366,8 +366,9 @@ const installPrimaryActionsDock = () => {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
-    <AiAdviceLauncher />
+    <AiAdviceProvider>
+      <App />
+    </AiAdviceProvider>
     <FamilyAccountIconEnhancer />
   </React.StrictMode>
 );
