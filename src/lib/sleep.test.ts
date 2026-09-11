@@ -149,7 +149,7 @@ describe("sleep helpers", () => {
     expect(gauge.remainingPercent).toBe(50);
   });
 
-  it("reduces the activity gauge only by the recovery from a short nap", () => {
+  it("reduces only the gauge load by the recovery from a short nap", () => {
     const minute = 60 * 1000;
     const analysis = analyzeSleepEvents(
       [event("start", "sleepStart", 0), event("wake", "wake", 5 * minute)],
@@ -157,13 +157,13 @@ describe("sleep helpers", () => {
     );
 
     const atWake = buildActivityGauge(analysis, new Date(5 * minute), 120);
-    expect(atWake.remainingMinutes).toBe(5);
-    expect(atWake.elapsedMinutes).toBe(115);
+    expect(atWake.elapsedMinutes).toBe(0);
+    expect(atWake.remainingMinutes).toBe(120);
     expect(atWake.elapsedPercent).toBe(96);
 
     const afterThirtyMinutes = buildActivityGauge(analysis, new Date(35 * minute), 120);
-    expect(afterThirtyMinutes.remainingMinutes).toBeCloseTo(3.75);
-    expect(afterThirtyMinutes.elapsedMinutes).toBeCloseTo(116.25);
+    expect(afterThirtyMinutes.elapsedMinutes).toBe(30);
+    expect(afterThirtyMinutes.remainingMinutes).toBe(90);
     expect(afterThirtyMinutes.elapsedPercent).toBe(97);
 
     expect(buildActivityGauge(analysis, new Date(125 * minute), 120).elapsedPercent).toBe(100);
@@ -178,13 +178,13 @@ describe("sleep helpers", () => {
     const now = new Date(90 * minute);
 
     const twoHourGauge = buildActivityGauge(analysis, now, 120);
-    expect(twoHourGauge.remainingMinutes).toBe(45);
-    expect(twoHourGauge.elapsedMinutes).toBe(75);
+    expect(twoHourGauge.elapsedMinutes).toBe(30);
+    expect(twoHourGauge.remainingMinutes).toBe(90);
     expect(twoHourGauge.elapsedPercent).toBe(63);
 
     const threeHourGauge = buildActivityGauge(analysis, now, 180);
-    expect(threeHourGauge.remainingMinutes).toBe(50);
-    expect(threeHourGauge.elapsedMinutes).toBe(130);
+    expect(threeHourGauge.elapsedMinutes).toBe(30);
+    expect(threeHourGauge.remainingMinutes).toBe(150);
     expect(threeHourGauge.elapsedPercent).toBe(72);
   });
 
