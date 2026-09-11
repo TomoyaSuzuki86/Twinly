@@ -326,7 +326,13 @@ export const installBabyTabSwipeAnimator = () => {
       }
     }
 
-    if (structureChanged && (!list || !list.isConnected)) ensureIndicator();
+    if (structureChanged) {
+      // React can mount the tab list with data-state="active" already present. In that case
+      // there is no later data-state mutation to position the custom indicator, so explicitly
+      // settle after the list/children arrive on the first render.
+      ensureIndicator();
+      if (!session) scheduleSettle(false);
+    }
     if (activeChanged && !session) scheduleSettle(true);
   });
 
