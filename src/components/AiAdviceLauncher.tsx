@@ -29,13 +29,14 @@ const activateRadixTab = (targetTab: HTMLButtonElement) => {
   // Radix Tabs changes selection from its mousedown path. HTMLElement.click() only emits a
   // click event and does not execute that path, so the old swipe code could detect a gesture
   // correctly while leaving the selected tab unchanged.
+  const eventWindow = targetTab.ownerDocument.defaultView;
+  const MouseEventCtor = eventWindow?.MouseEvent ?? MouseEvent;
   targetTab.dispatchEvent(
-    new MouseEvent("mousedown", {
+    new MouseEventCtor("mousedown", {
       bubbles: true,
       cancelable: true,
       button: 0,
       buttons: 1,
-      view: window,
     })
   );
 };
