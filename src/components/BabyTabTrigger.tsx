@@ -67,6 +67,7 @@ export function BabyTabTrigger({
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <div className="relative flex-shrink-0">
           <div
+            data-twinly-baby-icon={p.babyId}
             className={`grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br transition-[filter] ${
             p.iconGradient ?? "from-violet-500 to-fuchsia-500"
           } ${selected ? "ring-2 ring-ring ring-offset-2 ring-offset-background" : "opacity-85"}`}
