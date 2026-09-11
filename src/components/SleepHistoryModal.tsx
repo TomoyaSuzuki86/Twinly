@@ -8,10 +8,19 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { analyzeSleepEvents, formatSleepDuration } from "@/lib/sleep";
 import { rangeDays, type TimeRange } from "@/lib/event-history";
-import { fmtDate, fmtTime } from "@/lib/utils";
 import type { BabyProfile, LogEvent } from "@/types";
 import { Moon } from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type SleepHistoryModalProps = {
   open: boolean;
@@ -28,11 +37,28 @@ type SleepHistoryEntry = {
   complete: boolean;
 };
 
+type NightWindow = {
+  start: number;
+  end: number;
+};
+
+const NIGHT_START_HOUR = 19;
+const NIGHT_END_HOUR = 7;
+
 const getRangeStart = (timeRange: TimeRange, now: Date) => {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - (rangeDays[timeRange] - 1));
   return start.getTime();
+};
+
+const getRangeDayStarts = (timeRange: TimeRange, now: Date) => {
+  const start = new Date(getRangeStart(timeRange, now));
+  return Array.from({ length: rangeDays[timeRange] }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return date;
+  });
 };
 
 const buildRangeEntries = (
@@ -62,12 +88,12 @@ const buildRangeEntries = (
     .sort((left, right) => right.start - left.start);
 };
 
-const getClippedDurationMinutes = (
+const getOverlapMinutes = (
   entry: SleepHistoryEntry,
-  rangeStart: number,
-  rangeEnd: number
+  windowStart: number,
+  windowEnd: number
 ) =>
-  Math.max(0, Math.min(entry.end, rangeEnd) - Math.max(entry.start, rangeStart)) /
+  Math.max(0, Math.min(entry.end, windowEnd) - Math.max(entry.start, windowStart)) /
   (60 * 1000);
 
 const getAverageAwakeMinutes = (entries: SleepHistoryEntry[]) => {
@@ -86,47 +112,23 @@ const getAverageAwakeMinutes = (entries: SleepHistoryEntry[]) => {
   return awakeMinutes.reduce((sum, minutes) => sum + minutes, 0) / awakeMinutes.length;
 };
 
-const getSimultaneousSleepMinutes = (
-  ownEntries: SleepHistoryEntry[],
-  otherEntries: SleepHistoryEntry[],
-  rangeStart: number,
-  rangeEnd: number
-) => {
-  const own = [...ownEntries]
-    .sort((left, right) => left.start - right.start)
-    .map((entry) => ({
-      start: Math.max(entry.start, rangeStart),
-      end: Math.min(entry.end, rangeEnd),
-    }));
-  const other = [...otherEntries]
-    .sort((left, right) => left.start - right.start)
-    .map((entry) => ({
-      start: Math.max(entry.start, rangeStart),
-      end: Math.min(entry.end, rangeEnd),
-    }));
+const getNightWindowEndingOn = (day: Date, now: Date): NightWindow => {
+  const end = new Date(day);
+  end.setHours(NIGHT_END_HOUR, 0, 0, 0);
 
-  let ownIndex = 0;
-  let otherIndex = 0;
-  let overlapMs = 0;
+  const start = new Date(day);
+  start.setDate(start.getDate() - 1);
+  start.setHours(NIGHT_START_HOUR, 0, 0, 0);
 
-  while (ownIndex < own.length && otherIndex < other.length) {
-    const ownEntry = own[ownIndex];
-    const otherEntry = other[otherIndex];
-    const overlapStart = Math.max(ownEntry.start, otherEntry.start);
-    const overlapEnd = Math.min(ownEntry.end, otherEntry.end);
+  return {
+    start: start.getTime(),
+    end: Math.min(end.getTime(), now.getTime()),
+  };
+};
 
-    if (overlapEnd > overlapStart) {
-      overlapMs += overlapEnd - overlapStart;
-    }
-
-    if (ownEntry.end <= otherEntry.end) {
-      ownIndex += 1;
-    } else {
-      otherIndex += 1;
-    }
-  }
-
-  return overlapMs / (60 * 1000);
+const formatShortDate = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
 };
 
 export function SleepHistoryModal({
@@ -141,50 +143,106 @@ export function SleepHistoryModal({
     () => analyzeSleepEvents(events, profile.babyId),
     [events, profile.babyId]
   );
-  const otherBabyId = profile.babyId === "A" ? "B" : "A";
-  const otherAnalysis = useMemo(
-    () => analyzeSleepEvents(events, otherBabyId),
-    [events, otherBabyId]
-  );
   const rangeStart = getRangeStart(timeRange, now);
   const rangeEnd = now.getTime();
+  const dayStarts = useMemo(() => getRangeDayStarts(timeRange, now), [timeRange, now]);
+
   const entries = useMemo(
     () => buildRangeEntries(analysis, rangeStart, rangeEnd),
     [analysis, rangeEnd, rangeStart]
   );
-  const otherEntries = useMemo(
-    () => buildRangeEntries(otherAnalysis, rangeStart, rangeEnd),
-    [otherAnalysis, rangeEnd, rangeStart]
+
+  const earliestNightStart = useMemo(() => {
+    const firstDay = dayStarts[0] ?? new Date(rangeStart);
+    return getNightWindowEndingOn(firstDay, now).start;
+  }, [dayStarts, now, rangeStart]);
+
+  const nightEntries = useMemo(
+    () => buildRangeEntries(analysis, earliestNightStart, rangeEnd),
+    [analysis, earliestNightStart, rangeEnd]
   );
 
   const totalMinutes = entries.reduce(
-    (sum, entry) => sum + getClippedDurationMinutes(entry, rangeStart, rangeEnd),
+    (sum, entry) => sum + getOverlapMinutes(entry, rangeStart, rangeEnd),
     0
   );
   const dailyAverageMinutes = totalMinutes / rangeDays[timeRange];
-  const longestSleepMinutes = entries.reduce(
-    (longest, entry) =>
-      Math.max(longest, getClippedDurationMinutes(entry, rangeStart, rangeEnd)),
-    0
-  );
   const averageAwakeMinutes = getAverageAwakeMinutes(entries);
-  const simultaneousSleepMinutes = getSimultaneousSleepMinutes(
-    entries,
-    otherEntries,
-    rangeStart,
-    rangeEnd
+
+  const longestSleep = entries.reduce<{
+    entry: SleepHistoryEntry | null;
+    minutes: number;
+  }>(
+    (longest, entry) => {
+      const minutes = getOverlapMinutes(entry, rangeStart, rangeEnd);
+      return minutes > longest.minutes ? { entry, minutes } : longest;
+    },
+    { entry: null, minutes: 0 }
+  );
+
+  const nightSummaries = useMemo(
+    () =>
+      dayStarts.map((day) => {
+        const window = getNightWindowEndingOn(day, now);
+        const sleepMinutes = nightEntries.reduce(
+          (sum, entry) => sum + getOverlapMinutes(entry, window.start, window.end),
+          0
+        );
+        const wakeCount = nightEntries.filter(
+          (entry) =>
+            entry.complete &&
+            entry.end >= window.start &&
+            entry.end < window.end
+        ).length;
+
+        return { day, sleepMinutes, wakeCount };
+      }),
+    [dayStarts, nightEntries, now]
+  );
+
+  const averageNightSleepMinutes =
+    nightSummaries.length === 0
+      ? 0
+      : nightSummaries.reduce((sum, summary) => sum + summary.sleepMinutes, 0) /
+        nightSummaries.length;
+  const averageNightWakeCount =
+    nightSummaries.length === 0
+      ? 0
+      : nightSummaries.reduce((sum, summary) => sum + summary.wakeCount, 0) /
+        nightSummaries.length;
+
+  const chartData = useMemo(
+    () =>
+      dayStarts.map((day, index) => {
+        const dayStart = new Date(day);
+        dayStart.setHours(0, 0, 0, 0);
+        const nextDay = new Date(dayStart);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const dayEnd = Math.min(nextDay.getTime(), rangeEnd);
+        const dailyMinutes = entries.reduce(
+          (sum, entry) => sum + getOverlapMinutes(entry, dayStart.getTime(), dayEnd),
+          0
+        );
+
+        return {
+          date: `${day.getMonth() + 1}/${day.getDate()}`,
+          totalMinutes: Math.round(dailyMinutes),
+          nightMinutes: Math.round(nightSummaries[index]?.sleepMinutes ?? 0),
+        };
+      }),
+    [dayStarts, entries, nightSummaries, rangeEnd]
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[82vh] max-w-2xl flex-col overflow-hidden">
+      <DialogContent className="flex h-[85vh] max-w-2xl flex-col overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Moon className="h-5 w-5" />
             <span>{profile.displayName}の睡眠履歴</span>
           </DialogTitle>
           <DialogDescription>
-            表示期間の睡眠リズムと、入眠から起床までの履歴を確認できます。
+            表示期間の睡眠リズムを確認できます。夜間は19:00〜翌7:00で集計します。
           </DialogDescription>
         </DialogHeader>
 
@@ -200,16 +258,21 @@ export function SleepHistoryModal({
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border bg-card p-3">
-            <div className="text-xs text-muted-foreground">合計睡眠</div>
-            <div className="mt-2 font-bold text-violet-300">{formatSleepDuration(totalMinutes)}</div>
-          </div>
-          <div className="rounded-xl border bg-card p-3">
             <div className="text-xs text-muted-foreground">1日平均</div>
-            <div className="mt-2 font-bold">{formatSleepDuration(dailyAverageMinutes)}</div>
+            <div className="mt-2 font-bold text-violet-300">
+              {formatSleepDuration(dailyAverageMinutes)}
+            </div>
           </div>
           <div className="rounded-xl border bg-card p-3">
-            <div className="text-xs text-muted-foreground">最長睡眠</div>
-            <div className="mt-2 font-bold">{formatSleepDuration(longestSleepMinutes)}</div>
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>最長睡眠</span>
+              {longestSleep.entry && (
+                <span data-testid="longest-sleep-date" className="text-[10px]">
+                  {formatShortDate(longestSleep.entry.start)}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 font-bold">{formatSleepDuration(longestSleep.minutes)}</div>
           </div>
           <div className="rounded-xl border bg-card p-3">
             <div className="text-xs text-muted-foreground">睡眠回数</div>
@@ -222,38 +285,57 @@ export function SleepHistoryModal({
             </div>
           </div>
           <div className="rounded-xl border bg-card p-3">
-            <div className="text-xs text-muted-foreground">2人同時睡眠</div>
+            <div className="text-xs text-muted-foreground">平均夜間睡眠</div>
             <div className="mt-2 font-bold text-violet-300">
-              {formatSleepDuration(simultaneousSleepMinutes)}
+              {formatSleepDuration(averageNightSleepMinutes)}
             </div>
+          </div>
+          <div className="rounded-xl border bg-card p-3">
+            <div className="text-xs text-muted-foreground">平均夜間覚醒</div>
+            <div className="mt-2 font-bold">{averageNightWakeCount.toFixed(1)}回/夜</div>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-medium">履歴一覧</div>
-            <div className="text-xs text-muted-foreground">{entries.length}件</div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="mb-1 text-sm font-medium">睡眠時間の推移</div>
+          <div className="mb-4 text-xs text-muted-foreground">
+            日ごとの総睡眠時間と、19:00〜翌7:00の夜間睡眠を比較します。
           </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-            {entries.length === 0 ? (
-              <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                まだ睡眠記録がありません
-              </div>
-            ) : (
-              entries.map((entry) => (
-                <div key={entry.key} className="rounded-xl border p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium">
-                      {entry.complete ? "睡眠" : "睡眠中"} {formatSleepDuration((entry.end - entry.start) / (60 * 1000))}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {fmtTime(new Date(entry.start))}〜{entry.complete ? fmtTime(new Date(entry.end)) : "現在"}
-                    </div>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">{fmtDate(new Date(entry.start))}</div>
-                </div>
-              ))
-            )}
+          <div data-testid="sleep-history-chart" className="h-64 w-full text-violet-400">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.2} />
+                <XAxis dataKey="date" minTickGap={24} tick={{ fontSize: 11 }} />
+                <YAxis
+                  width={42}
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(value) => `${Math.round(Number(value) / 60)}h`}
+                />
+                <Tooltip
+                  formatter={(value) => formatSleepDuration(Number(value))}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line
+                  type="monotone"
+                  dataKey="totalMinutes"
+                  name="1日睡眠"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  dot={timeRange === "1W"}
+                  activeDot={{ r: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="nightMinutes"
+                  name="夜間睡眠"
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeWidth={2}
+                  strokeDasharray="5 4"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </DialogContent>
