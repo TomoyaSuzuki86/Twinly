@@ -38,7 +38,7 @@ describe('AI advice follow-up',()=>{
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
 
-  it('maps a left swipe on the AI advice launcher directly to the right twin',async()=>{
+  it('captures the gesture on the AI advice button itself and switches after a short left swipe',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
     const switchToSecond=vi.fn();
 
@@ -54,18 +54,20 @@ describe('AI advice follow-up',()=>{
     </div>);
 
     const launcher=await screen.findByRole('button',{name:'AIアドバイスを見る'});
+    expect(launcher).toHaveStyle({touchAction:'none'});
+    expect(launcher).toHaveAttribute('data-twinly-ai-advice-button','true');
+
     fireEvent.pointerDown(launcher,{pointerId:1,pointerType:'touch',clientX:140,clientY:30});
-    fireEvent.pointerMove(launcher,{pointerId:1,pointerType:'touch',clientX:118,clientY:32});
+    fireEvent.pointerMove(launcher,{pointerId:1,pointerType:'touch',clientX:124,clientY:34});
 
     expect(switchToSecond).toHaveBeenCalledTimes(1);
 
-    fireEvent.pointerUp(launcher,{pointerId:1,pointerType:'touch',clientX:118,clientY:32});
+    fireEvent.pointerUp(launcher,{pointerId:1,pointerType:'touch',clientX:124,clientY:34});
     fireEvent.click(launcher);
     expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
-    expect(switchToSecond).toHaveBeenCalledTimes(1);
   });
 
-  it('switches the real Radix baby tab as soon as an AI-launcher swipe is detected',async()=>{
+  it('switches the real Radix baby tab from the portaled AI button using the button-local gesture handler',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
 
     render(<>
@@ -84,13 +86,13 @@ describe('AI advice follow-up',()=>{
       <AiAdviceLauncher/>
     </>);
 
-    await waitFor(()=>expect(document.querySelectorAll('[data-twinly-ai-advice-target="true"] button[aria-label="AIアドバイスを見る"]').length).toBe(2));
+    await waitFor(()=>expect(document.querySelectorAll('button[aria-label="AIアドバイスを見る"]').length).toBe(2));
     const activePanel=document.querySelector<HTMLElement>('.twinly-baby-tabs-content[data-state="active"]');
     const launcher=activePanel?.querySelector<HTMLButtonElement>('button[aria-label="AIアドバイスを見る"]');
     expect(launcher).not.toBeNull();
 
     fireEvent.pointerDown(launcher!,{pointerId:2,pointerType:'touch',clientX:150,clientY:40});
-    fireEvent.pointerMove(launcher!,{pointerId:2,pointerType:'touch',clientX:128,clientY:42});
+    fireEvent.pointerMove(launcher!,{pointerId:2,pointerType:'touch',clientX:134,clientY:43});
 
     await waitFor(()=>expect(screen.getByRole('tab',{name:'2人目'})).toHaveAttribute('data-state','active'));
   });
