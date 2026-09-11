@@ -25,6 +25,21 @@ const isSplitLayoutActive = () =>
   document.documentElement.dataset.twinlyLayout === "split" &&
   window.matchMedia("(min-width: 1180px)").matches;
 
+const activateRadixTab = (targetTab: HTMLButtonElement) => {
+  // Radix Tabs changes selection from its mousedown path. HTMLElement.click() only emits a
+  // click event and does not execute that path, so the old swipe code could detect a gesture
+  // correctly while leaving the selected tab unchanged.
+  targetTab.dispatchEvent(
+    new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      buttons: 1,
+      view: window,
+    })
+  );
+};
+
 const switchTwinBySwipe = (direction: SwipeDirection) => {
   if (isSplitLayoutActive()) return false;
 
@@ -35,7 +50,7 @@ const switchTwinBySwipe = (direction: SwipeDirection) => {
 
   const targetTab = direction === "left" ? tabs[1] : tabs[0];
   if (!targetTab) return false;
-  targetTab.click();
+  activateRadixTab(targetTab);
   return true;
 };
 
