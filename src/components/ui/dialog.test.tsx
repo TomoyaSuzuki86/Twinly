@@ -21,24 +21,28 @@ const fireSwipe = (target: Element, startX: number, endX: number) => {
   fireEvent(target, end);
 };
 
-function HistoryDialogFixture({ title }: { title: string }) {
-  const openA = vi.fn();
-  const openB = vi.fn();
-
+function HistoryDialogFixture({
+  title,
+  onOpenA,
+  onOpenB,
+}: {
+  title: string;
+  onOpenA: () => void;
+  onOpenB: () => void;
+}) {
   return (
     <>
       <div className="twinly-baby-tabs-content">
-        <button aria-label="かなちゃんの食事履歴を開く" onClick={openA}>A</button>
+        <button aria-label="かなちゃんの食事履歴を開く" onClick={onOpenA}>A</button>
       </div>
       <div className="twinly-baby-tabs-content">
-        <button aria-label="ひなちゃんの食事履歴を開く" onClick={openB}>B</button>
+        <button aria-label="ひなちゃんの食事履歴を開く" onClick={onOpenB}>B</button>
       </div>
       <Dialog open>
         <DialogContent>
           <DialogTitle>{title}</DialogTitle>
         </DialogContent>
       </Dialog>
-      <output data-testid="calls">{`${openA.mock.calls.length}:${openB.mock.calls.length}`}</output>
     </>
   );
 }
@@ -47,19 +51,25 @@ describe("DialogContent", () => {
   afterEach(cleanup);
 
   it("switches from the first twin to the second twin with a left swipe on a history modal", () => {
-    render(<HistoryDialogFixture title="かなちゃんの食事履歴" />);
+    const openA = vi.fn();
+    const openB = vi.fn();
+    render(<HistoryDialogFixture title="かなちゃんの食事履歴" onOpenA={openA} onOpenB={openB} />);
 
     fireSwipe(screen.getByRole("dialog"), 220, 100);
 
-    expect(screen.getByTestId("calls").textContent).toBe("0:1");
+    expect(openA).not.toHaveBeenCalled();
+    expect(openB).toHaveBeenCalledTimes(1);
   });
 
   it("switches from the second twin to the first twin with a right swipe on a history modal", () => {
-    render(<HistoryDialogFixture title="ひなちゃんの食事履歴" />);
+    const openA = vi.fn();
+    const openB = vi.fn();
+    render(<HistoryDialogFixture title="ひなちゃんの食事履歴" onOpenA={openA} onOpenB={openB} />);
 
     fireSwipe(screen.getByRole("dialog"), 100, 220);
 
-    expect(screen.getByTestId("calls").textContent).toBe("1:0");
+    expect(openA).toHaveBeenCalledTimes(1);
+    expect(openB).not.toHaveBeenCalled();
   });
 
   it("shows an opening skeleton while the modal is entering", () => {
