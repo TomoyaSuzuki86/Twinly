@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type TouchEventHandler } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
 import { callService } from "@/lib/ai";
-import { detectHorizontalSwipe, type SwipePoint } from "@/lib/horizontal-swipe";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { VoiceCommandButton } from "./VoiceCommandButton";
@@ -11,8 +10,62 @@ import { VoiceCommandButton } from "./VoiceCommandButton";
 const TARGET_SELECTOR = 'button[aria-label="週間タイムラインを開く"]';
 const CONSENT_KEY = "twinly-ai-review-consent-v3";
 const JST = 9 * 60 * 60 * 1000;
-const LAUNCHER_SWIPE_OPTIONS = { minDistancePx: 36, horizontalDominanceRatio: 1.15 } as const;
+const LAUNCHER_SWIPE_DISTANCE_PX = 14;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
+
+type SwipeDirection = "left" | "right";
+
+type LauncherSwipe = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+};
+
+const isSplitLayoutActive = () =>
+  document.documentElement.dataset.twinlyLayout === "split" &&
+  window.matchMedia("(min-width: 1180px)").matches;
+
+const activateRadixTab = (targetTab: HTMLButtonElement) => {
+  // Radix Tabs changes selection from its mousedown path. HTMLElement.click() only emits a
+  // click event and does not execute that path, so the old swipe code could detect a gesture
+  // correctly while leaving the selected tab unchanged.
+  const eventWindow = targetTab.ownerDocument.defaultView;
+  const MouseEventCtor = eventWindow?.MouseEvent ?? MouseEvent;
+  targetTab.dispatchEvent(
+    new MouseEventCtor("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      buttons: 1,
+    })
+  );
+};
+
+const switchTwinBySwipe = (direction: SwipeDirection) => {
+  if (isSplitLayoutActive()) return false;
+
+  const tabs = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.twinly-baby-tabs-list [role="tab"]')
+  );
+  if (tabs.length < 2) return false;
+
+  const targetTab = direction === "left" ? tabs[1] : tabs[0];
+  if (!targetTab) return false;
+  activateRadixTab(targetTab);
+  return true;
+};
+
+const detectLauncherSwipe = (startX: number, startY: number, x: number, y: number): SwipeDirection | null => {
+  const deltaX = x - startX;
+  const deltaY = y - startY;
+  const horizontal = Math.abs(deltaX);
+  const vertical = Math.abs(deltaY);
+  if (horizontal < LAUNCHER_SWIPE_DISTANCE_PX) return null;
+  // Be deliberately generous here. The launcher is a small button and the user is explicitly
+  // starting a horizontal gesture on it, so a slightly diagonal swipe should still switch twins.
+  if (horizontal < vertical * 0.75) return null;
+  return deltaX < 0 ? "left" : "right";
+};
 
 export function AiAdviceLauncher() {
   const [targets, setTargets] = useState<HTMLElement[]>([]);
@@ -30,8 +83,8 @@ export function AiAdviceLauncher() {
   });
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
-  const launcherSwipeStartRef = useRef<SwipePoint | null>(null);
   const suppressLauncherClickUntilRef = useRef(0);
+  const launcherSwipeRef = useRef<LauncherSwipe | null>(null);
 
   useEffect(() => {
     const syncTargets = () => {
@@ -47,7 +100,10 @@ export function AiAdviceLauncher() {
         if (targetMap.current.has(button) || !button.parentElement) continue;
         const target = document.createElement("span");
         target.className = "ml-auto inline-flex shrink-0";
-        target.dataset.twinlyAiAdviceTarget = "true";
+        // This is only a portal mount point. Swipe handling lives on the actual button below.
+        // Intentionally do not reuse data-twinly-ai-advice-target, which was consumed by the
+        // old document-level gesture workaround.
+        target.dataset.twinlyAiAdviceMount = "true";
         button.parentElement.insertBefore(target, button);
         targetMap.current.set(button, target);
       }
@@ -90,6 +146,51 @@ export function AiAdviceLauncher() {
     }, 60000);
     return () => window.clearInterval(interval);
   }, [review]);
+
+  const releasePointer = (button: HTMLButtonElement, pointerId: number) => {
+    try {
+      if (button.hasPointerCapture?.(pointerId)) button.releasePointerCapture(pointerId);
+    } catch {
+      // Some embedded WebViews expose Pointer Events without pointer-capture methods.
+    }
+  };
+
+  const handleLauncherPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === "mouse") return;
+    launcherSwipeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is an optimization, not a requirement for tapping the launcher.
+    }
+  };
+
+  const handleLauncherPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const swipe = launcherSwipeRef.current;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+
+    const direction = detectLauncherSwipe(swipe.startX, swipe.startY, event.clientX, event.clientY);
+    if (!direction) return;
+
+    if (!switchTwinBySwipe(direction)) return;
+
+    launcherSwipeRef.current = null;
+    suppressLauncherClickUntilRef.current = Date.now() + 900;
+    if (event.cancelable) event.preventDefault();
+    event.stopPropagation();
+    releasePointer(event.currentTarget, event.pointerId);
+  };
+
+  const finishLauncherPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const swipe = launcherSwipeRef.current;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    launcherSwipeRef.current = null;
+    releasePointer(event.currentTarget, event.pointerId);
+  };
 
   const loadReview = async () => {
     if (inFlight.current) return;
@@ -143,59 +244,22 @@ export function AiAdviceLauncher() {
     void loadReview();
   };
 
-  const handleLauncherTouchStart: TouchEventHandler<HTMLButtonElement> = (event) => {
-    const touch = event.touches[0];
-    launcherSwipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
-  };
-
-  const tryLauncherSwipe = (end: SwipePoint) => {
-    const start = launcherSwipeStartRef.current;
-    if (!start) return false;
-    const direction = detectHorizontalSwipe(start, end, LAUNCHER_SWIPE_OPTIONS);
-    if (!direction) return false;
-
-    const splitLayoutActive =
-      document.documentElement.dataset.twinlyLayout === "split" &&
-      window.matchMedia("(min-width: 1180px)").matches;
-    if (splitLayoutActive) return false;
-
-    const tabs = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.twinly-baby-tabs-list [role="tab"]')
-    );
-    const selectedIndex = tabs.findIndex(
-      (tab) => tab.getAttribute("data-state") === "active" || tab.getAttribute("aria-selected") === "true"
-    );
-    if (selectedIndex < 0) return false;
-
-    launcherSwipeStartRef.current = null;
-    suppressLauncherClickUntilRef.current = Date.now() + 500;
-    const nextIndex = direction === "left" ? selectedIndex + 1 : selectedIndex - 1;
-    tabs[nextIndex]?.click();
-    return true;
-  };
-
-  const handleLauncherTouchMove: TouchEventHandler<HTMLButtonElement> = (event) => {
-    const touch = event.touches[0];
-    if (!touch) return;
-    tryLauncherSwipe({ x: touch.clientX, y: touch.clientY });
-  };
-
-  const handleLauncherTouchEnd: TouchEventHandler<HTMLButtonElement> = (event) => {
-    const touch = event.changedTouches[0];
-    if (touch && tryLauncherSwipe({ x: touch.clientX, y: touch.clientY })) return;
-    launcherSwipeStartRef.current = null;
-  };
-
   const launcher = (
     <Button
       type="button"
       variant="outline"
       size="sm"
-      className="h-8 touch-pan-y select-none gap-1 px-2 text-xs"
-      onTouchStart={handleLauncherTouchStart}
-      onTouchMove={handleLauncherTouchMove}
-      onTouchEnd={handleLauncherTouchEnd}
-      onTouchCancel={() => { launcherSwipeStartRef.current = null; }}
+      className="h-8 select-none gap-1 px-2 text-xs"
+      style={{ touchAction: "none" }}
+      data-twinly-ai-advice-button="true"
+      onPointerDown={handleLauncherPointerDown}
+      onPointerMove={handleLauncherPointerMove}
+      onPointerUp={finishLauncherPointer}
+      onPointerCancel={finishLauncherPointer}
+      onLostPointerCapture={(event) => {
+        const swipe = launcherSwipeRef.current;
+        if (swipe && event.pointerId === swipe.pointerId) launcherSwipeRef.current = null;
+      }}
       onClick={(event) => {
         if (Date.now() < suppressLauncherClickUntilRef.current) {
           event.preventDefault();
