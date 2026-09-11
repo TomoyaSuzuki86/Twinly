@@ -96,6 +96,18 @@ describe("SleepHistoryModal", () => {
         type: "wake",
         timestamp: new Date("2026-04-18T06:00:00+09:00").getTime(),
       },
+      {
+        id: "day-sleep",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+      },
+      {
+        id: "day-wake",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(),
+      },
     ];
 
     render(
