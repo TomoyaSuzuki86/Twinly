@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createInitialAppState } from "@/lib/app-state";
 import type { LogEvent } from "@/types";
 import { SleepHistoryModal } from "./SleepHistoryModal";
@@ -7,9 +7,20 @@ import { SleepHistoryModal } from "./SleepHistoryModal";
 const now = new Date("2026-04-18T10:20:00+09:00");
 
 describe("SleepHistoryModal", () => {
+  beforeAll(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+
   afterEach(cleanup);
 
-  it("shows useful sleep summary metrics and active sleep sessions", () => {
+  it("shows useful sleep summary metrics and replaces the history list with a chart", () => {
     const app = createInitialAppState(now);
     const events: LogEvent[] = [
       {
@@ -30,24 +41,6 @@ describe("SleepHistoryModal", () => {
         type: "sleepStart",
         timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
       },
-      {
-        id: "sleep-b-1",
-        babyId: "B",
-        type: "sleepStart",
-        timestamp: new Date("2026-04-18T08:30:00+09:00").getTime(),
-      },
-      {
-        id: "wake-b-1",
-        babyId: "B",
-        type: "wake",
-        timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(),
-      },
-      {
-        id: "sleep-b-2",
-        babyId: "B",
-        type: "sleepStart",
-        timestamp: new Date("2026-04-18T10:10:00+09:00").getTime(),
-      },
     ];
 
     render(
@@ -61,17 +54,63 @@ describe("SleepHistoryModal", () => {
     );
 
     expect(screen.getByText(`${app.profiles.A.displayName}の睡眠履歴`)).toBeTruthy();
-    expect(screen.getByText("合計睡眠")).toBeTruthy();
+    expect(screen.queryByText("合計睡眠")).toBeNull();
+    expect(screen.queryByText("2人同時睡眠")).toBeNull();
     expect(screen.getByText("1日平均")).toBeTruthy();
     expect(screen.getByText("最長睡眠")).toBeTruthy();
     expect(screen.getByText("平均覚醒時間")).toBeTruthy();
-    expect(screen.getByText("2人同時睡眠")).toBeTruthy();
-    expect(screen.getByText("1時間50分")).toBeTruthy();
-    expect(screen.getByText("1時間30分")).toBeTruthy();
-    expect(screen.getByText("30分")).toBeTruthy();
-    expect(screen.getByText("40分")).toBeTruthy();
+    expect(screen.getByText("平均夜間睡眠")).toBeTruthy();
+    expect(screen.getByText("平均夜間覚醒")).toBeTruthy();
     expect(screen.getByText("2回")).toBeTruthy();
-    expect(screen.getByText(/睡眠中 20分/)).toBeTruthy();
-    expect(screen.getByText(/睡眠 1時間30分/)).toBeTruthy();
+    expect(screen.getByText("30分")).toBeTruthy();
+    expect(screen.getByTestId("longest-sleep-date").textContent).toBe("4/18");
+    expect(screen.getByText("睡眠時間の推移")).toBeTruthy();
+    expect(screen.getByTestId("sleep-history-chart")).toBeTruthy();
+    expect(screen.queryByText("履歴一覧")).toBeNull();
+  });
+
+  it("calculates night sleep and night wakes using the 19:00 to 07:00 window", () => {
+    const app = createInitialAppState(now);
+    const events: LogEvent[] = [
+      {
+        id: "night-sleep-1",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-17T20:00:00+09:00").getTime(),
+      },
+      {
+        id: "night-wake-1",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T01:00:00+09:00").getTime(),
+      },
+      {
+        id: "night-sleep-2",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T02:00:00+09:00").getTime(),
+      },
+      {
+        id: "night-wake-2",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T06:00:00+09:00").getTime(),
+      },
+    ];
+
+    render(
+      <SleepHistoryModal
+        open
+        onOpenChange={vi.fn()}
+        events={events}
+        profile={app.profiles.A}
+        now={now}
+      />
+    );
+
+    expect(screen.getByText(/夜間は19:00〜翌7:00/)).toBeTruthy();
+    expect(screen.getByText("1時間17分")).toBeTruthy();
+    expect(screen.getByText("0.3回/夜")).toBeTruthy();
+    expect(screen.getByTestId("longest-sleep-date").textContent).toBe("4/17");
   });
 });
