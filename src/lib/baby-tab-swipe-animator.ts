@@ -4,6 +4,7 @@ type SwipeSession = {
   panelWidth: number;
   activeIndex: number;
   tabRects: RelativeRect[];
+  startedOnAiAdvice: boolean;
 };
 
 type RelativeRect = {
@@ -16,9 +17,12 @@ type RelativeRect = {
 
 const LIST_SELECTOR = ".twinly-baby-tabs-list";
 const PANELS_SELECTOR = ".twinly-baby-tabs-panels";
+const AI_ADVICE_SELECTOR = '[data-twinly-ai-advice-target="true"]';
 const READY_CLASS = "twinly-fluid-tabs-ready";
 const INDICATOR_CLASS = "twinly-fluid-tab-indicator";
 const SETTLING_CLASS = "twinly-fluid-tab-indicator-settling";
+const AI_ADVICE_SWIPE_DISTANCE_PX = 20;
+const AI_ADVICE_CLICK_SUPPRESS_MS = 800;
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
@@ -144,6 +148,7 @@ export const installBabyTabSwipeAnimator = () => {
   let session: SwipeSession | null = null;
   let refreshFrame = 0;
   let settlingTimer = 0;
+  let suppressAiAdviceClickUntil = 0;
 
   const clearSettlingAnimation = () => {
     if (!indicator) return;
@@ -266,6 +271,7 @@ export const installBabyTabSwipeAnimator = () => {
       panelWidth: Math.max(1, panels.getBoundingClientRect().width),
       activeIndex,
       tabRects: tabs.map((tab) => getRelativeRect(tab, list!)),
+      startedOnAiAdvice: Boolean(target.closest(AI_ADVICE_SELECTOR)),
     };
   };
 
@@ -278,6 +284,27 @@ export const installBabyTabSwipeAnimator = () => {
     const deltaY = touch.clientY - session.startY;
     const horizontal = Math.abs(deltaX);
     const vertical = Math.abs(deltaY);
+
+    // The AI launcher is portaled into BabyPanel, so React's normal panel touch handlers do not
+    // receive its gesture. This native listener sees the physical DOM tree, therefore switch the
+    // actual Radix tab directly as soon as a clear horizontal swipe is detected.
+    if (
+      session.startedOnAiAdvice &&
+      horizontal >= AI_ADVICE_SWIPE_DISTANCE_PX &&
+      horizontal > vertical
+    ) {
+      const tabs = getDirectTabs(list);
+      const targetTab = deltaX < 0 ? tabs[1] : tabs[0];
+      if (targetTab) {
+        session = null;
+        suppressAiAdviceClickUntil = Date.now() + AI_ADVICE_CLICK_SUPPRESS_MS;
+        if (event.cancelable) event.preventDefault();
+        targetTab.click();
+        scheduleSettle(true);
+        return;
+      }
+    }
+
     if (horizontal < 7 || horizontal < vertical * 0.72) return;
 
     const targetIndex = deltaX < 0 ? session.activeIndex + 1 : session.activeIndex - 1;
@@ -306,10 +333,19 @@ export const installBabyTabSwipeAnimator = () => {
     scheduleSettle(true);
   };
 
+  const handleClickCapture = (event: MouseEvent) => {
+    if (Date.now() >= suppressAiAdviceClickUntil) return;
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest(AI_ADVICE_SELECTOR)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   document.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
-  document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
+  document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false });
   document.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
   document.addEventListener("touchcancel", handleTouchCancel, { capture: true, passive: true });
+  document.addEventListener("click", handleClickCapture, true);
 
   const observer = new MutationObserver((mutations) => {
     let activeChanged = false;
@@ -326,7 +362,13 @@ export const installBabyTabSwipeAnimator = () => {
       }
     }
 
-    if (structureChanged && (!list || !list.isConnected)) ensureIndicator();
+    if (structureChanged) {
+      // React can mount the tab list with data-state="active" already present. In that case
+      // there is no later data-state mutation to position the custom indicator, so explicitly
+      // settle after the list/children arrive on the first render.
+      ensureIndicator();
+      if (!session) scheduleSettle(false);
+    }
     if (activeChanged && !session) scheduleSettle(true);
   });
 
