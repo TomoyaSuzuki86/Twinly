@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
@@ -8,13 +8,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { VoiceCommandButton } from "./VoiceCommandButton";
 
 const TARGET_SELECTOR = 'button[aria-label="週間タイムラインを開く"]';
-const LAUNCHER_SELECTOR = '[data-twinly-ai-advice-target="true"]';
 const CONSENT_KEY = "twinly-ai-review-consent-v3";
 const JST = 9 * 60 * 60 * 1000;
-const LAUNCHER_SWIPE_DISTANCE_PX = 20;
+const LAUNCHER_SWIPE_DISTANCE_PX = 14;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
 type SwipeDirection = "left" | "right";
+
+type LauncherSwipe = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+};
 
 const isSplitLayoutActive = () =>
   document.documentElement.dataset.twinlyLayout === "split" &&
@@ -28,9 +33,6 @@ const switchTwinBySwipe = (direction: SwipeDirection) => {
   );
   if (tabs.length < 2) return false;
 
-  // Twinly has exactly two baby tabs. Do not depend on Radix's current data-state here:
-  // a left swipe means "show the right twin", a right swipe means "show the left twin".
-  // This also makes the gesture work during the first paint before active-state styling settles.
   const targetTab = direction === "left" ? tabs[1] : tabs[0];
   if (!targetTab) return false;
   targetTab.click();
@@ -43,7 +45,9 @@ const detectLauncherSwipe = (startX: number, startY: number, x: number, y: numbe
   const horizontal = Math.abs(deltaX);
   const vertical = Math.abs(deltaY);
   if (horizontal < LAUNCHER_SWIPE_DISTANCE_PX) return null;
-  if (horizontal <= vertical) return null;
+  // Be deliberately generous here. The launcher is a small button and the user is explicitly
+  // starting a horizontal gesture on it, so a slightly diagonal swipe should still switch twins.
+  if (horizontal < vertical * 0.75) return null;
   return deltaX < 0 ? "left" : "right";
 };
 
@@ -64,6 +68,7 @@ export function AiAdviceLauncher() {
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
   const suppressLauncherClickUntilRef = useRef(0);
+  const launcherSwipeRef = useRef<LauncherSwipe | null>(null);
 
   useEffect(() => {
     const syncTargets = () => {
@@ -79,7 +84,10 @@ export function AiAdviceLauncher() {
         if (targetMap.current.has(button) || !button.parentElement) continue;
         const target = document.createElement("span");
         target.className = "ml-auto inline-flex shrink-0";
-        target.dataset.twinlyAiAdviceTarget = "true";
+        // This is only a portal mount point. Swipe handling lives on the actual button below.
+        // Intentionally do not reuse data-twinly-ai-advice-target, which was consumed by the
+        // old document-level gesture workaround.
+        target.dataset.twinlyAiAdviceMount = "true";
         button.parentElement.insertBefore(target, button);
         targetMap.current.set(button, target);
       }
@@ -93,47 +101,6 @@ export function AiAdviceLauncher() {
       observer.disconnect();
       for (const target of targetMap.current.values()) target.remove();
       targetMap.current.clear();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Use pointer events at capture phase so the AI button itself cannot swallow the gesture.
-    // touch-action: pan-y keeps normal vertical scrolling, while horizontal movement is ours.
-    let gesture: { pointerId: number; startX: number; startY: number } | null = null;
-
-    const startsOnLauncher = (target: EventTarget | null) =>
-      target instanceof Element && Boolean(target.closest(LAUNCHER_SELECTOR));
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.pointerType === "mouse" || !startsOnLauncher(event.target)) return;
-      gesture = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (!gesture || event.pointerId !== gesture.pointerId) return;
-      const direction = detectLauncherSwipe(gesture.startX, gesture.startY, event.clientX, event.clientY);
-      if (!direction) return;
-
-      if (switchTwinBySwipe(direction)) {
-        gesture = null;
-        suppressLauncherClickUntilRef.current = Date.now() + 700;
-        if (event.cancelable) event.preventDefault();
-      }
-    };
-
-    const endPointer = (event: PointerEvent) => {
-      if (gesture && event.pointerId === gesture.pointerId) gesture = null;
-    };
-
-    document.addEventListener("pointerdown", onPointerDown, { capture: true, passive: true });
-    document.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
-    document.addEventListener("pointerup", endPointer, { capture: true, passive: true });
-    document.addEventListener("pointercancel", endPointer, { capture: true, passive: true });
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("pointermove", onPointerMove, true);
-      document.removeEventListener("pointerup", endPointer, true);
-      document.removeEventListener("pointercancel", endPointer, true);
     };
   }, []);
 
@@ -163,6 +130,51 @@ export function AiAdviceLauncher() {
     }, 60000);
     return () => window.clearInterval(interval);
   }, [review]);
+
+  const releasePointer = (button: HTMLButtonElement, pointerId: number) => {
+    try {
+      if (button.hasPointerCapture?.(pointerId)) button.releasePointerCapture(pointerId);
+    } catch {
+      // Some embedded WebViews expose Pointer Events without pointer-capture methods.
+    }
+  };
+
+  const handleLauncherPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType === "mouse") return;
+    launcherSwipeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is an optimization, not a requirement for tapping the launcher.
+    }
+  };
+
+  const handleLauncherPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const swipe = launcherSwipeRef.current;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+
+    const direction = detectLauncherSwipe(swipe.startX, swipe.startY, event.clientX, event.clientY);
+    if (!direction) return;
+
+    if (!switchTwinBySwipe(direction)) return;
+
+    launcherSwipeRef.current = null;
+    suppressLauncherClickUntilRef.current = Date.now() + 900;
+    if (event.cancelable) event.preventDefault();
+    event.stopPropagation();
+    releasePointer(event.currentTarget, event.pointerId);
+  };
+
+  const finishLauncherPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const swipe = launcherSwipeRef.current;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    launcherSwipeRef.current = null;
+    releasePointer(event.currentTarget, event.pointerId);
+  };
 
   const loadReview = async () => {
     if (inFlight.current) return;
@@ -221,7 +233,17 @@ export function AiAdviceLauncher() {
       type="button"
       variant="outline"
       size="sm"
-      className="h-8 touch-pan-y select-none gap-1 px-2 text-xs"
+      className="h-8 select-none gap-1 px-2 text-xs"
+      style={{ touchAction: "none" }}
+      data-twinly-ai-advice-button="true"
+      onPointerDown={handleLauncherPointerDown}
+      onPointerMove={handleLauncherPointerMove}
+      onPointerUp={finishLauncherPointer}
+      onPointerCancel={finishLauncherPointer}
+      onLostPointerCapture={(event) => {
+        const swipe = launcherSwipeRef.current;
+        if (swipe && event.pointerId === swipe.pointerId) launcherSwipeRef.current = null;
+      }}
       onClick={(event) => {
         if (Date.now() < suppressLauncherClickUntilRef.current) {
           event.preventDefault();
