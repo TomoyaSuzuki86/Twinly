@@ -38,14 +38,14 @@ describe('AI advice follow-up',()=>{
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
   });
 
-  it('switches twins from a native DOM swipe that starts on the AI advice launcher',async()=>{
+  it('maps a left swipe on the AI advice launcher directly to the right twin',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
     const switchToSecond=vi.fn();
 
     render(<div>
       <div className="twinly-baby-tabs-list">
-        <button role="tab" data-state="active">1人目</button>
-        <button role="tab" data-state="inactive" onClick={switchToSecond}>2人目</button>
+        <button role="tab">1人目</button>
+        <button role="tab" onClick={switchToSecond}>2人目</button>
       </div>
       <div className="twinly-baby-tabs-content" data-state="active">
         <div><button aria-label="週間タイムラインを開く">timeline</button></div>
@@ -54,18 +54,18 @@ describe('AI advice follow-up',()=>{
     </div>);
 
     const launcher=await screen.findByRole('button',{name:'AIアドバイスを見る'});
-    fireEvent.touchStart(launcher,{touches:[{identifier:1,clientX:140,clientY:30}],changedTouches:[{identifier:1,clientX:140,clientY:30}]});
-    fireEvent.touchMove(launcher,{touches:[{identifier:1,clientX:102,clientY:34}]});
+    fireEvent.pointerDown(launcher,{pointerId:1,pointerType:'touch',clientX:140,clientY:30});
+    fireEvent.pointerMove(launcher,{pointerId:1,pointerType:'touch',clientX:118,clientY:32});
 
     expect(switchToSecond).toHaveBeenCalledTimes(1);
 
-    fireEvent.touchEnd(launcher,{changedTouches:[{identifier:1,clientX:102,clientY:34}]});
+    fireEvent.pointerUp(launcher,{pointerId:1,pointerType:'touch',clientX:118,clientY:32});
     fireEvent.click(launcher);
     expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
     expect(switchToSecond).toHaveBeenCalledTimes(1);
   });
 
-  it('switches the real Radix baby tab when the swipe starts inside the portaled launcher',async()=>{
+  it('switches the real Radix baby tab as soon as an AI-launcher swipe is detected',async()=>{
     mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?premium:premium);
 
     render(<>
@@ -89,8 +89,8 @@ describe('AI advice follow-up',()=>{
     const launcher=activePanel?.querySelector<HTMLButtonElement>('button[aria-label="AIアドバイスを見る"]');
     expect(launcher).not.toBeNull();
 
-    fireEvent.touchStart(launcher!,{touches:[{identifier:2,clientX:150,clientY:40}],changedTouches:[{identifier:2,clientX:150,clientY:40}]});
-    fireEvent.touchMove(launcher!,{touches:[{identifier:2,clientX:108,clientY:43}]});
+    fireEvent.pointerDown(launcher!,{pointerId:2,pointerType:'touch',clientX:150,clientY:40});
+    fireEvent.pointerMove(launcher!,{pointerId:2,pointerType:'touch',clientX:128,clientY:42});
 
     await waitFor(()=>expect(screen.getByRole('tab',{name:'2人目'})).toHaveAttribute('data-state','active'));
   });
