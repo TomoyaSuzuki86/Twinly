@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { createPortal } from "react-dom";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Sparkles } from "lucide-react";
 import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
 import { callService } from "@/lib/ai";
@@ -7,69 +15,20 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { VoiceCommandButton } from "./VoiceCommandButton";
 
-const TARGET_SELECTOR = 'button[aria-label="週間タイムラインを開く"]';
 const CONSENT_KEY = "twinly-ai-review-consent-v3";
 const JST = 9 * 60 * 60 * 1000;
-const LAUNCHER_SWIPE_DISTANCE_PX = 14;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
-type SwipeDirection = "left" | "right";
-
-type LauncherSwipe = {
-  pointerId: number;
-  startX: number;
-  startY: number;
+type AiAdviceContextValue = {
+  enabled: boolean;
+  openAdvice: () => void;
+  registerTrigger: () => () => void;
 };
 
-const isSplitLayoutActive = () =>
-  document.documentElement.dataset.twinlyLayout === "split" &&
-  window.matchMedia("(min-width: 1180px)").matches;
+const AiAdviceContext = createContext<AiAdviceContextValue | null>(null);
 
-const activateRadixTab = (targetTab: HTMLButtonElement) => {
-  // Radix Tabs changes selection from its mousedown path. HTMLElement.click() only emits a
-  // click event and does not execute that path, so the old swipe code could detect a gesture
-  // correctly while leaving the selected tab unchanged.
-  const eventWindow = targetTab.ownerDocument.defaultView;
-  const MouseEventCtor = eventWindow?.MouseEvent ?? MouseEvent;
-  targetTab.dispatchEvent(
-    new MouseEventCtor("mousedown", {
-      bubbles: true,
-      cancelable: true,
-      button: 0,
-      buttons: 1,
-    })
-  );
-};
-
-const switchTwinBySwipe = (direction: SwipeDirection) => {
-  if (isSplitLayoutActive()) return false;
-
-  const tabs = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('.twinly-baby-tabs-list [role="tab"]')
-  );
-  if (tabs.length < 2) return false;
-
-  const targetTab = direction === "left" ? tabs[1] : tabs[0];
-  if (!targetTab) return false;
-  activateRadixTab(targetTab);
-  return true;
-};
-
-const detectLauncherSwipe = (startX: number, startY: number, x: number, y: number): SwipeDirection | null => {
-  const deltaX = x - startX;
-  const deltaY = y - startY;
-  const horizontal = Math.abs(deltaX);
-  const vertical = Math.abs(deltaY);
-  if (horizontal < LAUNCHER_SWIPE_DISTANCE_PX) return null;
-  // Be deliberately generous here. The launcher is a small button and the user is explicitly
-  // starting a horizontal gesture on it, so a slightly diagonal swipe should still switch twins.
-  if (horizontal < vertical * 0.75) return null;
-  return deltaX < 0 ? "left" : "right";
-};
-
-export function AiAdviceLauncher() {
-  const [targets, setTargets] = useState<HTMLElement[]>([]);
-  const targetMap = useRef(new Map<HTMLButtonElement, HTMLSpanElement>());
+export function AiAdviceProvider({ children }: { children: ReactNode }) {
+  const [mountedTriggerCount, setMountedTriggerCount] = useState(0);
   const [access, setAccess] = useState<FamilyAccess | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -79,49 +38,28 @@ export function AiAdviceLauncher() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AiQuestionAnswer | null>(null);
   const [consent, setConsent] = useState(() => {
-    try { return window.localStorage.getItem(CONSENT_KEY) === "yes"; } catch { return false; }
+    try {
+      return window.localStorage.getItem(CONSENT_KEY) === "yes";
+    } catch {
+      return false;
+    }
   });
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
-  const suppressLauncherClickUntilRef = useRef(0);
-  const launcherSwipeRef = useRef<LauncherSwipe | null>(null);
 
-  useEffect(() => {
-    const syncTargets = () => {
-      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>(TARGET_SELECTOR));
-      const live = new Set(buttons);
-      for (const [button, target] of targetMap.current) {
-        if (!live.has(button) || !button.isConnected) {
-          target.remove();
-          targetMap.current.delete(button);
-        }
-      }
-      for (const button of buttons) {
-        if (targetMap.current.has(button) || !button.parentElement) continue;
-        const target = document.createElement("span");
-        target.className = "ml-auto inline-flex shrink-0";
-        // This is only a portal mount point. Swipe handling lives on the actual button below.
-        // Intentionally do not reuse data-twinly-ai-advice-target, which was consumed by the
-        // old document-level gesture workaround.
-        target.dataset.twinlyAiAdviceMount = "true";
-        button.parentElement.insertBefore(target, button);
-        targetMap.current.set(button, target);
-      }
-      const next = Array.from(targetMap.current.values());
-      setTargets((current) => current.length === next.length && current.every((target, index) => target === next[index]) ? current : next);
-    };
-    syncTargets();
-    const observer = new MutationObserver(syncTargets);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-      for (const target of targetMap.current.values()) target.remove();
-      targetMap.current.clear();
-    };
+  const registerTrigger = useCallback(() => {
+    setMountedTriggerCount((count) => count + 1);
+    return () => setMountedTriggerCount((count) => Math.max(0, count - 1));
   }, []);
 
+  const hasMountedTrigger = mountedTriggerCount > 0;
+
   useEffect(() => {
-    if (!targets.length) { setAccess(null); return; }
+    if (!hasMountedTrigger) {
+      setAccess(null);
+      return;
+    }
+
     let active = true;
     const refresh = async () => {
       try {
@@ -131,10 +69,14 @@ export function AiAdviceLauncher() {
         if (active) setAccess(null);
       }
     };
-    refresh();
+
+    void refresh();
     const interval = window.setInterval(refresh, 30000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, [targets.length]);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [hasMountedTrigger]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -146,51 +88,6 @@ export function AiAdviceLauncher() {
     }, 60000);
     return () => window.clearInterval(interval);
   }, [review]);
-
-  const releasePointer = (button: HTMLButtonElement, pointerId: number) => {
-    try {
-      if (button.hasPointerCapture?.(pointerId)) button.releasePointerCapture(pointerId);
-    } catch {
-      // Some embedded WebViews expose Pointer Events without pointer-capture methods.
-    }
-  };
-
-  const handleLauncherPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (event.pointerType === "mouse") return;
-    launcherSwipeRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-    };
-    try {
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    } catch {
-      // Pointer capture is an optimization, not a requirement for tapping the launcher.
-    }
-  };
-
-  const handleLauncherPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const swipe = launcherSwipeRef.current;
-    if (!swipe || event.pointerId !== swipe.pointerId) return;
-
-    const direction = detectLauncherSwipe(swipe.startX, swipe.startY, event.clientX, event.clientY);
-    if (!direction) return;
-
-    if (!switchTwinBySwipe(direction)) return;
-
-    launcherSwipeRef.current = null;
-    suppressLauncherClickUntilRef.current = Date.now() + 900;
-    if (event.cancelable) event.preventDefault();
-    event.stopPropagation();
-    releasePointer(event.currentTarget, event.pointerId);
-  };
-
-  const finishLauncherPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const swipe = launcherSwipeRef.current;
-    if (!swipe || event.pointerId !== swipe.pointerId) return;
-    launcherSwipeRef.current = null;
-    releasePointer(event.currentTarget, event.pointerId);
-  };
 
   const loadReview = async () => {
     if (inFlight.current) return;
@@ -231,53 +128,33 @@ export function AiAdviceLauncher() {
     }
   };
 
-  const openAdvice = () => {
+  const openAdvice = useCallback(() => {
     setOpen(true);
     setError("");
     if (consent) void loadReview();
-  };
+  }, [consent, review]);
 
   const acceptAndLoad = () => {
-    try { window.localStorage.setItem(CONSENT_KEY, "yes"); } catch {}
+    try {
+      window.localStorage.setItem(CONSENT_KEY, "yes");
+    } catch {}
     setConsent(true);
     setConsentChecked(true);
     void loadReview();
   };
 
-  const launcher = (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 select-none gap-1 px-2 text-xs"
-      style={{ touchAction: "none" }}
-      data-twinly-ai-advice-button="true"
-      onPointerDown={handleLauncherPointerDown}
-      onPointerMove={handleLauncherPointerMove}
-      onPointerUp={finishLauncherPointer}
-      onPointerCancel={finishLauncherPointer}
-      onLostPointerCapture={(event) => {
-        const swipe = launcherSwipeRef.current;
-        if (swipe && event.pointerId === swipe.pointerId) launcherSwipeRef.current = null;
-      }}
-      onClick={(event) => {
-        if (Date.now() < suppressLauncherClickUntilRef.current) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        openAdvice();
-      }}
-      aria-label="AIアドバイスを見る"
-    >
-      <Sparkles className="h-4 w-4" />
-      <span>AIアドバイス</span>
-    </Button>
+  const contextValue = useMemo<AiAdviceContextValue>(
+    () => ({
+      enabled: Boolean(access?.features.aiReview),
+      openAdvice,
+      registerTrigger,
+    }),
+    [access?.features.aiReview, openAdvice, registerTrigger]
   );
 
   return (
-    <>
-      {access?.features.aiReview ? targets.map((target, index) => createPortal(launcher, target, `ai-advice-${index}`)) : null}
+    <AiAdviceContext.Provider value={contextValue}>
+      {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
@@ -300,7 +177,9 @@ export function AiAdviceLauncher() {
                   AIアドバイス・質問時、GoogleのAPIへ質問文、赤ちゃんの登録名、生年月日、直近2週間の育児集計を送信し、質問に必要な場合のみ時系列記録も追加送信することに同意します。
                 </span>
               </label>
-              <Button disabled={!consentChecked || busy} onClick={acceptAndLoad}>同意してアドバイスを見る</Button>
+              <Button disabled={!consentChecked || busy} onClick={acceptAndLoad}>
+                同意してアドバイスを見る
+              </Button>
             </div>
           ) : null}
 
@@ -331,7 +210,16 @@ export function AiAdviceLauncher() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {!busy ? <VoiceCommandButton onCommand={()=>{}} onMessage={setError} onTranscript={(value)=>{setQuestion(value);setAnswer(null);}}/> : null}
+                    {!busy ? (
+                      <VoiceCommandButton
+                        onCommand={() => {}}
+                        onMessage={setError}
+                        onTranscript={(value) => {
+                          setQuestion(value);
+                          setAnswer(null);
+                        }}
+                      />
+                    ) : null}
                     <span className="text-xs text-muted-foreground">音声でも質問できます</span>
                   </div>
                   <textarea
@@ -342,14 +230,21 @@ export function AiAdviceLauncher() {
                     disabled={busy}
                     value={question}
                     placeholder="例：最近、片方の睡眠時間は減ってる？"
-                    onChange={(event)=>{setQuestion(event.target.value);setAnswer(null);}}
+                    onChange={(event) => {
+                      setQuestion(event.target.value);
+                      setAnswer(null);
+                    }}
                   />
-                  <Button disabled={busy||!question.trim()} onClick={()=>void askQuestion()}>質問する</Button>
+                  <Button disabled={busy || !question.trim()} onClick={() => void askQuestion()}>
+                    質問する
+                  </Button>
                   {answer ? (
                     <div className="space-y-1 rounded-lg bg-muted/40 p-3">
                       <p>{answer.answer}</p>
                       <p className="text-xs text-muted-foreground">
-                        {answer.source==='review+timeline' ? 'AIアドバイスに加えて必要な時系列記録も確認して回答' : '今日のAIアドバイスと集計データから回答'}
+                        {answer.source === "review+timeline"
+                          ? "AIアドバイスに加えて必要な時系列記録も確認して回答"
+                          : "今日のAIアドバイスと集計データから回答"}
                       </p>
                     </div>
                   ) : null}
@@ -363,6 +258,32 @@ export function AiAdviceLauncher() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </>
+    </AiAdviceContext.Provider>
+  );
+}
+
+export function AiAdviceTrigger() {
+  const context = useContext(AiAdviceContext);
+  const registerTrigger = context?.registerTrigger;
+
+  useEffect(() => {
+    if (!registerTrigger) return;
+    return registerTrigger();
+  }, [registerTrigger]);
+
+  if (!context?.enabled) return null;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-8 select-none gap-1 px-2 text-xs"
+      onClick={context.openAdvice}
+      aria-label="AIアドバイスを見る"
+    >
+      <Sparkles className="h-4 w-4" />
+      <span>AIアドバイス</span>
+    </Button>
   );
 }
