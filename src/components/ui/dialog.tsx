@@ -64,14 +64,8 @@ function DialogOpeningSkeleton() {
   const [visible, setVisible] = React.useState(true)
 
   React.useEffect(() => {
-    let timeoutId = 0
-    const frameId = window.requestAnimationFrame(() => {
-      timeoutId = window.setTimeout(() => setVisible(false), 170)
-    })
-    return () => {
-      window.cancelAnimationFrame(frameId)
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
+    const timeoutId = window.setTimeout(() => setVisible(false), 170)
+    return () => window.clearTimeout(timeoutId)
   }, [])
 
   if (!visible) return null
