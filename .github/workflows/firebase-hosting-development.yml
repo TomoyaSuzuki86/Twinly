@@ -47,8 +47,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test critical sync regressions
-        run: npx vitest run src/data/sync-regression.test.ts src/data/sync-history-switch.regression.test.tsx src/data/firestore-merge.test.ts
+      - name: Test data synchronization layer
+        run: npx vitest run src/data
 
       # Keep the development preview blocking the AI swipe regression that previously reached preview.
       - name: Test AI advice swipe regression
