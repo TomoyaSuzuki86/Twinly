@@ -88,6 +88,10 @@ export function createMutation(before: AppState, after: AppState, id: string, op
 export function applyMutation(state: AppState, mutation: AppMutation, checkConflicts = false): AppState {
   const result = structuredClone(state);
   const events = new Map(result.events.map((event) => [event.id, event]));
+  const eventChangesAlreadyReflected = mutation.events.length > 0 && mutation.events.every((change) => {
+    const current = events.get(change.id);
+    return change.after ? sameValue(current, change.after) : !current;
+  });
   for (const change of mutation.events) {
     if (checkConflicts && !sameValue(events.get(change.id), change.before)) {
       throw new Error("別の端末で同じ記録が変更されています。");
@@ -103,8 +107,12 @@ export function applyMutation(state: AppState, mutation: AppMutation, checkConfl
     if (checkConflicts && change.delta === undefined && !sameValue(target[key], change.before)) {
       throw new Error("別の端末で同じ設定が変更されています。");
     }
-    if (change.delta !== undefined) target[key] = Math.max(0, Number(target[key] ?? 0) + change.delta);
-    else if (change.after === undefined) delete target[key];
+    if (change.delta !== undefined) {
+      // Relative diaper stock changes are coupled to their event mutations. If the event side
+      // is already present in the base snapshot, replaying the durable overlay must be a no-op.
+      const delta = eventChangesAlreadyReflected ? 0 : change.delta;
+      target[key] = Math.max(0, Number(target[key] ?? 0) + delta);
+    } else if (change.after === undefined) delete target[key];
     else target[key] = change.after;
   }
   return result;
