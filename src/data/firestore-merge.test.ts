@@ -11,19 +11,24 @@ const base: LogEvent = {
   note: "before",
 };
 
+const afterOf = (result: ReturnType<typeof mergeEventChangeByServerOrder>) => {
+  const confirmed = result.confirmed;
+  return confirmed && "after" in confirmed ? confirmed.after : undefined;
+};
+
 describe("server-ordered event merge", () => {
   it("preserves unrelated remote fields while applying the local field change", () => {
     const remote = { ...base, note: "remote note" };
     const local = { ...base, milkMl: 150 };
     const result = mergeEventChangeByServerOrder({ id: base.id, before: base, after: local }, remote);
-    expect(result.confirmed?.after).toMatchObject({ milkMl: 150, note: "remote note" });
+    expect(afterOf(result)).toMatchObject({ milkMl: 150, note: "remote note" });
   });
 
   it("lets the later server-processed mutation win when both changed the same field", () => {
     const remote = { ...base, milkMl: 180 };
     const local = { ...base, milkMl: 150 };
     const result = mergeEventChangeByServerOrder({ id: base.id, before: base, after: local }, remote);
-    expect(result.confirmed?.after?.milkMl).toBe(150);
+    expect(afterOf(result)?.milkMl).toBe(150);
   });
 
   it("lets a later delete remove a remotely edited record without a dialog", () => {
