@@ -44,8 +44,13 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --fund=false
 
-      # Keep the development preview fast while still blocking the exact regression that
-      # previously reached the preview: AI swipe was detected, but Radix never changed tabs.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test critical sync regressions
+        run: npx vitest run src/data/sync-regression.test.ts src/data/sync-history-switch.regression.test.tsx
+
+      # Keep the development preview blocking the AI swipe regression that previously reached preview.
       - name: Test AI advice swipe regression
         run: npx vitest run src/components/AiAdviceLauncher.test.tsx
 
