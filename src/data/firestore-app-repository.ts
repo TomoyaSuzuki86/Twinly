@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocFromServer, getDocs, limit, onSnapshot, orderBy,
+  collection, doc, getDocFromServer, getDocsFromServer, limit, onSnapshot, orderBy,
   query, runTransaction, serverTimestamp, startAfter, where,
   type Firestore, type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -15,7 +15,6 @@ import {
   type CommitResult,
   type EventChange,
   type SettingChange,
-  type SyncConflict,
 } from "./app-repository";
 
 export const RECENT_DAYS = 30;
@@ -31,7 +30,6 @@ const decode = (data: Record<string, unknown> | undefined): AppState => {
   return stripLegacyCalendarFields({ ...stored, events: stored.events ?? [], ui: createInitialAppState().ui });
 };
 
-const conflictValue = (value: unknown) => value === undefined ? null : value;
 const setEventValue = (event: LogEvent, field: keyof LogEvent, value: unknown) => {
   const target = event as unknown as Record<string, unknown>;
   if (value === undefined) delete target[field as string];
@@ -42,93 +40,41 @@ const getPathValue = (state: AppState, path: string[]) => {
   for (const key of path) value = (value as Record<string, unknown> | undefined)?.[key];
   return value;
 };
-const mutationHasChanges = (mutation: AppMutation | undefined) => Boolean(mutation && (mutation.events.length || mutation.settings.length));
 
-function mergeEventChange(change: EventChange, remote: LogEvent | undefined, mutationId: string) {
-  const conflicts: SyncConflict[] = [];
+// Firestore transactions serialize concurrent writes. We therefore resolve conflicts using
+// server processing order instead of device clocks: untouched remote fields are preserved,
+// fields changed by this mutation take the local value, and a later delete/edit wins.
+export function mergeEventChangeByServerOrder(change: EventChange, remote: LogEvent | undefined) {
   const before = change.before;
   const local = change.after;
-  const identity = local ?? remote ?? before;
-  const addRecordConflict = () => {
-    conflicts.push({
-      id: `${mutationId}:event:${change.id}:__record__`,
-      mutationId,
-      kind: "event",
-      field: "__record__",
-      eventId: change.id,
-      babyId: identity?.babyId,
-      eventType: identity?.type,
-      localValue: conflictValue(local),
-      remoteValue: conflictValue(remote),
-    });
-  };
 
-  if (!before && local) {
-    if (!remote) return { confirmed: change, conflicts };
-    if (sameValue(remote, local)) return { conflicts };
-    addRecordConflict();
-    return { unresolved: { id: change.id, before: remote, after: local }, conflicts };
+  if (!local) {
+    if (!remote) return {};
+    return { confirmed: { id: change.id, before: remote } satisfies EventChange };
   }
 
-  if (before && !local) {
-    if (!remote) return { conflicts };
-    if (sameValue(remote, before)) return { confirmed: { id: change.id, before: remote }, conflicts };
-    addRecordConflict();
-    return { unresolved: { id: change.id, before: remote }, conflicts };
+  if (!before) {
+    if (remote && sameValue(remote, local)) return {};
+    return { confirmed: { id: change.id, ...(remote ? { before: remote } : {}), after: local } satisfies EventChange };
   }
 
-  if (!before || !local) return { conflicts };
   if (!remote) {
-    addRecordConflict();
-    return { unresolved: { id: change.id, after: local }, conflicts };
+    return { confirmed: { id: change.id, after: local } satisfies EventChange };
   }
 
   const merged = structuredClone(remote);
-  const unresolvedValues = new Map<keyof LogEvent, unknown>();
-  let mergedChanged = false;
-
+  let changed = false;
   for (const field of EVENT_FIELDS) {
-    const beforeValue = before[field];
-    const localValue = local[field];
-    const remoteValue = remote[field];
-    if (sameValue(beforeValue, localValue)) continue;
-
-    const remoteChanged = !sameValue(beforeValue, remoteValue);
-    if (remoteChanged && !sameValue(localValue, remoteValue)) {
-      conflicts.push({
-        id: `${mutationId}:event:${change.id}:${String(field)}`,
-        mutationId,
-        kind: "event",
-        field: String(field),
-        eventId: change.id,
-        babyId: identity?.babyId,
-        eventType: identity?.type,
-        localValue: conflictValue(localValue),
-        remoteValue: conflictValue(remoteValue),
-      });
-      unresolvedValues.set(field, localValue);
-      continue;
-    }
-
-    if (!sameValue(remoteValue, localValue)) {
-      setEventValue(merged, field, localValue);
-      mergedChanged = true;
+    if (sameValue(before[field], local[field])) continue;
+    if (!sameValue(remote[field], local[field])) {
+      setEventValue(merged, field, local[field]);
+      changed = true;
     }
   }
-
-  if (mergedChanged) {
-    if (local.updatedByUid !== undefined) merged.updatedByUid = local.updatedByUid;
-    if (local.updatedAt !== undefined) merged.updatedAt = local.updatedAt;
-  }
-
-  const confirmed = mergedChanged ? { id: change.id, before: remote, after: merged } : undefined;
-  if (!unresolvedValues.size) return { confirmed, conflicts };
-
-  const unresolvedAfter = structuredClone(merged);
-  unresolvedValues.forEach((value, field) => setEventValue(unresolvedAfter, field, value));
-  if (local.updatedByUid !== undefined) unresolvedAfter.updatedByUid = local.updatedByUid;
-  if (local.updatedAt !== undefined) unresolvedAfter.updatedAt = local.updatedAt;
-  return { confirmed, unresolved: { id: change.id, before: merged, after: unresolvedAfter }, conflicts };
+  if (!changed) return {};
+  if (local.updatedByUid !== undefined) merged.updatedByUid = local.updatedByUid;
+  if (local.updatedAt !== undefined) merged.updatedAt = local.updatedAt;
+  return { confirmed: { id: change.id, before: remote, after: merged } satisfies EventChange };
 }
 
 export function createFirestoreAppRepository(db: Firestore, familyId: string, userId: string, allHistory = false): AppRepository {
@@ -141,6 +87,45 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       throw new Error("一括変更は450件までです。全件の復元・削除は管理者による作業が必要です。");
     }
   };
+
+  const loadAllFromServer = async () => {
+    const snapshot = await getDocFromServer(stateRef);
+    if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
+    const current = decode(snapshot.data());
+    if (snapshot.data()?.schemaVersion !== 2) return current;
+    const events: LogEvent[] = [];
+    let cursor: QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = await getDocsFromServer(query(eventsRef, orderBy("timestamp", "desc"),
+        ...(cursor ? [startAfter(cursor)] : []), limit(PAGE_SIZE)));
+      events.push(...page.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
+      if (page.size < PAGE_SIZE) break;
+      cursor = page.docs[page.docs.length - 1];
+    }
+    return { ...current, events };
+  };
+
+  const loadLatestFromServer = async () => {
+    if (allHistory) return loadAllFromServer();
+    const snapshot = await getDocFromServer(stateRef);
+    if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
+    const current = decode(snapshot.data());
+    if (snapshot.data()?.schemaVersion !== 2) return current;
+
+    const since = Date.now() - RECENT_DAYS * 86400000;
+    const types: EventType[] = ["milk", "solidFood", "diaper", "sleepStart", "wake", "weight", "height"];
+    const recentPromise = getDocsFromServer(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")));
+    const seedPromises = (["A", "B"] as const).flatMap((babyId) => types.map((type) =>
+      getDocsFromServer(query(eventsRef, where("babyId", "==", babyId), where("type", "==", type),
+        where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)))));
+    const [recentRows, ...seedRows] = await Promise.all([recentPromise, ...seedPromises]);
+    const byId = new Map<string, LogEvent>();
+    for (const row of [...seedRows.flatMap((rows) => rows.docs), ...recentRows.docs]) {
+      byId.set(row.id, { ...row.data(), id: row.id } as LogEvent);
+    }
+    return { ...current, events: [...byId.values()].sort((a, b) => b.timestamp - a.timestamp) };
+  };
+
   return {
     validate,
     subscribe(onChange, onError) {
@@ -258,39 +243,19 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         }
 
         const confirmedEvents: EventChange[] = [];
-        const unresolvedEvents: EventChange[] = [];
-        const conflicts: SyncConflict[] = [];
         for (const change of mutation.events) {
-          const merged = mergeEventChange(change, remoteEvents.get(change.id), mutation.id);
+          const merged = mergeEventChangeByServerOrder(change, remoteEvents.get(change.id));
           if (merged.confirmed) confirmedEvents.push(merged.confirmed);
-          if (merged.unresolved) unresolvedEvents.push(merged.unresolved);
-          conflicts.push(...merged.conflicts);
         }
 
         const confirmedSettings: SettingChange[] = [];
-        const unresolvedSettings: SettingChange[] = [];
         for (const change of mutation.settings) {
           if (change.delta !== undefined) {
-            if (unresolvedEvents.length) unresolvedSettings.push(change);
-            else if (confirmedEvents.length) confirmedSettings.push(change);
+            if (confirmedEvents.length) confirmedSettings.push(change);
             continue;
           }
           const remoteValue = getPathValue(current, change.path);
-          const remoteChanged = !sameValue(remoteValue, change.before);
-          if (remoteChanged && !sameValue(remoteValue, change.after)) {
-            conflicts.push({
-              id: `${mutation.id}:setting:${change.path.join(".")}`,
-              mutationId: mutation.id,
-              kind: "setting",
-              field: change.path[change.path.length - 1] ?? "setting",
-              path: change.path,
-              localValue: conflictValue(change.after),
-              remoteValue: conflictValue(remoteValue),
-            });
-            unresolvedSettings.push({ ...change, before: remoteValue });
-          } else if (!sameValue(remoteValue, change.after)) {
-            confirmedSettings.push({ ...change, before: remoteValue });
-          }
+          if (!sameValue(remoteValue, change.after)) confirmedSettings.push({ ...change, before: remoteValue });
         }
 
         const candidate: AppMutation = {
@@ -323,37 +288,12 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
           const { delta: _delta, ...rest } = change;
           return { ...rest, after: value };
         }) };
-        const unresolved: AppMutation | undefined = unresolvedEvents.length || unresolvedSettings.length ? {
-          id: mutation.id,
-          queuedAt: mutation.queuedAt,
-          events: unresolvedEvents,
-          settings: unresolvedSettings,
-        } : undefined;
-        const result: CommitResult = {
-          confirmed,
-          conflicts,
-          ...(mutationHasChanges(unresolved) ? { unresolved } : {}),
-        };
+        const result: CommitResult = { confirmed, conflicts: [] };
         transaction.set(receiptRef, removeUndefined({ uid: userId, result, createdAt: serverTimestamp() }));
-        return conflicts.length ? result : confirmed;
+        return confirmed;
       });
     },
-    async loadAll() {
-      const snapshot = await getDocFromServer(stateRef);
-      if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
-      const current = decode(snapshot.data());
-      if (snapshot.data()?.schemaVersion !== 2) return current;
-      const events: LogEvent[] = [];
-      let cursor: QueryDocumentSnapshot | undefined;
-      for (;;) {
-        const page = await getDocs(query(eventsRef, orderBy("timestamp", "desc"),
-          ...(cursor ? [startAfter(cursor)] : []), limit(PAGE_SIZE)));
-        if (page.metadata.fromCache) throw new Error("全履歴の取得には通信が必要です。");
-        events.push(...page.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
-        if (page.size < PAGE_SIZE) break;
-        cursor = page.docs[page.docs.length - 1];
-      }
-      return { ...current, events };
-    },
+    loadLatest: loadLatestFromServer,
+    loadAll: loadAllFromServer,
   };
 }

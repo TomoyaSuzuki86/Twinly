@@ -7,6 +7,7 @@ import {
   type AppMutation,
   type AppRepository,
   type AppSnapshot,
+  type CommitResponse,
   type CommitResult,
   type SyncConflict,
 } from "./app-repository";
@@ -29,6 +30,7 @@ type DiagnosticEntry = {
   event: string;
   connection: SyncConnectionState;
   pending: number;
+  confirmedPending: number;
   conflictCount: number;
   pendingWaitMs: number;
   fromCache: boolean;
@@ -41,9 +43,17 @@ type ConflictRecord = {
   conflicts: SyncConflict[];
   createdAt: number;
 };
+type ConfirmedRecord = {
+  id: string;
+  mutation: AppMutation;
+  createdAt: number;
+};
+type AppStoreOptions = { initialReady?: boolean };
 
 const SERVER_CHECK_TIMEOUT_MS = 12_000;
+const COMMIT_TIMEOUT_MS = 15_000;
 const RECONNECT_MAX_MS = 30_000;
+const SAVE_RETRY_MAX_MS = 30_000;
 const DIAGNOSTIC_LIMIT = 80;
 const USER_EVENT_FIELDS: (keyof LogEvent)[] = [
   "babyId", "type", "timestamp", "milkMl", "milkMethod", "diaperKind", "diaperSizeUsed",
@@ -64,7 +74,7 @@ function mutationReflected(state: AppState, mutation: AppMutation) {
   for (const change of mutation.events) {
     const current = events.get(change.id);
     if (!change.before && change.after) {
-      if (!current) return false;
+      if (!current || !sameValue(current, change.after)) return false;
     } else if (change.before && !change.after) {
       if (current) return false;
     } else if (!sameValue(current, change.after)) return false;
@@ -83,6 +93,7 @@ function mutationReflected(state: AppState, mutation: AppMutation) {
 
 export class AppStore {
   private queue: AppMutation[];
+  private confirmed: ConfirmedRecord[];
   private conflicts: ConflictRecord[];
   private base: AppState;
   private running = false;
@@ -91,7 +102,10 @@ export class AppStore {
   private stopSubscription: (() => void) | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private serverCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
+  private saveRetryAttempt = 0;
+  private connectionGeneration = 0;
   private lastCheckStartedAt = 0;
   private saveError: string | null = null;
   private receiveError: string | null = null;
@@ -108,10 +122,12 @@ export class AppStore {
 
   constructor(private repository: AppRepository, initial: AppState,
     private storage: Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">, private key: string,
-    private onChange: (app: AppState, status: StoreStatus) => void) {
+    private onChange: (app: AppState, status: StoreStatus) => void, options: AppStoreOptions = {}) {
     this.base = initial;
     this.queue = this.readQueue();
+    this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
+    this.status.ready = Boolean(options.initialReady);
     if (!Array.isArray(this.queue) || this.queue.some((item) => !item.id || !Array.isArray(item.events) || !Array.isArray(item.settings))) {
       throw new Error("端末の未保存データを読み取れません。ブラウザのデータを消さずに再度お試しください。");
     }
@@ -128,6 +144,20 @@ export class AppStore {
     return mutations.sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
   }
 
+  private readConfirmedRecords(): ConfirmedRecord[] {
+    const records: ConfirmedRecord[] = [];
+    const prefix = `${this.key}.confirmed:`;
+    for (let i = 0; i < this.storage.length; i++) {
+      const storageKey = this.storage.key(i);
+      if (!storageKey?.startsWith(prefix)) continue;
+      const raw = this.storage.getItem(storageKey);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as ConfirmedRecord;
+      if (parsed?.id && parsed.mutation && Array.isArray(parsed.mutation.events) && Array.isArray(parsed.mutation.settings)) records.push(parsed);
+    }
+    return records.sort((a, b) => (a.mutation.queuedAt ?? a.createdAt) - (b.mutation.queuedAt ?? b.createdAt));
+  }
+
   private readConflictRecords(): ConflictRecord[] {
     const records: ConflictRecord[] = [];
     const prefix = `${this.key}.conflict:`;
@@ -142,6 +172,7 @@ export class AppStore {
     return records.sort((a, b) => a.createdAt - b.createdAt);
   }
 
+  private confirmedKey(id: string) { return `${this.key}.confirmed:${id}`; }
   private conflictKey(id: string) { return `${this.key}.conflict:${id}`; }
   private syncError() { this.status.error = this.saveError ?? this.receiveError; }
   private flattenedConflicts() { return this.conflicts.flatMap((record) => record.conflicts); }
@@ -153,6 +184,7 @@ export class AppStore {
       event,
       connection: this.status.connection ?? "connecting",
       pending: this.queue.length,
+      confirmedPending: this.confirmed.length,
       conflictCount: this.flattenedConflicts().length,
       pendingWaitMs: oldest ? Math.max(0, Date.now() - oldest) : 0,
       fromCache: this.status.fromCache,
@@ -173,6 +205,7 @@ export class AppStore {
 
   refresh() {
     this.queue = this.readQueue();
+    this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
     this.emit();
     this.logDiagnostic("outbox-refresh");
@@ -180,10 +213,13 @@ export class AppStore {
   }
 
   private view() {
+    const durable = new Map<string, AppMutation>();
+    for (const record of this.confirmed) durable.set(record.mutation.id, record.mutation);
+    for (const mutation of this.queue) durable.set(mutation.id, mutation);
     const reflectedInFlight = this.inFlight && mutationReflected(this.base, this.inFlight) ? this.inFlight.id : null;
     const overlays = [
       ...this.conflicts.map((record) => record.mutation),
-      ...this.queue.filter((mutation) => mutation.id !== reflectedInFlight),
+      ...[...durable.values()].filter((mutation) => mutation.id !== reflectedInFlight),
     ].sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
     return overlays.reduce((state, mutation) => applyMutation(state, mutation), this.base);
   }
@@ -206,13 +242,18 @@ export class AppStore {
     this.serverCheckTimer = null;
   }
 
-  private armServerCheckTimeout() {
-    this.clearServerCheckTimer();
-    if (!this.status.checking || this.stopped) return;
+  private clearSaveRetryTimer() {
+    if (this.saveRetryTimer) clearTimeout(this.saveRetryTimer);
+    this.saveRetryTimer = null;
+  }
+
+  private armServerCheckTimeout(generation = this.connectionGeneration) {
+    if (this.serverCheckTimer || !this.status.checking || this.stopped) return;
     this.serverCheckTimer = setTimeout(() => {
-      if (this.stopped || !this.status.checking) return;
+      this.serverCheckTimer = null;
+      if (this.stopped || !this.status.checking || generation !== this.connectionGeneration) return;
       this.logDiagnostic("server-check-timeout");
-      this.connect("server-check-timeout");
+      void this.recoverFromServer(generation);
     }, SERVER_CHECK_TIMEOUT_MS);
   }
 
@@ -226,12 +267,64 @@ export class AppStore {
     }, delay);
   }
 
+  private scheduleSaveRetry() {
+    if (this.stopped || this.saveRetryTimer || !this.queue.length) return;
+    const delay = Math.min(SAVE_RETRY_MAX_MS, 1_000 * (2 ** Math.min(this.saveRetryAttempt, 5)));
+    this.saveRetryAttempt += 1;
+    this.saveRetryTimer = setTimeout(() => {
+      this.saveRetryTimer = null;
+      void this.flush();
+    }, delay);
+  }
+
+  private pruneConfirmed(state: AppState) {
+    let changed = false;
+    for (const record of this.confirmed) {
+      if (!mutationReflected(state, record.mutation)) continue;
+      this.storage.removeItem(this.confirmedKey(record.id));
+      changed = true;
+    }
+    if (changed) this.confirmed = this.readConfirmedRecords();
+  }
+
+  private async recoverFromServer(generation: number) {
+    try {
+      const app = this.repository.loadLatest
+        ? await this.repository.loadLatest()
+        : await this.repository.loadAll();
+      if (this.stopped || generation !== this.connectionGeneration) return;
+      this.base = app;
+      this.pruneConfirmed(app);
+      this.receiveError = null;
+      this.reconnectAttempt = 0;
+      this.status.ready = true;
+      this.status.fromCache = false;
+      this.status.checking = false;
+      this.status.connection = "online";
+      this.status.lastServerConfirmedAt = Date.now();
+      this.syncError();
+      this.emit();
+      this.logDiagnostic("server-recovered");
+      void this.flush();
+    } catch (error) {
+      if (this.stopped || generation !== this.connectionGeneration) return;
+      this.receiveError = error instanceof Error ? error.message : "最新データを確認できませんでした。自動で再試行します。";
+      this.status.checking = true;
+      this.status.connection = "retrying";
+      this.syncError();
+      this.emit();
+      this.logDiagnostic("server-recovery-error");
+      this.scheduleReconnect();
+    }
+  }
+
   private connect(reason: SyncCheckReason) {
     if (this.stopped) return;
     this.clearReconnectTimer();
     this.clearServerCheckTimer();
     this.stopSubscription?.();
     this.stopSubscription = null;
+    const generation = ++this.connectionGeneration;
     this.status.checking = true;
     this.status.connection = this.reconnectAttempt ? "retrying" : "connecting";
     this.syncError();
@@ -239,11 +332,14 @@ export class AppStore {
     this.logDiagnostic(`connect:${reason}`);
 
     const stop = this.repository.subscribe((snapshot: AppSnapshot) => {
-      if (this.stopped) return;
-      this.base = snapshot.app;
+      if (this.stopped || generation !== this.connectionGeneration) return;
+      // Once a server-confirmed state has been shown, cache snapshots are advisory only.
+      // Replacing the visible base with them can roll the UI backwards after a successful save.
+      if (!snapshot.fromCache || !this.status.ready) this.base = snapshot.app;
       this.status.ready = this.status.ready || !snapshot.fromCache;
       this.status.fromCache = snapshot.fromCache;
       if (!snapshot.fromCache) {
+        this.pruneConfirmed(snapshot.app);
         this.receiveError = null;
         this.reconnectAttempt = 0;
         this.status.checking = false;
@@ -252,14 +348,15 @@ export class AppStore {
         this.clearServerCheckTimer();
         this.logDiagnostic("server-confirmed");
       } else {
+        this.status.checking = true;
         this.status.connection = this.reconnectAttempt ? "retrying" : "connecting";
-        this.armServerCheckTimeout();
+        this.armServerCheckTimeout(generation);
       }
       this.syncError();
       this.emit();
-      if (!this.saveError) void this.flush();
+      void this.flush();
     }, (error) => {
-      if (this.stopped) return;
+      if (this.stopped || generation !== this.connectionGeneration) return;
       this.receiveError = error instanceof Error ? error.message : "通信が切れました。自動で再接続します。";
       this.status.checking = true;
       this.status.connection = "retrying";
@@ -268,9 +365,9 @@ export class AppStore {
       this.logDiagnostic("listener-error");
       this.scheduleReconnect();
     });
-    if (this.stopped) stop();
+    if (this.stopped || generation !== this.connectionGeneration) stop();
     else this.stopSubscription = stop;
-    this.armServerCheckTimeout();
+    this.armServerCheckTimeout(generation);
   }
 
   start() {
@@ -281,8 +378,10 @@ export class AppStore {
 
   private stop() {
     this.stopped = true;
+    this.connectionGeneration += 1;
     this.clearReconnectTimer();
     this.clearServerCheckTimer();
+    this.clearSaveRetryTimer();
     this.stopSubscription?.();
     this.stopSubscription = null;
   }
@@ -305,6 +404,7 @@ export class AppStore {
   update(updater: (state: AppState) => AppState, options: { absoluteSettings?: boolean } = {}) {
     if (!this.status.ready) throw new Error("記録を読み込んでいます。");
     this.queue = this.readQueue();
+    this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
     const before = this.view();
     const mutation = createMutation(before, updater(before), crypto.randomUUID(), {
@@ -312,7 +412,11 @@ export class AppStore {
     });
     if (!mutation.events.length && !mutation.settings.length) return;
     this.repository.validate?.(mutation);
-    const allQueuedAt = [...this.queue.map((item) => item.queuedAt ?? 0), ...this.conflicts.map((item) => item.mutation.queuedAt ?? 0)];
+    const allQueuedAt = [
+      ...this.queue.map((item) => item.queuedAt ?? 0),
+      ...this.confirmed.map((item) => item.mutation.queuedAt ?? 0),
+      ...this.conflicts.map((item) => item.mutation.queuedAt ?? 0),
+    ];
     mutation.queuedAt = Math.max(Date.now(), ...allQueuedAt.map((value) => value + 1));
     this.storage.setItem(`${this.key}:${mutation.id}`, JSON.stringify(mutation));
     this.queue = this.readQueue();
@@ -321,9 +425,23 @@ export class AppStore {
     void this.flush();
   }
 
+  private commitWithTimeout(mutation: AppMutation): Promise<CommitResponse> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("保存確認がタイムアウトしました。自動で再試行します。")), COMMIT_TIMEOUT_MS);
+      this.repository.commit(mutation).then((response) => {
+        clearTimeout(timer);
+        resolve(response);
+      }, (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+    });
+  }
+
   async flush() {
     if (this.running || this.stopped || !this.status.ready) return;
     this.running = true;
+    this.clearSaveRetryTimer();
     this.saveError = null;
     this.syncError();
     this.emit();
@@ -333,13 +451,20 @@ export class AppStore {
         const mutation = this.queue[0];
         this.inFlight = mutation;
         this.logDiagnostic("save-start");
-        const response = await this.repository.commit(mutation);
+        const response = await this.commitWithTimeout(mutation);
         if (this.stopped) return;
         const result: CommitResult = isCommitResult(response)
           ? response
           : { confirmed: response, conflicts: [], unresolved: undefined };
-        if (mutationHasChanges(result.confirmed) && !mutationReflected(this.base, result.confirmed)) {
-          this.base = applyMutation(this.base, result.confirmed);
+        if (mutationHasChanges(result.confirmed)) {
+          const record: ConfirmedRecord = {
+            id: mutation.id,
+            mutation: { ...result.confirmed, queuedAt: mutation.queuedAt },
+            createdAt: Date.now(),
+          };
+          // Persist the read-confirmation overlay before removing the unsent outbox item.
+          // A crash or another tab between these writes must never make a saved record disappear.
+          this.storage.setItem(this.confirmedKey(record.id), JSON.stringify(record));
         }
         this.storage.removeItem(`${this.key}:${mutation.id}`);
         if (result.conflicts.length && mutationHasChanges(result.unresolved)) {
@@ -353,11 +478,13 @@ export class AppStore {
           this.logDiagnostic("conflict-isolated");
         }
         this.queue = this.readQueue();
+        this.confirmed = this.readConfirmedRecords();
         this.conflicts = this.readConflictRecords();
         this.inFlight = null;
         this.saveError = null;
+        this.saveRetryAttempt = 0;
         this.syncError();
-        this.logDiagnostic("save-confirmed");
+        this.logDiagnostic("save-confirmed-awaiting-read");
         this.emit();
       }
     } catch (error) {
@@ -365,6 +492,7 @@ export class AppStore {
       this.syncError();
       this.logDiagnostic("save-error");
       this.emit();
+      this.scheduleSaveRetry();
     } finally {
       this.running = false;
       this.inFlight = null;
@@ -397,8 +525,6 @@ export class AppStore {
       }
     }
 
-    // Relative stock deltas are coupled to an event operation. If the user keeps the remote
-    // record and no local event operation remains, never replay the stock delta on its own.
     if (!mutation.events.length) mutation.settings = mutation.settings.filter((change) => change.delta === undefined);
 
     const remaining = record.conflicts.filter((item) => item.id !== conflictId);
@@ -414,6 +540,7 @@ export class AppStore {
     }
 
     this.queue = this.readQueue();
+    this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
     this.emit();
     this.logDiagnostic(`conflict-resolved:${choice}`);
@@ -422,13 +549,23 @@ export class AppStore {
 
   async exportAll() {
     const remote = await this.repository.loadAll();
-    const overlays = [...this.conflicts.map((record) => record.mutation), ...this.queue]
-      .sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
+    const overlays = [
+      ...this.confirmed.map((record) => record.mutation),
+      ...this.conflicts.map((record) => record.mutation),
+      ...this.queue,
+    ].sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0) || a.id.localeCompare(b.id));
     return overlays.reduce((state, mutation) => applyMutation(state, mutation), remote);
   }
 
   get hasPending() { return this.queue.length > 0; }
-  exportPending() { return { app: this.view(), pendingMutations: this.queue, conflicts: this.conflicts }; }
+  exportPending() {
+    return {
+      app: this.view(),
+      pendingMutations: this.queue,
+      confirmedMutations: this.confirmed.map((record) => record.mutation),
+      conflicts: this.conflicts,
+    };
+  }
   exportDiagnostics() {
     try {
       const raw = this.storage.getItem(`${this.key}.diagnostics`);
@@ -442,6 +579,7 @@ export class AppStore {
     this.queue = [];
     this.conflicts = [];
     this.saveError = null;
+    this.clearSaveRetryTimer();
     this.syncError();
     this.emit();
     this.logDiagnostic("pending-discarded");

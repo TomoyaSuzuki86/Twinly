@@ -4,7 +4,14 @@ import type { AppState, BabyId, EventType, LogEvent } from "@/types";
 export type EventChange = { before?: LogEvent; after?: LogEvent; id: string };
 export type SettingChange = { path: string[]; before: unknown; after: unknown; delta?: number };
 export type AppMutation = { id: string; queuedAt?: number; events: EventChange[]; settings: SettingChange[] };
-export type AppSnapshot = { app: AppState; fromCache: boolean; completeHistory: boolean };
+export type AppSnapshot = {
+  app: AppState;
+  fromCache: boolean;
+  completeHistory: boolean;
+  // Partial v2 listeners always cover every event on or after this timestamp. Absence of an
+  // older event is not authoritative unless completeHistory is true.
+  recentSince?: number;
+};
 
 export type SyncConflict = {
   id: string;
@@ -31,6 +38,9 @@ export interface AppRepository {
   subscribe(onChange: (snapshot: AppSnapshot) => void, onError: (error: unknown) => void): () => void;
   commit(mutation: AppMutation): Promise<CommitResponse>;
   validate?(mutation: AppMutation): void;
+  // Server-only read matching the repository's normal subscription scope. Used only as a
+  // bounded recovery path when metadata listeners remain cache-only past the deadline.
+  loadLatest?(): Promise<AppState>;
   loadAll(): Promise<AppState>;
 }
 
@@ -78,6 +88,10 @@ export function createMutation(before: AppState, after: AppState, id: string, op
 export function applyMutation(state: AppState, mutation: AppMutation, checkConflicts = false): AppState {
   const result = structuredClone(state);
   const events = new Map(result.events.map((event) => [event.id, event]));
+  const eventChangesAlreadyReflected = mutation.events.length > 0 && mutation.events.every((change) => {
+    const current = events.get(change.id);
+    return change.after ? sameValue(current, change.after) : !current;
+  });
   for (const change of mutation.events) {
     if (checkConflicts && !sameValue(events.get(change.id), change.before)) {
       throw new Error("別の端末で同じ記録が変更されています。");
@@ -93,8 +107,12 @@ export function applyMutation(state: AppState, mutation: AppMutation, checkConfl
     if (checkConflicts && change.delta === undefined && !sameValue(target[key], change.before)) {
       throw new Error("別の端末で同じ設定が変更されています。");
     }
-    if (change.delta !== undefined) target[key] = Math.max(0, Number(target[key] ?? 0) + change.delta);
-    else if (change.after === undefined) delete target[key];
+    if (change.delta !== undefined) {
+      // Relative diaper stock changes are coupled to their event mutations. If the event side
+      // is already present in the base snapshot, replaying the durable overlay must be a no-op.
+      const delta = eventChangesAlreadyReflected ? 0 : change.delta;
+      target[key] = Math.max(0, Number(target[key] ?? 0) + delta);
+    } else if (change.after === undefined) delete target[key];
     else target[key] = change.after;
   }
   return result;

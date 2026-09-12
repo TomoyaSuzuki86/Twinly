@@ -227,6 +227,7 @@ const renderConflictPanel = (conflicts: SyncConflict[], store: AppStore | null) 
 export function useAppStore(userId: string | undefined, familyId: string | undefined, allHistory: boolean,
   setApp: React.Dispatch<React.SetStateAction<AppState>>, setLoading: (value: boolean) => void) {
   const store = useRef<AppStore | null>(null);
+  const lastApp = useRef<AppState>(createInitialAppState());
   const [status, setStatus] = useState<StoreStatus>({ pending: 0, error: null, ready: false, fromCache: true, conflicts: [] });
   const identity = `${userId ?? ""}:${familyId ?? ""}`;
   const [historyMode, setHistoryMode] = useState<HistoryMode>({ identity, allHistory });
@@ -273,9 +274,11 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   useEffect(() => {
     if (!db || !userId || !familyId) return;
 
+    const reuseVisibleState = initialLoadIdentity.current === identity && initialLoadComplete.current;
     if (initialLoadIdentity.current !== identity) {
       initialLoadIdentity.current = identity;
       initialLoadComplete.current = false;
+      lastApp.current = createInitialAppState();
     }
 
     setLoading(!initialLoadComplete.current);
@@ -298,11 +301,16 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     };
     const stopAccessBootstrap = subscribeFamilyAccessBootstrap(syncBootstrapLoading);
     try {
+      const initial = reuseVisibleState ? lastApp.current : createInitialAppState();
       const instance = new AppStore(createFirestoreAppRepository(db, familyId, userId, effectiveAllHistory),
-        createInitialAppState(), localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
+        initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
           latestStatus = nextStatus;
-          setApp((previous) => ({ ...next, ui: previous.ui }));
+          setApp((previous) => {
+            const merged = { ...next, ui: previous.ui };
+            lastApp.current = merged;
+            return merged;
+          });
           setStatus(nextStatus);
           syncBootstrapLoading();
           if (!migrated && nextStatus.ready && familyId === userId) {
@@ -313,7 +321,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
               removePendingEvents(userId, pending.map((event) => event.id));
             }
           }
-        });
+        }, { initialReady: reuseVisibleState });
       store.current = instance;
       stop = instance.start();
       syncBootstrapLoading();
@@ -336,9 +344,11 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     };
     const scopeKey = `twinly-outbox:${userId}:${familyId}`;
     const outboxPrefix = `${scopeKey}:`;
+    const confirmedPrefix = `${scopeKey}.confirmed:`;
     const conflictPrefix = `${scopeKey}.conflict:`;
     const refresh = (event: StorageEvent) => {
-      if (event.key === null || event.key.startsWith(outboxPrefix) || event.key.startsWith(conflictPrefix)) store.current?.refresh();
+      if (event.key === null || event.key.startsWith(outboxPrefix) || event.key.startsWith(confirmedPrefix) ||
+        event.key.startsWith(conflictPrefix)) store.current?.refresh();
     };
     window.addEventListener("storage", refresh);
     window.addEventListener("online", onOnline);
