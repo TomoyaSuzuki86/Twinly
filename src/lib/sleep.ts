@@ -285,6 +285,9 @@ export const getAverageActivityMinutes = (
     : null;
 };
 
+const FULL_ACTIVITY_RECOVERY_MINUTES = 30;
+const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+
 export const buildActivityGauge = (
   analysis: SleepAnalysis,
   now: Date,
@@ -292,7 +295,10 @@ export const buildActivityGauge = (
 ): ActivityGauge => {
   const normalizedLimitMinutes = Math.max(30, Math.min(12 * 60, limitMinutes));
   const nowMs = now.getTime();
-  const latestWakeAt = analysis.intervals.reduce<number | null>(
+  const completedIntervals = analysis.intervals
+    .filter((interval) => interval.end > interval.start && interval.end <= nowMs)
+    .sort((a, b) => a.start - b.start);
+  const latestWakeAt = completedIntervals.reduce<number | null>(
     (latest, interval) => (latest === null || interval.end > latest ? interval.end : latest),
     null
   );
@@ -303,21 +309,7 @@ export const buildActivityGauge = (
       : Math.max(0, (activityEndedAt - latestWakeAt) / (60 * 1000));
   const remainingMinutes = Math.max(0, normalizedLimitMinutes - elapsedMinutes);
 
-  // Each completed sleep contributes recovery equal to its duration at wake-up.
-  // That recovery fades linearly to zero over the current activity limit. The
-  // visible elapsed time above remains the real time since the latest wake,
-  // while only the green gauge uses this recovery-weighted activity load.
-  const recoveryMinutes = analysis.intervals.reduce((sum, interval) => {
-    if (interval.end <= interval.start || interval.end > nowMs) return sum;
-    const wakeAgeMinutes = Math.max(0, (nowMs - interval.end) / (60 * 1000));
-    if (wakeAgeMinutes >= normalizedLimitMinutes) return sum;
-
-    const sleepMinutes = (interval.end - interval.start) / (60 * 1000);
-    const remainingRatio = 1 - wakeAgeMinutes / normalizedLimitMinutes;
-    return sum + sleepMinutes * remainingRatio;
-  }, 0);
-
-  if (latestWakeAt === null) {
+  if (completedIntervals.length === 0) {
     return {
       limitMinutes: normalizedLimitMinutes,
       elapsedMinutes: 0,
@@ -326,17 +318,53 @@ export const buildActivityGauge = (
     };
   }
 
-  const cappedRecoveryMinutes = Math.min(normalizedLimitMinutes, Math.max(0, recoveryMinutes));
-  const effectiveActivityMinutes = Math.max(0, normalizedLimitMinutes - cappedRecoveryMinutes);
+  // Activity load grows while awake and recovers while asleep. Thirty minutes of
+  // sleep always restores 100% of the gauge, while awake growth remains tied to
+  // the baby's current activity limit. Clamp after every segment so sequence
+  // matters: 15m sleep -> 5m awake -> 15m sleep becomes 50% -> ~54% -> ~4%.
+  let activityPercent = 100;
+  let cursor = completedIntervals[0].start;
+
+  for (const interval of completedIntervals) {
+    if (interval.start > cursor) {
+      const awakeMinutes = (interval.start - cursor) / (60 * 1000);
+      activityPercent = clampPercent(
+        activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
+      );
+    }
+
+    const sleepMinutes = (interval.end - interval.start) / (60 * 1000);
+    activityPercent = clampPercent(
+      activityPercent - (sleepMinutes / FULL_ACTIVITY_RECOVERY_MINUTES) * 100
+    );
+    cursor = interval.end;
+  }
+
+  const currentSleepStart = analysis.currentSleepStart?.timestamp;
+  if (typeof currentSleepStart === "number" && currentSleepStart <= nowMs) {
+    if (currentSleepStart > cursor) {
+      const awakeMinutes = (currentSleepStart - cursor) / (60 * 1000);
+      activityPercent = clampPercent(
+        activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
+      );
+    }
+
+    const currentSleepMinutes = (nowMs - currentSleepStart) / (60 * 1000);
+    activityPercent = clampPercent(
+      activityPercent - (currentSleepMinutes / FULL_ACTIVITY_RECOVERY_MINUTES) * 100
+    );
+  } else if (nowMs > cursor) {
+    const awakeMinutes = (nowMs - cursor) / (60 * 1000);
+    activityPercent = clampPercent(
+      activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
+    );
+  }
 
   return {
     limitMinutes: normalizedLimitMinutes,
     elapsedMinutes,
     remainingMinutes,
-    elapsedPercent: Math.min(
-      100,
-      Math.round((effectiveActivityMinutes / normalizedLimitMinutes) * 100)
-    ),
+    elapsedPercent: Math.round(activityPercent),
   };
 };
 
