@@ -149,27 +149,58 @@ describe("sleep helpers", () => {
     expect(gauge.remainingPercent).toBe(50);
   });
 
-  it("reduces only the gauge load by the recovery from a short nap", () => {
+  it("recovers half of a full activity gauge with 15 minutes of sleep", () => {
     const minute = 60 * 1000;
     const analysis = analyzeSleepEvents(
-      [event("start", "sleepStart", 0), event("wake", "wake", 5 * minute)],
+      [
+        event("reset-sleep", "sleepStart", 0),
+        event("reset-wake", "wake", 30 * minute),
+        event("nap-start", "sleepStart", 150 * minute),
+        event("nap-wake", "wake", 165 * minute),
+      ],
       "A"
     );
 
-    const atWake = buildActivityGauge(analysis, new Date(5 * minute), 120);
-    expect(atWake.elapsedMinutes).toBe(0);
-    expect(atWake.remainingMinutes).toBe(120);
-    expect(atWake.elapsedPercent).toBe(96);
-
-    const afterThirtyMinutes = buildActivityGauge(analysis, new Date(35 * minute), 120);
-    expect(afterThirtyMinutes.elapsedMinutes).toBe(30);
-    expect(afterThirtyMinutes.remainingMinutes).toBe(90);
-    expect(afterThirtyMinutes.elapsedPercent).toBe(97);
-
-    expect(buildActivityGauge(analysis, new Date(125 * minute), 120).elapsedPercent).toBe(100);
+    const gauge = buildActivityGauge(analysis, new Date(165 * minute), 120);
+    expect(gauge.elapsedMinutes).toBe(0);
+    expect(gauge.remainingMinutes).toBe(120);
+    expect(gauge.elapsedPercent).toBe(50);
   });
 
-  it("uses the current activity limit for both recovery decay and gauge capacity", () => {
+  it("fully recovers the activity gauge with 30 minutes of sleep", () => {
+    const minute = 60 * 1000;
+    const analysis = analyzeSleepEvents(
+      [
+        event("reset-sleep", "sleepStart", 0),
+        event("reset-wake", "wake", 30 * minute),
+        event("nap-start", "sleepStart", 150 * minute),
+        event("nap-wake", "wake", 180 * minute),
+      ],
+      "A"
+    );
+
+    expect(buildActivityGauge(analysis, new Date(180 * minute), 120).elapsedPercent).toBe(0);
+  });
+
+  it("applies sleep recovery and awake load in chronological order", () => {
+    const minute = 60 * 1000;
+    const analysis = analyzeSleepEvents(
+      [
+        event("reset-sleep", "sleepStart", 0),
+        event("reset-wake", "wake", 30 * minute),
+        event("nap-1-start", "sleepStart", 150 * minute),
+        event("nap-1-wake", "wake", 165 * minute),
+        event("nap-2-start", "sleepStart", 170 * minute),
+        event("nap-2-wake", "wake", 185 * minute),
+      ],
+      "A"
+    );
+
+    const gauge = buildActivityGauge(analysis, new Date(185 * minute), 120);
+    expect(gauge.elapsedPercent).toBe(4);
+  });
+
+  it("uses the current activity limit only for awake accumulation", () => {
     const minute = 60 * 1000;
     const analysis = analyzeSleepEvents(
       [event("start", "sleepStart", 0), event("wake", "wake", 60 * minute)],
@@ -180,12 +211,12 @@ describe("sleep helpers", () => {
     const twoHourGauge = buildActivityGauge(analysis, now, 120);
     expect(twoHourGauge.elapsedMinutes).toBe(30);
     expect(twoHourGauge.remainingMinutes).toBe(90);
-    expect(twoHourGauge.elapsedPercent).toBe(63);
+    expect(twoHourGauge.elapsedPercent).toBe(25);
 
     const threeHourGauge = buildActivityGauge(analysis, now, 180);
     expect(threeHourGauge.elapsedMinutes).toBe(30);
     expect(threeHourGauge.remainingMinutes).toBe(150);
-    expect(threeHourGauge.elapsedPercent).toBe(72);
+    expect(threeHourGauge.elapsedPercent).toBe(17);
   });
 
   it("keeps the activity gauge unknown until the first completed sleep", () => {
