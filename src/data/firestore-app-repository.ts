@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocFromServer, getDocs, limit, onSnapshot, orderBy,
+  collection, doc, getDocFromServer, getDocsFromServer, limit, onSnapshot, orderBy,
   query, runTransaction, serverTimestamp, startAfter, where,
   type Firestore, type QueryDocumentSnapshot,
 } from "firebase/firestore";
@@ -141,6 +141,45 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       throw new Error("一括変更は450件までです。全件の復元・削除は管理者による作業が必要です。");
     }
   };
+
+  const loadAllFromServer = async () => {
+    const snapshot = await getDocFromServer(stateRef);
+    if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
+    const current = decode(snapshot.data());
+    if (snapshot.data()?.schemaVersion !== 2) return current;
+    const events: LogEvent[] = [];
+    let cursor: QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = await getDocsFromServer(query(eventsRef, orderBy("timestamp", "desc"),
+        ...(cursor ? [startAfter(cursor)] : []), limit(PAGE_SIZE)));
+      events.push(...page.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
+      if (page.size < PAGE_SIZE) break;
+      cursor = page.docs[page.docs.length - 1];
+    }
+    return { ...current, events };
+  };
+
+  const loadLatestFromServer = async () => {
+    if (allHistory) return loadAllFromServer();
+    const snapshot = await getDocFromServer(stateRef);
+    if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
+    const current = decode(snapshot.data());
+    if (snapshot.data()?.schemaVersion !== 2) return current;
+
+    const since = Date.now() - RECENT_DAYS * 86400000;
+    const types: EventType[] = ["milk", "solidFood", "diaper", "sleepStart", "wake", "weight", "height"];
+    const recentPromise = getDocsFromServer(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")));
+    const seedPromises = (["A", "B"] as const).flatMap((babyId) => types.map((type) =>
+      getDocsFromServer(query(eventsRef, where("babyId", "==", babyId), where("type", "==", type),
+        where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)))));
+    const [recentRows, ...seedRows] = await Promise.all([recentPromise, ...seedPromises]);
+    const byId = new Map<string, LogEvent>();
+    for (const row of [...seedRows.flatMap((rows) => rows.docs), ...recentRows.docs]) {
+      byId.set(row.id, { ...row.data(), id: row.id } as LogEvent);
+    }
+    return { ...current, events: [...byId.values()].sort((a, b) => b.timestamp - a.timestamp) };
+  };
+
   return {
     validate,
     subscribe(onChange, onError) {
@@ -338,22 +377,7 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         return conflicts.length ? result : confirmed;
       });
     },
-    async loadAll() {
-      const snapshot = await getDocFromServer(stateRef);
-      if (snapshot.data()?.migrationState === "copying") throw new Error("保存方式の更新中です。");
-      const current = decode(snapshot.data());
-      if (snapshot.data()?.schemaVersion !== 2) return current;
-      const events: LogEvent[] = [];
-      let cursor: QueryDocumentSnapshot | undefined;
-      for (;;) {
-        const page = await getDocs(query(eventsRef, orderBy("timestamp", "desc"),
-          ...(cursor ? [startAfter(cursor)] : []), limit(PAGE_SIZE)));
-        if (page.metadata.fromCache) throw new Error("全履歴の取得には通信が必要です。");
-        events.push(...page.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
-        if (page.size < PAGE_SIZE) break;
-        cursor = page.docs[page.docs.length - 1];
-      }
-      return { ...current, events };
-    },
+    loadLatest: loadLatestFromServer,
+    loadAll: loadAllFromServer,
   };
 }
