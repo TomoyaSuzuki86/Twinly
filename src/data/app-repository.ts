@@ -4,7 +4,14 @@ import type { AppState, BabyId, EventType, LogEvent } from "@/types";
 export type EventChange = { before?: LogEvent; after?: LogEvent; id: string };
 export type SettingChange = { path: string[]; before: unknown; after: unknown; delta?: number };
 export type AppMutation = { id: string; queuedAt?: number; events: EventChange[]; settings: SettingChange[] };
-export type AppSnapshot = { app: AppState; fromCache: boolean; completeHistory: boolean };
+export type AppSnapshot = {
+  app: AppState;
+  fromCache: boolean;
+  completeHistory: boolean;
+  // Partial v2 listeners always cover every event on or after this timestamp. Absence of an
+  // older event is not authoritative unless completeHistory is true.
+  recentSince?: number;
+};
 
 export type SyncConflict = {
   id: string;
