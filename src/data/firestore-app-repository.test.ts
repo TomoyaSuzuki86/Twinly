@@ -16,6 +16,7 @@ vi.mock("firebase/firestore", () => {
     query: (reference: any, ...constraints: any[]) => { const q = { ...reference, constraints }; memory.queries.push(q); return q; },
     getDocFromServer: async (reference: any) => snapshot(reference.path),
     getDocs: async () => ({ docs: [], size: 0, metadata: { fromCache: false } }),
+    getDocsFromServer: async () => ({ docs: [], size: 0, metadata: { fromCache: false } }),
     onSnapshot: (reference: any, options: any, listener?: any) => {
       const callback = typeof options === "function" ? options : listener;
       callback(reference.constraints ? { docs: [], metadata: { fromCache: false } } : snapshot(reference.path));
@@ -79,7 +80,7 @@ describe("Firestore adapter contract", () => {
     expect(memory.docs.get(eventPath).note).toBe("別端末のメモ");
   });
 
-  it("returns only the same-field conflict with concrete local and remote values", async () => {
+  it("resolves same-field edits by server transaction order without prompting", async () => {
     const baseEvent = { ...record, milkMl: 120 };
     const initial = appendEvents(createInitialAppState(), [baseEvent]);
     const local = { ...initial, events: [{ ...baseEvent, milkMl: 140 }] };
@@ -88,20 +89,9 @@ describe("Firestore adapter contract", () => {
 
     const result = await repository().commit(createMutation(initial, local, "conflict"));
 
-    expect(isCommitResult(result)).toBe(true);
-    if (!isCommitResult(result)) throw new Error("expected structured conflict");
-    expect(result.conflicts).toEqual([expect.objectContaining({
-      field: "milkMl",
-      localValue: 140,
-      remoteValue: 160,
-      babyId: "A",
-      eventType: "milk",
-    })]);
-    expect(result.unresolved?.events[0]).toEqual(expect.objectContaining({
-      before: expect.objectContaining({ milkMl: 160 }),
-      after: expect.objectContaining({ milkMl: 140 }),
-    }));
-    expect(memory.docs.get(eventPath).milkMl).toBe(160);
+    expect(isCommitResult(result) ? result.conflicts : []).toEqual([]);
+    expect(memory.docs.get(eventPath).milkMl).toBe(140);
+    expect(memory.docs.get("families/family/mutations/conflict").result.conflicts).toEqual([]);
   });
 
   it("preserves legacy history without silently migrating or truncating it", async () => {
