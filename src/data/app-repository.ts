@@ -31,6 +31,9 @@ export interface AppRepository {
   subscribe(onChange: (snapshot: AppSnapshot) => void, onError: (error: unknown) => void): () => void;
   commit(mutation: AppMutation): Promise<CommitResponse>;
   validate?(mutation: AppMutation): void;
+  // Server-only read matching the repository's normal subscription scope. Used only as a
+  // bounded recovery path when metadata listeners remain cache-only past the deadline.
+  loadLatest?(): Promise<AppState>;
   loadAll(): Promise<AppState>;
 }
 
