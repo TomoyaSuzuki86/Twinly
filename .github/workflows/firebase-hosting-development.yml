@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: firebase-development-preview
+  group: firebase-development-preview-v2
   cancel-in-progress: true
 
 jobs:
