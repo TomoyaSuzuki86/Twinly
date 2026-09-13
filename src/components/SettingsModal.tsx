@@ -48,12 +48,6 @@ type SettingsModalProps = {
   planAi?: React.ReactNode;
 };
 
-const parseVoiceAliases = (value: string) =>
-  value
-    .split(/[\s,、]+/)
-    .map((alias) => alias.trim())
-    .filter(Boolean);
-
 type ResetRequest = {
   babyId: BabyId;
   kind: "milkWindow" | "milkTarget" | "activityLimit" | "sleepTarget";
@@ -216,15 +210,6 @@ export function SettingsModal({
                         <Input
                           value={profile.displayName}
                           onChange={(e) => handleProfileChange(babyId, "displayName", e.target.value)}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>音声入力名</Label>
-                        <Input
-                          value={(profile.voiceAliases ?? []).join(" ")}
-                          onChange={(e) => handleProfileChange(babyId, "voiceAliases", parseVoiceAliases(e.target.value))}
-                          placeholder="ひなた ひなちゃん"
                         />
                       </div>
 

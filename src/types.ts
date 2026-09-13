@@ -44,6 +44,7 @@ export type LogEvent = {
   weight?: number;
   height?: number;
   note?: string;
+  sharedDailyId?: string;
   createdByUid?: string;
   updatedByUid?: string;
   createdAt?: number;

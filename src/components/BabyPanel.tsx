@@ -26,6 +26,7 @@ import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
 import { EventCard } from "./EventCard";
+import { VoiceCommandButton } from "./VoiceCommandButton";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
@@ -67,6 +68,7 @@ type BabyPanelProps = {
   onOpenDailyReport: () => void;
   onOpenHealthChart: () => void;
   onOpenTimeline: () => void;
+  onVoiceMessage?: (message: string) => void;
   lastWeight: number | null;
   lastHeight: number | null;
   themeDimmedBgColor: string;
@@ -152,6 +154,7 @@ export function BabyPanel({
   onOpenDailyReport,
   onOpenHealthChart,
   onOpenTimeline,
+  onVoiceMessage = () => {},
   lastWeight,
   lastHeight,
   themeDimmedBgColor,
@@ -488,9 +491,23 @@ export function BabyPanel({
               }}
               className="h-7 flex-1 px-2 text-sm"
             />
-            <Button size="icon" className="h-7 w-7 flex-shrink-0" onClick={handleSaveDailyNote} disabled={!dailyNote.trim()}>
-              <Check className="h-4 w-4" />
-            </Button>
+            {dailyNote.trim() ? (
+              <Button
+                size="icon"
+                className="h-7 w-7 flex-shrink-0"
+                onClick={handleSaveDailyNote}
+                aria-label="一言メモを保存"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+            ) : (
+              <VoiceCommandButton
+                className="h-7 w-7 flex-shrink-0"
+                onCommand={() => {}}
+                onMessage={onVoiceMessage}
+                onTranscript={(text) => setDailyNote(text.trim())}
+              />
+            )}
             <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onOpenDailyReport} aria-label="show daily reports">
               <FileText className="h-4 w-4" />
             </Button>
