@@ -336,6 +336,7 @@ export function BabyPanel({
       <CardContent className="p-4">
         <div className="grid grid-cols-2 gap-4">
           <Button
+            data-tutorial="primary-action"
             size="lg"
             className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-milk-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-milk-text))] hover:[background:hsl(var(--gauge-milk-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
@@ -367,6 +368,7 @@ export function BabyPanel({
             </div>
           </Button>
           <Button
+            data-tutorial="primary-action"
             size="lg"
             className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-diaper-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-diaper-text))] hover:[background:hsl(var(--gauge-diaper-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
@@ -398,6 +400,7 @@ export function BabyPanel({
 
         {sleepManagementEnabled ? (
         <Button
+          data-tutorial="primary-action"
           disabled={sleepTransition !== null}
           data-transition={sleepTransition || undefined}
           role="switch"
@@ -633,6 +636,7 @@ export function BabyPanel({
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
         <div
+          data-tutorial="log-summary"
           className="-mx-1 overflow-x-auto px-1 pb-2"
           data-horizontal-scroll="true"
           onTouchStart={(event) => event.stopPropagation()}

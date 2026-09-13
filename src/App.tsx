@@ -1414,8 +1414,12 @@ export default function App() {
                 </>}
               </div>}
 
-              <p className="text-center text-[10px] leading-none text-muted-foreground">
-                ダブルクリック／長押しで音声入力
+              <p
+                className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
+                data-twinly-voice-hint="true"
+              >
+                <span className="hidden min-[480px]:inline">ダブルクリック／長押しで音声入力｜ヘッダー＝2人同時・タブ＝個別</span>
+                <span className="min-[480px]:hidden">ダブルクリック／長押しで音声入力</span>
               </p>
 
               <TabsList

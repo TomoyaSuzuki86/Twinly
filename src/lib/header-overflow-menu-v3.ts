@@ -84,7 +84,10 @@ const createMenuItem = (label: string, iconMarkup: string, onClick: () => void) 
 const findHint = (header: HTMLElement) => {
   const container = header.parentElement;
   if (!container) return null;
-  return [...container.querySelectorAll('p')].find((node) => node.textContent?.trim() === HINT_TEXT) as HTMLParagraphElement | undefined;
+  return (
+    container.querySelector<HTMLParagraphElement>('p[data-twinly-voice-hint="true"]') ??
+    ([...container.querySelectorAll('p')].find((node) => node.textContent?.includes(HINT_TEXT)) as HTMLParagraphElement | undefined)
+  );
 };
 
 const ensurePlayer = (header: HTMLElement) => {
