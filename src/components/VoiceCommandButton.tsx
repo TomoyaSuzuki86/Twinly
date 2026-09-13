@@ -79,14 +79,24 @@ const MAX_LISTENING_MS = 20000;
 const setBabyTabVoiceHighlight = (target: VoiceCommandTarget | undefined, active: boolean) => {
   if (typeof document === "undefined") return;
 
-  document.querySelectorAll<HTMLElement>('[role="tab"][data-voice-input-active="true"]').forEach((tab) => {
-    tab.removeAttribute("data-voice-input-active");
-  });
+  document
+    .querySelectorAll<HTMLElement>('[data-voice-input-active="true"], .twinly-voice-input-active')
+    .forEach((element) => {
+      element.removeAttribute("data-voice-input-active");
+      element.classList.remove("twinly-voice-input-active");
+    });
 
   if (!active || (target !== "A" && target !== "B")) return;
+
   const babyIcon = document.querySelector<HTMLElement>(`[data-twinly-baby-icon="${target}"]`);
-  const tab = babyIcon?.closest<HTMLElement>('[role="tab"]');
-  tab?.setAttribute("data-voice-input-active", "true");
+  const tab = babyIcon?.closest<HTMLElement>('.twinly-baby-tabs-list [role="tab"]');
+
+  // Mark both the full tab and its avatar. The avatar ring remains visible even if
+  // a parent clips the tab's outer glow or the active tab background is very light.
+  [tab, babyIcon].forEach((element) => {
+    element?.setAttribute("data-voice-input-active", "true");
+    element?.classList.add("twinly-voice-input-active");
+  });
 };
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
@@ -221,7 +231,10 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       recognition.maxAlternatives = 5;
       recognition.continuous = true;
 
-      recognition.onstart = () => setListening(true);
+      recognition.onstart = () => {
+        setListening(true);
+        setBabyTabVoiceHighlight(forcedBabyIdRef.current, true);
+      };
       recognition.onend = () => {
         if (sessionId !== sessionIdRef.current) return;
         recognitionRef.current = null;
