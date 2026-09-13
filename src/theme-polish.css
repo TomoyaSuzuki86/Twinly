@@ -97,9 +97,12 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
 }
 
 /* Baby-tab voice input uses the same active color as the listening microphone button. */
+.twinly-baby-tabs-list.twinly-fluid-tabs-ready > [role="tab"][data-voice-input-active="true"],
+.twinly-baby-tabs-list.twinly-fluid-tabs-ready > [role="tab"].twinly-voice-input-active,
 .twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"],
 .twinly-baby-tabs-list [role="tab"].twinly-voice-input-active {
-  background: hsl(var(--primary)) !important;
+  background-color: hsl(var(--primary)) !important;
+  background-image: none !important;
   color: hsl(var(--primary-foreground)) !important;
   box-shadow: none !important;
 }
@@ -124,7 +127,8 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
 
   html[data-twinly-layout="split"] .twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"],
   html[data-twinly-layout="split"] .twinly-baby-tabs-list [role="tab"].twinly-voice-input-active {
-    background: hsl(var(--primary)) !important;
+    background-color: hsl(var(--primary)) !important;
+    background-image: none !important;
     color: hsl(var(--primary-foreground)) !important;
     box-shadow: none !important;
   }
