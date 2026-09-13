@@ -36,6 +36,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
 import { useFamilyAccess } from "./lib/use-family-access";
+import { useAppearancePreferences } from "./lib/use-appearance-preferences";
 import { AiTools } from "./components/AiTools";
 import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
@@ -145,38 +146,10 @@ export default function App() {
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
   const {access: familyAccess, error: accessError} = useFamilyAccess(authUser?.uid, family?.id);
-  const [theme, setTheme] = useState("dark");
-  useEffect(() => {
-    if (!family?.id) return;
-    try {
-      const saved = localStorage.getItem(`twinly-theme:${family.id}`) || "dark";
-      setTheme(saved === "light" ? "milk" : saved === "pink" ? "sakura" : saved === "yellow" ? "sun" : saved);
-    } catch { setTheme("dark"); }
-  }, [family?.id]);
-  useEffect(() => {
-    const freeTheme = theme === "milk";
-    const premiumTheme = ["sakura", "sun", "forest"].includes(theme) && familyAccess?.features.themes;
-    document.documentElement.dataset.theme = freeTheme || premiumTheme ? theme : "dark";
-    return () => { delete document.documentElement.dataset.theme; };
-  }, [theme, familyAccess?.features.themes]);
-  const [layoutMode, setLayoutMode] = useState<"single" | "split">("single");
-  useEffect(() => {
-    if (!family?.id) {
-      setLayoutMode("single");
-      return;
-    }
-    try {
-      setLayoutMode(localStorage.getItem(`twinly-layout:${family.id}`) === "split" ? "split" : "single");
-    } catch {
-      setLayoutMode("single");
-    }
-  }, [family?.id]);
-  useEffect(() => {
-    document.documentElement.dataset.twinlyLayout = layoutMode;
-    return () => {
-      delete document.documentElement.dataset.twinlyLayout;
-    };
-  }, [layoutMode]);
+  const { theme, layoutMode, selectTheme, selectLayoutMode } = useAppearancePreferences(
+    family?.id,
+    Boolean(familyAccess?.features.themes)
+  );
   const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
@@ -1597,10 +1570,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setLayoutMode("single");
-                    try { localStorage.setItem(`twinly-layout:${family.id}`, "single"); } catch {}
-                  }}
+                  onClick={() => selectLayoutMode("single")}
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "single" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">1人ずつ表示</span>
@@ -1608,10 +1578,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setLayoutMode("split");
-                    try { localStorage.setItem(`twinly-layout:${family.id}`, "split"); } catch {}
-                  }}
+                  onClick={() => selectLayoutMode("split")}
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">左右2人表示</span>
@@ -1625,7 +1592,7 @@ export default function App() {
                 ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
                 ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
                 ["forest", "森の朝", "from-emerald-50 to-green-200"]
-              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
+              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => selectTheme(id)} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
             </section>
           </div>
         }
