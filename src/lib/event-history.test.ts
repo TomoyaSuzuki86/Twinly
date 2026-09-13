@@ -88,6 +88,23 @@ describe("event-history helpers", () => {
     });
   });
 
+  it("keeps the three-month history grouped by Monday-based weeks", () => {
+    expect(buildMilkChartData(milkEvents, "3M", now)).toEqual([
+      {
+        key: "2026-04-06",
+        label: "04-06",
+        total: { count: 1, amount: 100, average: 100 },
+        solidFoodCount: 0,
+      },
+      {
+        key: "2026-04-20",
+        label: "04-20",
+        total: { count: 2, amount: 200, average: 100 },
+        solidFoodCount: 0,
+      },
+    ]);
+  });
+
   it("summarizes diaper totals by kind and daily average", () => {
     const diaperEvents: LogEvent[] = [
       {
