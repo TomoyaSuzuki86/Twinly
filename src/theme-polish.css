@@ -96,48 +96,17 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
   z-index: 35 !important;
 }
 
-/* A baby-tab initiated voice session should make the active target unmistakable. */
-@keyframes twinly-voice-tab-pulse {
-  0%, 100% {
-    box-shadow:
-      inset 0 0 0 2px rgb(255 255 255 / 0.98),
-      0 0 0 2px rgb(255 255 255 / 0.98),
-      0 0 12px 3px rgb(255 255 255 / 0.62);
-  }
-  50% {
-    box-shadow:
-      inset 0 0 0 2px rgb(255 255 255 / 1),
-      0 0 0 3px rgb(255 255 255 / 1),
-      0 0 24px 8px rgb(255 255 255 / 0.92);
-  }
-}
-
+/* Baby-tab voice input uses the same active color as the listening microphone button. */
 .twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"],
 .twinly-baby-tabs-list [role="tab"].twinly-voice-input-active {
-  position: relative;
-  z-index: 4;
-  animation: twinly-voice-tab-pulse 1.05s ease-in-out infinite;
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: none !important;
 }
 
-.twinly-baby-tabs-list [data-twinly-baby-icon][data-voice-input-active="true"],
-.twinly-baby-tabs-list [data-twinly-baby-icon].twinly-voice-input-active {
-  position: relative;
-  z-index: 5;
-  box-shadow:
-    0 0 0 2px rgb(255 255 255 / 1),
-    0 0 14px 4px rgb(255 255 255 / 0.9) !important;
-  filter: brightness(1.12);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"],
-  .twinly-baby-tabs-list [role="tab"].twinly-voice-input-active {
-    animation: none;
-    box-shadow:
-      inset 0 0 0 2px rgb(255 255 255 / 1),
-      0 0 0 3px rgb(255 255 255 / 1),
-      0 0 20px 6px rgb(255 255 255 / 0.85) !important;
-  }
+.twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"] .text-muted-foreground,
+.twinly-baby-tabs-list [role="tab"].twinly-voice-input-active .text-muted-foreground {
+  color: hsl(var(--primary-foreground) / 0.78) !important;
 }
 
 /* Wide twin split layout */
@@ -155,7 +124,9 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
 
   html[data-twinly-layout="split"] .twinly-baby-tabs-list [role="tab"][data-voice-input-active="true"],
   html[data-twinly-layout="split"] .twinly-baby-tabs-list [role="tab"].twinly-voice-input-active {
-    animation: twinly-voice-tab-pulse 1.05s ease-in-out infinite;
+    background: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+    box-shadow: none !important;
   }
 
   html[data-twinly-layout="split"] .twinly-baby-tabs-list [data-testid$="-mini-gauge"] {
