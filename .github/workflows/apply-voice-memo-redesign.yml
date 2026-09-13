@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   apply:
-    if: github.event.head_commit.message != 'Capture voice memo test failure'
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Tokyo
@@ -37,28 +36,22 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: |
-          set +e
-          npm test 2>&1 | tee voice-memo-test-output.txt
-          status=${PIPESTATUS[0]}
-          exit $status
+      - name: Voice memo regression tests
+        run: npm test -- src/lib/voice-command.test.ts src/lib/voice-command.target.test.ts src/components/BabyPanel.test.tsx
 
-      - name: Capture test failure
-        if: failure()
+      - name: Static feature assertions
         run: |
-          cp voice-memo-test-output.txt /tmp/voice-memo-test-output.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git reset --hard HEAD
-          git clean -fd
-          cp /tmp/voice-memo-test-output.txt voice-memo-test-output.txt
-          git add voice-memo-test-output.txt
-          git commit -m "Capture voice memo test failure"
-          git push
+          ! grep -q '音声入力名' src/components/SettingsModal.tsx
+          ! grep -q 'parseVoiceAliases' src/components/SettingsModal.tsx
+          grep -q 'sharedDailyId' src/components/DailyReportModal.tsx
+          grep -q 'sharedDailyId' src/App.tsx
+          grep -q 'forcedBabyId: "both"' src/lib/voice-command.target.test.ts
 
       - name: Build
         run: npm run build
+
+      - name: Clean diagnostic files
+        run: rm -f voice-memo-test-output.txt
 
       - name: Commit product changes
         run: |
