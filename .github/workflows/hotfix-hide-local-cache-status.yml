@@ -1,0 +1,52 @@
+name: Apply local cache status hotfix
+
+on:
+  push:
+    branches:
+      - hotfix/hide-local-cache-status
+    paths:
+      - .github/workflows/hotfix-hide-local-cache-status.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+
+      - name: Remove cache-only status banner
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text()
+
+          old_condition = 'syncStatus.pending > 0 || syncStatus.error || syncStatus.fromCache'
+          new_condition = 'syncStatus.pending > 0 || syncStatus.error'
+          if text.count(old_condition) != 1:
+              raise SystemExit(f'expected exactly one status condition, found {text.count(old_condition)}')
+          text = text.replace(old_condition, new_condition, 1)
+
+          old_message = ': syncStatus.pending ? `端末に保存済み・同期待ち ${syncStatus.pending}件` : "端末の保存データを表示中"'
+          new_message = ': `端末に保存済み・同期待ち ${syncStatus.pending}件`'
+          if text.count(old_message) != 1:
+              raise SystemExit(f'expected exactly one cache-only message, found {text.count(old_message)}')
+          text = text.replace(old_message, new_message, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit hotfix and remove helper workflow
+        shell: bash
+        run: |
+          rm .github/workflows/hotfix-hide-local-cache-status.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx .github/workflows/hotfix-hide-local-cache-status.yml
+          git commit -m "fix: hide cache-only sync status"
+          git push origin HEAD:hotfix/hide-local-cache-status
