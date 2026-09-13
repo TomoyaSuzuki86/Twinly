@@ -40,7 +40,8 @@ const targetResolvers: Array<() => HTMLElement | null> = [
   () => document.querySelector<HTMLElement>('[aria-label="settings"]'),
 ];
 
-const TOTAL_STEPS = targetResolvers.length;
+const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 8, 10, 11];
+const TOTAL_STEPS = tutorialSteps.length;
 const scrollTargetIntoView = new Set([1, 7, 8, 9]);
 const voiceSteps = new Set([4, 5]);
 
@@ -449,6 +450,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5;
   const interactiveSpotlight = step === 4 || step === 5 || step === 11;
   const isVoiceStep = voiceSteps.has(step);
+  const stepIndex = Math.max(0, tutorialSteps.indexOf(step));
+  const isLastStep = stepIndex === TOTAL_STEPS - 1;
 
   const spotlightLabel =
     step === 4 ? "選択中の赤ちゃんの音声入力を練習" :
@@ -468,11 +471,11 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     voiceLongPressTriggeredRef.current = false;
     voiceLastTapRef.current = 0;
 
-    if (step >= TOTAL_STEPS - 1) {
+    if (isLastStep) {
       finish("completed");
       return;
     }
-    setStep((value) => Math.min(TOTAL_STEPS - 1, value + 1));
+    setStep(tutorialSteps[stepIndex + 1]);
   };
 
   const completeAndOpenSettings = () => {
@@ -532,11 +535,11 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
           >
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-                使い方 <span className="ml-2">{step + 1} / {TOTAL_STEPS}</span>
+                使い方 <span className="ml-2">{stepIndex + 1} / {TOTAL_STEPS}</span>
               </span>
               <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={skipCurrentStep}>スキップ</Button>
-                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setExitConfirmOpen(true)}>終了</Button>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => finish("skipped")}>終了</Button>
               </div>
             </div>
 
@@ -745,16 +748,20 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-3">
-              <Button variant="ghost" disabled={step === 0} onClick={() => setStep((value) => value - 1)}>
+              <Button
+                variant="ghost"
+                disabled={stepIndex === 0}
+                onClick={() => setStep(tutorialSteps[Math.max(0, stepIndex - 1)])}
+              >
                 戻る
               </Button>
-              {step < TOTAL_STEPS - 1 && <Button
+              {!isLastStep && <Button
                 disabled={requiresPractice && !practiced}
-                onClick={() => setStep((value) => value + 1)}
+                onClick={() => setStep(tutorialSteps[stepIndex + 1])}
               >
                 次へ
               </Button>}
-              {step === TOTAL_STEPS - 1 && <Button onClick={completeAndOpenSettings}>設定を開いて完了</Button>}
+              {isLastStep && <Button onClick={completeAndOpenSettings}>設定を開いて完了</Button>}
             </div>
           </section>
 
