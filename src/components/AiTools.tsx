@@ -60,7 +60,7 @@ const premiumBenefits = [
     icon: Palette,
     title: "Premium限定テーマ",
     description:
-      "白・ピンク・イエローなど、気分や好みに合わせてTwinlyを着せ替え。毎日開くアプリだからこそ、見た目にもこだわれます。",
+      "無料版のナイト・ミルクに加えて、さくら・ひだまり・森の朝へ着せ替えできます。毎日開くアプリだからこそ、見た目にもこだわれます。",
   },
   {
     icon: Music2,
@@ -74,13 +74,14 @@ const comparisonRows = [
   ["基本の育児記録", true, true],
   ["通常の音声入力", true, true],
   ["ホワイトノイズ", true, true],
+  ["ナイト・ミルクテーマ", true, true],
   ["各種お世話ゲージ", false, true],
   ["AIアドバイス・AI質問", false, true],
   ["おむつ在庫切れ予測・通知", false, true],
   ["家族との記録共有", false, true],
   ["複数のおやすみ音楽", false, true],
   ["今日のまとめ通知", false, true],
-  ["追加テーマ", false, true],
+  ["Premium限定テーマ（さくら・ひだまり・森）", false, true],
 ] as const;
 
 export function AiTools({ familyId, embedded = false }: AiToolsProps) {
@@ -153,7 +154,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
           記録するだけだったTwinlyが、次のお世話・最近の変化・買い足しまで先回りして支えます。
         </p>
         <div className="mt-5 flex items-end gap-2">
-          <span className="text-3xl font-bold">¥500</span>
+          <span className="text-3xl font-bold">¥800</span>
           <span className="pb-1 text-sm text-muted-foreground">/ 月</span>
         </div>
         <div className="mt-1 text-sm font-semibold text-primary">最初の7日間は無料</div>

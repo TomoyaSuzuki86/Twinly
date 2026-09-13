@@ -12,7 +12,6 @@ const MENU_ID = 'twinly-header-menu';
 const PLAYER_ID = 'twinly-mini-player';
 const STYLE_ID = 'twinly-header-menu-style-v3';
 const HINT_TEXT = 'ダブルクリック／長押しで音声入力';
-const AI_ADVICE_SELECTOR = 'button[aria-label="AIアドバイスを見る"]';
 
 let comfortState: ComfortState = { active: false, paused: false, trackId: '', trackLabel: '' };
 let observer: MutationObserver | null = null;
@@ -35,7 +34,6 @@ const ensureStyle = () => {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    ${AI_ADVICE_SELECTOR} { display:none !important; }
     #${MENU_WRAPPER_ID} { position: relative; display: flex; align-items: center; }
     #${MENU_WRAPPER_ID} > .twinly-menu-trigger { width:2.5rem;height:2.5rem;display:grid;place-items:center;flex:0 0 2.5rem;border:0;border-radius:.375rem;background:transparent;color:inherit;cursor:pointer;transition:background-color 160ms ease,color 160ms ease;-webkit-tap-highlight-color:transparent; }
     #${MENU_WRAPPER_ID} > .twinly-menu-trigger:hover,#${MENU_WRAPPER_ID} > .twinly-menu-trigger[aria-expanded='true'] { background:hsl(var(--accent));color:hsl(var(--accent-foreground)); }
@@ -44,7 +42,10 @@ const ensureStyle = () => {
     #${MENU_ID}[data-open='true'] { opacity:1;transform:translateY(0) scale(1);pointer-events:auto; }
     #${MENU_ID} .twinly-menu-item { width:100%;min-height:2.5rem;display:flex;align-items:center;gap:.7rem;border:0;border-radius:.6rem;padding:.5rem .65rem;background:transparent;color:inherit;font:600 13px/1.2 'DM Sans','Noto Sans JP',sans-serif;text-align:left;cursor:pointer;transition:background-color 120ms ease; }
     #${MENU_ID} .twinly-menu-item:hover { background:hsl(var(--accent)); }
+    #${MENU_ID} .twinly-menu-item:disabled { opacity:.45;cursor:not-allowed; }
+    #${MENU_ID} .twinly-menu-item:disabled:hover { background:transparent; }
     #${MENU_ID} .twinly-menu-item svg { width:1.05rem;height:1.05rem;flex:0 0 auto; }
+    #${MENU_ID} .twinly-menu-premium { margin-left:auto;border-radius:9999px;background:hsl(var(--primary) / .12);color:hsl(var(--primary));padding:.12rem .38rem;font-size:9px;font-weight:800;letter-spacing:.01em; }
     [data-twinly-voice-hint][hidden],#${PLAYER_ID}[hidden] { display:none !important; }
     #${PLAYER_ID} { height:1.15rem;min-height:1.15rem;width:min(100%,29rem);margin-left:auto;margin-right:auto;display:flex;align-items:center;gap:.3rem;padding:0 .25rem 0 .5rem;border:1px solid hsl(var(--border));border-radius:9999px;background:hsl(var(--card) / .82);color:hsl(var(--card-foreground));box-shadow:0 1px 4px rgb(0 0 0 / .07);overflow:hidden; }
     #${PLAYER_ID} .twinly-player-track { min-width:0;flex:1;display:flex;align-items:center;gap:.3rem;font:600 10px/1 'DM Sans','Noto Sans JP',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer; }
@@ -59,8 +60,6 @@ const ensureStyle = () => {
 };
 
 const stopHeaderGesture = (event: Event) => event.stopPropagation();
-
-const getAiAdviceButton = () => document.querySelector<HTMLButtonElement>(AI_ADVICE_SELECTOR);
 
 const setMenuOpen = (open: boolean) => {
   const menu = document.getElementById(MENU_ID);
@@ -133,9 +132,19 @@ const updatePlayer = () => {
   }
 };
 
-const updateAiMenuVisibility = () => {
+const updateAiMenuState = () => {
   const item = document.querySelector<HTMLButtonElement>(`#${MENU_ID} [data-menu-action="ai-advice"]`);
-  if (item) item.hidden = !getAiAdviceButton();
+  if (!item) return;
+  const state = document.documentElement.dataset.twinlyAiAdvice ?? "loading";
+  const enabled = state === "enabled";
+  const premiumRequired = state === "premium-required";
+  if (item.disabled !== !enabled) item.disabled = !enabled;
+  const ariaDisabled = String(!enabled);
+  if (item.getAttribute("aria-disabled") !== ariaDisabled) item.setAttribute("aria-disabled", ariaDisabled);
+  const title = enabled ? "AIアドバイス" : premiumRequired ? "Premiumで利用できます" : "利用状態を確認しています";
+  if (item.title !== title) item.title = title;
+  const html = `${icons.sparkles}<span>AIアドバイス</span>${premiumRequired ? '<span class="twinly-menu-premium">Premium</span>' : ''}`;
+  if (item.innerHTML !== html) item.innerHTML = html;
 };
 
 const mount = () => {
@@ -174,7 +183,7 @@ const mount = () => {
     menu.setAttribute('role', 'menu');
     menu.dataset.open = 'false';
 
-    const aiItem = createMenuItem('AIアドバイス', icons.sparkles, () => getAiAdviceButton()?.click());
+    const aiItem = createMenuItem('AIアドバイス', icons.sparkles, () => window.dispatchEvent(new Event('twinly-ai-advice-open')));
     aiItem.dataset.menuAction = 'ai-advice';
     menu.append(
       aiItem,
@@ -188,7 +197,7 @@ const mount = () => {
     account.before(wrapper);
   }
 
-  updateAiMenuVisibility();
+  updateAiMenuState();
   updatePlayer();
 };
 
@@ -221,3 +230,5 @@ observer = new MutationObserver(renderSafely);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 renderSafely();
 window.setTimeout(() => window.dispatchEvent(new Event('twinly-comfort-state-request')), 100);
+
+window.addEventListener("twinly-ai-advice-state", () => renderSafely());

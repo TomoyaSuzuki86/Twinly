@@ -4,7 +4,6 @@ type SwipeSession = {
   panelWidth: number;
   activeIndex: number;
   tabRects: RelativeRect[];
-  startedOnAiAdvice: boolean;
 };
 
 type RelativeRect = {
@@ -17,12 +16,9 @@ type RelativeRect = {
 
 const LIST_SELECTOR = ".twinly-baby-tabs-list";
 const PANELS_SELECTOR = ".twinly-baby-tabs-panels";
-const AI_ADVICE_SELECTOR = '[data-twinly-ai-advice-target="true"]';
 const READY_CLASS = "twinly-fluid-tabs-ready";
 const INDICATOR_CLASS = "twinly-fluid-tab-indicator";
 const SETTLING_CLASS = "twinly-fluid-tab-indicator-settling";
-const AI_ADVICE_SWIPE_DISTANCE_PX = 20;
-const AI_ADVICE_CLICK_SUPPRESS_MS = 800;
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
@@ -118,18 +114,17 @@ style.textContent = `
   background: hsl(var(--background));
   box-shadow: 0 1px 3px hsl(var(--foreground) / 0.12), 0 0 0 1px hsl(var(--border) / 0.38);
   transform-origin: center;
-  will-change: left, width, transform, clip-path;
+  will-change: left, width, transform, border-radius;
 }
 
 .${SETTLING_CLASS} {
-  animation: twinly-tab-slime-settle 390ms cubic-bezier(.2,.9,.28,1.25);
+  animation: twinly-tab-spring-settle 360ms cubic-bezier(.2,.9,.28,1.18);
 }
 
-@keyframes twinly-tab-slime-settle {
-  0% { transform: scaleX(1.02) scaleY(.97); }
-  38% { transform: scaleX(.965) scaleY(1.055); }
-  68% { transform: scaleX(1.022) scaleY(.985); }
-  86% { transform: scaleX(.995) scaleY(1.01); }
+@keyframes twinly-tab-spring-settle {
+  0% { transform: scaleX(1.035) scaleY(.975); }
+  45% { transform: scaleX(.982) scaleY(1.025); }
+  72% { transform: scaleX(1.012) scaleY(.993); }
   100% { transform: scale(1); }
 }
 
@@ -148,7 +143,6 @@ export const installBabyTabSwipeAnimator = () => {
   let session: SwipeSession | null = null;
   let refreshFrame = 0;
   let settlingTimer = 0;
-  let suppressAiAdviceClickUntil = 0;
 
   const clearSettlingAnimation = () => {
     if (!indicator) return;
@@ -202,8 +196,7 @@ export const installBabyTabSwipeAnimator = () => {
         "width 430ms cubic-bezier(.2,1.42,.32,1)",
         "top 320ms cubic-bezier(.2,.9,.3,1)",
         "height 320ms cubic-bezier(.2,.9,.3,1)",
-        "clip-path 220ms ease-out",
-        "border-radius 220ms ease-out",
+        "border-radius 180ms ease-out",
       ].join(", ");
     }
 
@@ -213,12 +206,12 @@ export const installBabyTabSwipeAnimator = () => {
     indicator.style.height = `${rect.height}px`;
 
     if (tension > 0.015) {
-      const waist = Math.min(72, rect.width * 0.18) * tension;
-      indicator.style.clipPath = `polygon(0 0, 100% 0, calc(100% - ${waist.toFixed(2)}px) 50%, 100% 100%, 0 100%, ${waist.toFixed(2)}px 50%)`;
-      indicator.style.borderRadius = `${Math.round(7 + tension * 9)}px`;
-      indicator.style.transform = `scaleX(${(1 + tension * 0.012).toFixed(4)}) scaleY(${(1 - tension * 0.075).toFixed(4)})`;
+      const pillRadius = lerp(8, Math.max(18, rect.height / 2), tension);
+      indicator.style.clipPath = "none";
+      indicator.style.borderRadius = `${pillRadius.toFixed(2)}px`;
+      indicator.style.transform = `scaleY(${(1 - tension * 0.04).toFixed(4)})`;
     } else {
-      indicator.style.clipPath = "inset(0 round 8px)";
+      indicator.style.clipPath = "none";
       indicator.style.borderRadius = "8px";
       indicator.style.transform = "scale(1)";
     }
@@ -271,7 +264,6 @@ export const installBabyTabSwipeAnimator = () => {
       panelWidth: Math.max(1, panels.getBoundingClientRect().width),
       activeIndex,
       tabRects: tabs.map((tab) => getRelativeRect(tab, list!)),
-      startedOnAiAdvice: Boolean(target.closest(AI_ADVICE_SELECTOR)),
     };
   };
 
@@ -284,26 +276,6 @@ export const installBabyTabSwipeAnimator = () => {
     const deltaY = touch.clientY - session.startY;
     const horizontal = Math.abs(deltaX);
     const vertical = Math.abs(deltaY);
-
-    // The AI launcher is portaled into BabyPanel, so React's normal panel touch handlers do not
-    // receive its gesture. This native listener sees the physical DOM tree, therefore switch the
-    // actual Radix tab directly as soon as a clear horizontal swipe is detected.
-    if (
-      session.startedOnAiAdvice &&
-      horizontal >= AI_ADVICE_SWIPE_DISTANCE_PX &&
-      horizontal > vertical
-    ) {
-      const tabs = getDirectTabs(list);
-      const targetTab = deltaX < 0 ? tabs[1] : tabs[0];
-      if (targetTab) {
-        session = null;
-        suppressAiAdviceClickUntil = Date.now() + AI_ADVICE_CLICK_SUPPRESS_MS;
-        if (event.cancelable) event.preventDefault();
-        targetTab.click();
-        scheduleSettle(true);
-        return;
-      }
-    }
 
     if (horizontal < 7 || horizontal < vertical * 0.72) return;
 
@@ -333,19 +305,11 @@ export const installBabyTabSwipeAnimator = () => {
     scheduleSettle(true);
   };
 
-  const handleClickCapture = (event: MouseEvent) => {
-    if (Date.now() >= suppressAiAdviceClickUntil) return;
-    const target = event.target;
-    if (!(target instanceof Element) || !target.closest(AI_ADVICE_SELECTOR)) return;
-    event.preventDefault();
-    event.stopPropagation();
-  };
 
   document.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
   document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false });
   document.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
   document.addEventListener("touchcancel", handleTouchCancel, { capture: true, passive: true });
-  document.addEventListener("click", handleClickCapture, true);
 
   const observer = new MutationObserver((mutations) => {
     let activeChanged = false;

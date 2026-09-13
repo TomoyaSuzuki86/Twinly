@@ -26,7 +26,7 @@ describe('pricing and plans',()=>{
     mock.call.mockResolvedValue(free);
     renderTools();
     expect(await screen.findByText('Twinly Premium')).toBeInTheDocument();
-    expect(screen.getByText('¥500')).toBeInTheDocument();
+    expect(screen.getByText('¥800')).toBeInTheDocument();
     expect(screen.getByText('Premiumでできること')).toBeInTheDocument();
     expect(screen.getByText('AIアドバイス & AI質問')).toBeInTheDocument();
     expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();

@@ -27,6 +27,7 @@ type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   app: AppState;
+  premiumGaugesEnabled?: boolean;
   setApp: (updater: AppState | ((prev: AppState) => AppState)) => void;
   user: User | null;
   onSignIn: () => void | Promise<void>;
@@ -66,6 +67,7 @@ export function SettingsModal({
   open,
   onOpenChange,
   app,
+  premiumGaugesEnabled = false,
   setApp,
   user,
   onSignIn,
@@ -253,6 +255,8 @@ export function SettingsModal({
                         />
                       </div>
 
+                      {premiumGaugesEnabled ? (
+                        <>
                       <div className="space-y-2 rounded-lg border bg-background/40 p-3">
                         <Label htmlFor={`milk-window-${babyId}`}>ミルクゲージが空になる時間</Label>
                         <div className="flex items-center gap-2">
@@ -416,6 +420,8 @@ export function SettingsModal({
                                 : "手入力の値を使用中"}
                             </p>
                           </div>
+                        </>
+                      ) : null}
                         </>
                       ) : null}
 
