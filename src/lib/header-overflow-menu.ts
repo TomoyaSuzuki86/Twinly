@@ -1,3 +1,5 @@
+export {};
+
 type ComfortState = {
   active: boolean;
   paused: boolean;
