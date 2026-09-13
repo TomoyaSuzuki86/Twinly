@@ -195,23 +195,46 @@ const mountButton = () => {
   syncAutomaticState();
 };
 
-let refreshQueued = false;
-const refresh = () => {
-  if (refreshQueued) return;
-  refreshQueued = true;
-  queueMicrotask(() => {
-    refreshQueued = false;
-    mountButton();
-    syncAutomaticState();
+let currentCleanup: (() => void) | null = null;
+
+export const installManualSyncButton = () => {
+  currentCleanup?.();
+
+  let refreshQueued = false;
+  let disposed = false;
+
+  const refresh = () => {
+    if (refreshQueued || disposed) return;
+    refreshQueued = true;
+    queueMicrotask(() => {
+      refreshQueued = false;
+      if (disposed) return;
+      mountButton();
+      syncAutomaticState();
+    });
+  };
+
+  const observer = new MutationObserver(refresh);
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-twinly-sync-checking", "data-twinly-sync-managed", "data-twinly-sync-message"],
   });
+
+  mountButton();
+  syncAutomaticState();
+
+  const cleanup = () => {
+    disposed = true;
+    observer.disconnect();
+    document.getElementById(BUTTON_ID)?.remove();
+    if (currentCleanup === cleanup) currentCleanup = null;
+  };
+
+  currentCleanup = cleanup;
+  return cleanup;
 };
 
-const observer = new MutationObserver(refresh);
-observer.observe(document.documentElement, {
-  childList: true,
-  subtree: true,
-  attributes: true,
-  attributeFilter: ["data-twinly-sync-checking", "data-twinly-sync-managed", "data-twinly-sync-message"],
-});
-mountButton();
-syncAutomaticState();
+const uninstallManualSyncButton = installManualSyncButton();
+if (import.meta.hot) import.meta.hot.dispose(uninstallManualSyncButton);
