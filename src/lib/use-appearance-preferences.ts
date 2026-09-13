@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
-
-export type LayoutMode = "single" | "split";
-
-const normalizeTheme = (savedTheme: string | null) => {
-  const theme = savedTheme || "dark";
-  if (theme === "light") return "milk";
-  if (theme === "pink") return "sakura";
-  if (theme === "yellow") return "sun";
-  return theme;
-};
+import {
+  LayoutMode,
+  normalizeStoredTheme,
+  parseStoredLayoutMode,
+  resolveAppliedTheme,
+} from "./appearance-preferences";
 
 export function useAppearancePreferences(familyId?: string, premiumThemesEnabled = false) {
   const [theme, setTheme] = useState("dark");
@@ -17,16 +13,14 @@ export function useAppearancePreferences(familyId?: string, premiumThemesEnabled
   useEffect(() => {
     if (!familyId) return;
     try {
-      setTheme(normalizeTheme(localStorage.getItem(`twinly-theme:${familyId}`)));
+      setTheme(normalizeStoredTheme(localStorage.getItem(`twinly-theme:${familyId}`)));
     } catch {
       setTheme("dark");
     }
   }, [familyId]);
 
   useEffect(() => {
-    const freeTheme = theme === "milk";
-    const premiumTheme = ["sakura", "sun", "forest"].includes(theme) && premiumThemesEnabled;
-    document.documentElement.dataset.theme = freeTheme || premiumTheme ? theme : "dark";
+    document.documentElement.dataset.theme = resolveAppliedTheme(theme, premiumThemesEnabled);
     return () => {
       delete document.documentElement.dataset.theme;
     };
@@ -38,7 +32,7 @@ export function useAppearancePreferences(familyId?: string, premiumThemesEnabled
       return;
     }
     try {
-      setLayoutMode(localStorage.getItem(`twinly-layout:${familyId}`) === "split" ? "split" : "single");
+      setLayoutMode(parseStoredLayoutMode(localStorage.getItem(`twinly-layout:${familyId}`)));
     } catch {
       setLayoutMode("single");
     }
