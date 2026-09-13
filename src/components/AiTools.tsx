@@ -154,7 +154,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
           記録するだけだったTwinlyが、次のお世話・最近の変化・買い足しまで先回りして支えます。
         </p>
         <div className="mt-5 flex items-end gap-2">
-          <span className="text-3xl font-bold">¥500</span>
+          <span className="text-3xl font-bold">¥800</span>
           <span className="pb-1 text-sm text-muted-foreground">/ 月</span>
         </div>
         <div className="mt-1 text-sm font-semibold text-primary">最初の7日間は無料</div>
