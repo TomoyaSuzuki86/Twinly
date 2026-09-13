@@ -1,11 +1,45 @@
+const compactText = (value: string) => value.replace(/\s+/g, "");
+
+const rawOffsetForCompactIndex = (value: string, compactIndex: number) => {
+  let seen = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!/\s/.test(value[index])) {
+      if (seen === compactIndex) return index;
+      seen += 1;
+    }
+  }
+  return value.length;
+};
+
+export const collapseRepeatedTranscriptPrefix = (rawValue: string) => {
+  const value = rawValue.trim().replace(/\s+/g, " ");
+  const compact = compactText(value);
+  if (compact.length < 12) return value;
+
+  // Android Chrome can occasionally return one alternative as
+  // "prefix + prefix + continuation". Prefer the second, more complete copy.
+  // Do not collapse an exact two-times repetition because that can be intentional speech.
+  for (let prefixLength = Math.floor(compact.length / 2); prefixLength >= 6; prefixLength -= 1) {
+    const prefix = compact.slice(0, prefixLength);
+    if (!compact.slice(prefixLength).startsWith(prefix)) continue;
+    if (compact.length <= prefixLength * 2) continue;
+
+    const secondCopyOffset = rawOffsetForCompactIndex(value, prefixLength);
+    const deduped = value.slice(secondCopyOffset).trim();
+    return deduped || value;
+  }
+
+  return value;
+};
+
 export const mergeTranscriptSegments = (segments: string[]) => {
   return segments.reduce((merged, rawSegment) => {
-    const segment = rawSegment.trim();
+    const segment = collapseRepeatedTranscriptPrefix(rawSegment);
     if (!segment) return merged;
     if (!merged) return segment;
 
-    const compactMerged = merged.replace(/\s+/g, "");
-    const compactSegment = segment.replace(/\s+/g, "");
+    const compactMerged = compactText(merged);
+    const compactSegment = compactText(segment);
 
     // Chrome on Android may expose a new result as the whole utterance while
     // keeping the preceding result in the list. Avoid appending that shared
