@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
 import { FamilyAccountIconEnhancer } from "./components/FamilyAccountIconEnhancer";
+import { PrimaryActionMorphEnhancer } from "./components/PrimaryActionMorphEnhancer";
 import "./index.css";
 import "./theme-polish.css";
 import "./sync-status.css";
@@ -38,6 +39,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <App />
     <AiAdviceLauncher />
     <FamilyAccountIconEnhancer />
+    <PrimaryActionMorphEnhancer />
   </React.StrictMode>
 );
 
