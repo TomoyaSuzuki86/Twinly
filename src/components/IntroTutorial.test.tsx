@@ -40,10 +40,13 @@ afterEach(() => {
 const LiveUi = ({ onLiveSleep }: { onLiveSleep?: () => void }) => <>
   <div data-tutorial="babies">双子タブ</div>
   <div className="twinly-baby-tabs-content" data-state="active">
-    <button aria-label="食事を記録">食事</button>
-    <button role="switch" aria-checked="false" onClick={onLiveSleep}>実画面の睡眠</button>
+    <button data-tutorial="primary-action" aria-label="食事を記録">食事</button>
+    <button data-tutorial="primary-action" aria-label="おむつを記録">おむつ</button>
+    <button data-tutorial="primary-action" role="switch" aria-checked="false" onClick={onLiveSleep}>実画面の睡眠</button>
     <button data-tutorial="baby-A">1人目</button>
     <div data-tutorial="logs">ログ</div>
+    <div data-tutorial="log-summary">食事・おむつ・睡眠の集計</div>
+    <button aria-label="週間タイムラインを開く">タイムライン</button>
   </div>
   <header data-tutorial="header">Twinly</header>
   <button aria-label="settings">設定</button>
@@ -64,7 +67,7 @@ const openTutorialSleepTime = () => {
 };
 
 describe("IntroTutorial", () => {
-  it("waits for readiness and starts the eleven-step tutorial", async () => {
+  it("waits for readiness and starts the twelve-step tutorial", async () => {
     const view = render(<IntroTutorial {...props} ready={false} />);
     expect(shouldShowTutorial).not.toHaveBeenCalled();
 
@@ -73,7 +76,7 @@ describe("IntroTutorial", () => {
 
     view.rerender(<IntroTutorial {...props} />);
     await screen.findByText("まずは、記録する子を選ぶ");
-    expect(screen.getByText("1 / 11")).toBeTruthy();
+    expect(screen.getByText("1 / 12")).toBeTruthy();
   });
 
   it("explains the basic record controls before practice", async () => {
@@ -81,7 +84,7 @@ describe("IntroTutorial", () => {
     await screen.findByText("まずは、記録する子を選ぶ");
     next();
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 11")).toBeTruthy();
+    expect(screen.getByText("2 / 12")).toBeTruthy();
   });
 
   it("uses a tutorial-only sleep button and never touches the live sleep control", async () => {
@@ -126,7 +129,7 @@ describe("IntroTutorial", () => {
     fireEvent.click(screen.getByText("スキップ"));
 
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 11")).toBeTruthy();
+    expect(screen.getByText("2 / 12")).toBeTruthy();
     expect(finishTutorial).not.toHaveBeenCalled();
   });
 

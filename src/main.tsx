@@ -198,6 +198,12 @@ const buildCompactActionButton = (source: PrimaryActionSource) => {
     const meta = document.createElement("span");
     meta.className = "twinly-primary-action-dock-meta";
     meta.textContent = `${percentMatch[1]}%`;
+    if (source.key === "sleep") {
+      const foregroundToken = source.button.getAttribute("aria-checked") === "true"
+        ? "--gauge-sleep-on"
+        : "--gauge-wake-on";
+      meta.style.color = `hsl(var(${foregroundToken}))`;
+    }
     content.appendChild(meta);
   }
 
