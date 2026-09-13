@@ -45,12 +45,13 @@ jobs:
       - name: Capture test failure
         if: failure()
         run: |
+          cp voice-memo-test-output.txt /tmp/voice-memo-test-output.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git reset --hard HEAD
           git clean -fd
-          printf '%s\n' 'Test failed; see preceding Actions run for details.' > voice-memo-test-failure.txt
-          git add voice-memo-test-failure.txt
+          cp /tmp/voice-memo-test-output.txt voice-memo-test-output.txt
+          git add voice-memo-test-output.txt
           git commit -m "Capture voice memo test failure"
           git push
 
