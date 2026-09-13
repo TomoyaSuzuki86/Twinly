@@ -87,9 +87,29 @@ const setButtonState = (button: HTMLButtonElement, state: "idle" | "syncing" | "
   button.setAttribute("aria-busy", state === "syncing" ? "true" : "false");
 };
 
+const syncAutomaticState = () => {
+  const header = document.querySelector<HTMLElement>('header[data-tutorial="header"]');
+  const button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
+  if (!header || !button) return;
+
+  const status = getSyncStatusElement(header);
+  const routineStatus = Boolean(status && !status.querySelector("button"));
+
+  // Routine cache/loading/pending messages are implementation details. Keep actual
+  // error panels visible because they contain recovery actions.
+  if (status) status.hidden = routineStatus;
+
+  if (button.dataset.manualSyncing === "true" || button.dataset.state === "success") return;
+
+  const checking = document.documentElement.dataset.twinlySyncChecking === "true";
+  const initialLoad = document.documentElement.dataset.twinlySyncManaged !== "true";
+  setButtonState(button, checking || routineStatus || initialLoad ? "syncing" : "idle");
+};
+
 const runManualSync = (button: HTMLButtonElement, header: HTMLElement) => {
   if (button.dataset.state === "syncing") return;
 
+  button.dataset.manualSyncing = "true";
   setButtonState(button, "syncing");
   const startedAt = Date.now();
   let sawSyncActivity = false;
@@ -103,23 +123,30 @@ const runManualSync = (button: HTMLButtonElement, header: HTMLElement) => {
 
     const checking = document.documentElement.dataset.twinlySyncChecking === "true";
     const syncStatus = getSyncStatusElement(header);
+    const routineStatus = Boolean(syncStatus && !syncStatus.querySelector("button"));
     const syncMessage = document.body.dataset.twinlySyncMessage;
 
-    if (checking || syncStatus || syncMessage) sawSyncActivity = true;
+    if (checking || routineStatus || syncMessage) sawSyncActivity = true;
 
-    const settled = !checking && !syncStatus && !syncMessage;
+    const settled = !checking && !routineStatus && !syncMessage;
     const elapsed = Date.now() - startedAt;
 
     if (settled && (sawSyncActivity || elapsed >= 450)) {
+      delete button.dataset.manualSyncing;
       setButtonState(button, "success");
       window.setTimeout(() => {
-        if (button.isConnected && button.dataset.state === "success") setButtonState(button, "idle");
+        if (button.isConnected && button.dataset.state === "success") {
+          setButtonState(button, "idle");
+          syncAutomaticState();
+        }
       }, SUCCESS_HOLD_MS);
       return;
     }
 
     if (elapsed >= SETTLE_TIMEOUT_MS) {
+      delete button.dataset.manualSyncing;
       setButtonState(button, "idle");
+      syncAutomaticState();
       return;
     }
 
@@ -131,7 +158,13 @@ const runManualSync = (button: HTMLButtonElement, header: HTMLElement) => {
 
 const mountButton = () => {
   const header = document.querySelector<HTMLElement>('header[data-tutorial="header"]');
-  if (!header || document.getElementById(BUTTON_ID)) return;
+  if (!header) return;
+
+  const existing = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
+  if (existing) {
+    syncAutomaticState();
+    return;
+  }
 
   const controls = header.lastElementChild;
   if (!(controls instanceof HTMLElement)) return;
@@ -159,8 +192,26 @@ const mountButton = () => {
   });
 
   controls.prepend(button);
+  syncAutomaticState();
 };
 
-const observer = new MutationObserver(mountButton);
-observer.observe(document.documentElement, { childList: true, subtree: true });
+let refreshQueued = false;
+const refresh = () => {
+  if (refreshQueued) return;
+  refreshQueued = true;
+  queueMicrotask(() => {
+    refreshQueued = false;
+    mountButton();
+    syncAutomaticState();
+  });
+};
+
+const observer = new MutationObserver(refresh);
+observer.observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  attributeFilter: ["data-twinly-sync-checking", "data-twinly-sync-managed", "data-twinly-sync-message"],
+});
 mountButton();
+syncAutomaticState();
