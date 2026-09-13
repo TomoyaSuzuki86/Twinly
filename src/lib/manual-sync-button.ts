@@ -1,3 +1,10 @@
+import {
+  hasSyncActivity,
+  isSyncSettled,
+  shouldShowAutomaticSyncSpinner,
+  type ManualSyncSignals,
+} from "./manual-sync-state";
+
 const BUTTON_ID = "twinly-manual-sync-button";
 const STYLE_ID = "twinly-manual-sync-button-style";
 const SUCCESS_HOLD_MS = 850;
@@ -81,6 +88,15 @@ const getSyncStatusElement = (header: HTMLElement) => {
   return sibling instanceof HTMLElement && sibling.getAttribute("role") === "status" ? sibling : null;
 };
 
+const readSyncSignals = (header: HTMLElement): ManualSyncSignals => {
+  const status = getSyncStatusElement(header);
+  return {
+    checking: document.documentElement.dataset.twinlySyncChecking === "true",
+    routineStatus: Boolean(status && !status.querySelector("button")),
+    syncMessage: document.body.dataset.twinlySyncMessage,
+  };
+};
+
 const setButtonState = (button: HTMLButtonElement, state: "idle" | "syncing" | "success") => {
   button.dataset.state = state;
   button.disabled = state === "syncing";
@@ -93,17 +109,16 @@ const syncAutomaticState = () => {
   if (!header || !button) return;
 
   const status = getSyncStatusElement(header);
-  const routineStatus = Boolean(status && !status.querySelector("button"));
+  const signals = readSyncSignals(header);
 
-  // Routine cache/loading/pending messages are implementation details. Keep actual
+  // Routine loading/pending messages are implementation details. Keep actual
   // error panels visible because they contain recovery actions.
-  if (status) status.hidden = routineStatus;
+  if (status) status.hidden = signals.routineStatus;
 
   if (button.dataset.manualSyncing === "true" || button.dataset.state === "success") return;
 
-  const checking = document.documentElement.dataset.twinlySyncChecking === "true";
   const initialLoad = document.documentElement.dataset.twinlySyncManaged !== "true";
-  setButtonState(button, checking || routineStatus || initialLoad ? "syncing" : "idle");
+  setButtonState(button, shouldShowAutomaticSyncSpinner(signals, initialLoad) ? "syncing" : "idle");
 };
 
 const runManualSync = (button: HTMLButtonElement, header: HTMLElement) => {
@@ -121,17 +136,12 @@ const runManualSync = (button: HTMLButtonElement, header: HTMLElement) => {
   const checkSettled = () => {
     if (!button.isConnected) return;
 
-    const checking = document.documentElement.dataset.twinlySyncChecking === "true";
-    const syncStatus = getSyncStatusElement(header);
-    const routineStatus = Boolean(syncStatus && !syncStatus.querySelector("button"));
-    const syncMessage = document.body.dataset.twinlySyncMessage;
+    const signals = readSyncSignals(header);
+    if (hasSyncActivity(signals)) sawSyncActivity = true;
 
-    if (checking || routineStatus || syncMessage) sawSyncActivity = true;
-
-    const settled = !checking && !routineStatus && !syncMessage;
     const elapsed = Date.now() - startedAt;
 
-    if (settled && (sawSyncActivity || elapsed >= 450)) {
+    if (isSyncSettled(signals) && (sawSyncActivity || elapsed >= 450)) {
       delete button.dataset.manualSyncing;
       setButtonState(button, "success");
       window.setTimeout(() => {
