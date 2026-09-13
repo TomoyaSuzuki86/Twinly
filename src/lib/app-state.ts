@@ -1,4 +1,4 @@
-import { AppState, BabyId, BabyProfile, LogEvent } from "@/types";
+import { AppState, BabyProfile, LogEvent } from "@/types";
 import { fmtDate } from "./utils";
 
 export type SharedAppState = Pick<AppState, "profiles" | "events"> & {
@@ -19,7 +19,10 @@ type LegacyProfile = StoredProfile & {
 };
 
 type LegacyAppState = Omit<AppState, "profiles" | "events" | "diaperStockManagementEnabled" | "sleepManagementEnabled"> & {
-  profiles: Record<BabyId, LegacyProfile>;
+  profiles: {
+    A: LegacyProfile;
+    B: LegacyProfile;
+  };
   events: LegacyLogEvent[];
   diaperStockManagementEnabled?: boolean;
   sleepManagementEnabled?: boolean;
@@ -31,50 +34,48 @@ const demoBirthDate = (now: Date, daysAgo: number) => {
   return fmtDate(date);
 };
 
-const createBaseProfiles = (now: Date) =>
-  ({
-    A: {
-      babyId: "A",
-      displayName: "赤ちゃんA",
-      birthDate: demoBirthDate(now, 103),
-      diaperSize: "新生児",
-      diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
-      diaperPurchaseUrl: "",
-      iconEmoji: "A",
-      iconGradient: "from-violet-500 to-fuchsia-500",
-      voiceAliases: [],
-      milkGaugeWindowHours: 3,
-      milkTargetMlOverride: null,
-      activityLimitMinutesOverride: null,
-      sleepTargetHoursOverride: null,
-    },
-    B: {
-      babyId: "B",
-      displayName: "赤ちゃんB",
-      birthDate: demoBirthDate(now, 103),
-      diaperSize: "新生児",
-      diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
-      diaperPurchaseUrl: "",
-      iconEmoji: "B",
-      iconGradient: "from-sky-500 to-cyan-400",
-      voiceAliases: [],
-      milkGaugeWindowHours: 3,
-      milkTargetMlOverride: null,
-      activityLimitMinutesOverride: null,
-      sleepTargetHoursOverride: null,
-    },
-  }) as AppState["profiles"];
+const createBaseProfiles = (now: Date): AppState["profiles"] => ({
+  A: {
+    babyId: "A",
+    displayName: "赤ちゃんA",
+    birthDate: demoBirthDate(now, 103),
+    diaperSize: "新生児",
+    diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
+    diaperPurchaseUrl: "",
+    iconEmoji: "A",
+    iconGradient: "from-violet-500 to-fuchsia-500",
+    voiceAliases: [],
+    milkGaugeWindowHours: 3,
+    milkTargetMlOverride: null,
+    activityLimitMinutesOverride: null,
+    sleepTargetHoursOverride: null,
+  },
+  B: {
+    babyId: "B",
+    displayName: "赤ちゃんB",
+    birthDate: demoBirthDate(now, 103),
+    diaperSize: "新生児",
+    diaperStockBySize: { 新生児: 80, S: 0, M: 0, L: 0 },
+    diaperPurchaseUrl: "",
+    iconEmoji: "B",
+    iconGradient: "from-sky-500 to-cyan-400",
+    voiceAliases: [],
+    milkGaugeWindowHours: 3,
+    milkTargetMlOverride: null,
+    activityLimitMinutesOverride: null,
+    sleepTargetHoursOverride: null,
+  },
+});
 
-export const createInitialAppState = (now: Date = new Date()): AppState =>
-  ({
-    profiles: createBaseProfiles(now),
-    events: [],
-    diaperStockManagementEnabled: true,
-    sleepManagementEnabled: true,
-    ui: {
-      lastViewedDate: fmtDate(now),
-    },
-  }) as AppState;
+export const createInitialAppState = (now: Date = new Date()): AppState => ({
+  profiles: createBaseProfiles(now),
+  events: [],
+  diaperStockManagementEnabled: true,
+  sleepManagementEnabled: true,
+  ui: {
+    lastViewedDate: fmtDate(now),
+  },
+});
 
 export const toSharedAppState = (app: AppState): SharedAppState => ({
   profiles: app.profiles,
@@ -91,59 +92,36 @@ const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => ({
   sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
 });
 
-const normalizeProfileOrder = <T extends StoredProfile>(profiles: Record<BabyId, T>) => ({
-  A: profiles.A,
-  B: profiles.B,
+const normalizeProfiles = (profiles: AppState["profiles"]): AppState["profiles"] => ({
+  A: normalizeStoredProfile(profiles.A),
+  B: normalizeStoredProfile(profiles.B),
 });
+
+const stripLegacyProfile = (profile: LegacyProfile): BabyProfile => {
+  const { calendarId: _calendarId, calendarName: _calendarName, ...storedProfile } = profile;
+  return normalizeStoredProfile(storedProfile);
+};
+
+const stripLegacyEvent = (event: LegacyLogEvent): LogEvent => {
+  const { calendarEventId: _calendarEventId, calendarStatus: _calendarStatus, ...storedEvent } = event;
+  return storedEvent;
+};
 
 export const mergeSharedAppState = (shared: SharedAppState, ui: AppState["ui"]): AppState => ({
   ...shared,
-  profiles: Object.fromEntries(
-    (Object.entries(normalizeProfileOrder(shared.profiles)) as [BabyId, StoredProfile][]).map(([babyId, profile]) => [
-      babyId,
-      normalizeStoredProfile(profile),
-    ])
-  ) as AppState["profiles"],
+  profiles: normalizeProfiles(shared.profiles),
   diaperStockManagementEnabled: shared.diaperStockManagementEnabled ?? true,
   sleepManagementEnabled: shared.sleepManagementEnabled ?? true,
   ui,
 });
 
-export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => {
-  const profiles = Object.fromEntries(
-    (Object.entries(normalizeProfileOrder(app.profiles)) as [BabyId, LegacyProfile][]).map(([babyId, profile]) => {
-      const {
-        calendarId: _calendarId,
-        calendarName: _calendarName,
-        ...rest
-      } = profile;
-      return [
-        babyId,
-        {
-          ...rest,
-          milkGaugeWindowHours: rest.milkGaugeWindowHours ?? 3,
-          milkTargetMlOverride: rest.milkTargetMlOverride ?? null,
-          activityLimitMinutesOverride: rest.activityLimitMinutesOverride ?? null,
-          sleepTargetHoursOverride: rest.sleepTargetHoursOverride ?? null,
-        },
-      ];
-    })
-  ) as AppState["profiles"];
-
-  const events = app.events.map((event) => {
-    const {
-      calendarEventId: _calendarEventId,
-      calendarStatus: _calendarStatus,
-      ...rest
-    } = event;
-    return rest;
-  }) as AppState["events"];
-
-  return {
-    ...app,
-    diaperStockManagementEnabled: app.diaperStockManagementEnabled ?? true,
-    sleepManagementEnabled: app.sleepManagementEnabled ?? true,
-    profiles,
-    events,
-  };
-};
+export const stripLegacyCalendarFields = (app: LegacyAppState): AppState => ({
+  ...app,
+  diaperStockManagementEnabled: app.diaperStockManagementEnabled ?? true,
+  sleepManagementEnabled: app.sleepManagementEnabled ?? true,
+  profiles: {
+    A: stripLegacyProfile(app.profiles.A),
+    B: stripLegacyProfile(app.profiles.B),
+  },
+  events: app.events.map(stripLegacyEvent),
+});
