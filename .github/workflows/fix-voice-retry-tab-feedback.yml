@@ -1,0 +1,206 @@
+name: Fix voice retry and tab feedback
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/fix-voice-retry-tab-feedback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply source changes
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected source not found in {path}: {old[:120]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          voice = "src/components/VoiceCommandButton.tsx"
+          replace_once(
+              voice,
+              '  onTranscript?: (text: string) => void;\n  className?: string;\n',
+              '  onTranscript?: (text: string) => void;\n  onListeningChange?: (listening: boolean) => void;\n  className?: string;\n',
+          )
+          replace_once(
+              voice,
+              '  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, className },\n',
+              '  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, onListeningChange, className },\n',
+          )
+          replace_once(
+              voice,
+              '  const [listening, setListening] = useState(false);\n  const supported = typeof window !== "undefined" && Boolean(getSpeechRecognition());\n',
+              '  const [listening, setListening] = useState(false);\n  const supported = typeof window !== "undefined" && Boolean(getSpeechRecognition());\n\n  const setListeningState = (nextListening: boolean) => {\n    setListening(nextListening);\n    onListeningChange?.(nextListening);\n  };\n',
+          )
+          text = Path(voice).read_text()
+          text = text.replace('    setListening(false);', '    setListeningState(false);')
+          text = text.replace('    setListening(true);', '    setListeningState(true);')
+          text = text.replace('      recognition.onstart = () => setListening(true);', '      recognition.onstart = () => setListeningState(true);')
+          text = text.replace('          setListening(false);', '          setListeningState(false);')
+          Path(voice).write_text(text)
+          replace_once(
+              voice,
+              '    if (!parsed.ok) {\n      onMessage(parseErrorMessage(parsed.reason));\n      return;\n    }\n',
+              '    if (!parsed.ok) {\n      const message = parseErrorMessage(parsed.reason);\n      resetSession(sessionId);\n      onMessage(message);\n      return;\n    }\n',
+          )
+
+          app = "src/App.tsx"
+          replace_once(
+              app,
+              '  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);\n  const undoTimerRef = useRef<number | null>(null);\n',
+              '  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);\n  const [voiceListening, setVoiceListening] = useState(false);\n  const [voiceTargetBabyId, setVoiceTargetBabyId] = useState<BabyId | null>(null);\n  const undoTimerRef = useRef<number | null>(null);\n',
+          )
+          replace_once(
+              app,
+              '  const retryVoiceInput = () => {\n    undoLast();\n    window.setTimeout(() => voiceButtonRef.current?.startListening(), 0);\n  };\n\n  const startVoiceInputForBabyTab = (babyId: BabyId) => {\n    setSelectedBabyTab(babyId);\n    window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);\n  };\n',
+              '  const startGlobalVoiceInput = () => {\n    setVoiceTargetBabyId(null);\n    voiceButtonRef.current?.startListening();\n  };\n\n  const retryVoiceInput = () => {\n    undoLast();\n    window.setTimeout(startGlobalVoiceInput, 0);\n  };\n\n  const startVoiceInputForBabyTab = (babyId: BabyId) => {\n    setSelectedBabyTab(babyId);\n    setVoiceTargetBabyId(babyId);\n    window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);\n  };\n\n  const handleVoiceListeningChange = (isListening: boolean) => {\n    setVoiceListening(isListening);\n    if (!isListening) setVoiceTargetBabyId(null);\n  };\n',
+          )
+          replace_once(
+              app,
+              '      } else {\n        voiceButtonRef.current?.startListening();\n      }\n',
+              '      } else {\n        startGlobalVoiceInput();\n      }\n',
+          )
+          replace_once(
+              app,
+              '                onDoubleClick={() => voiceButtonRef.current?.startListening()}\n',
+              '                onDoubleClick={startGlobalVoiceInput}\n',
+          )
+          replace_once(
+              app,
+              '                    onMessage={showVoiceMessage}\n                  />\n',
+              '                    onMessage={showVoiceMessage}\n                    onListeningChange={handleVoiceListeningChange}\n                  />\n',
+          )
+          replace_once(
+              app,
+              '                  className="h-auto px-1 py-0.5"\n                  onDoubleClick={() => startVoiceInputForBabyTab("A")}\n',
+              '                  className={`h-auto px-1 py-0.5 transition-shadow ${\n                    voiceListening && voiceTargetBabyId === "A"\n                      ? "ring-2 ring-white ring-offset-2 ring-offset-background shadow-[0_0_18px_rgba(255,255,255,0.95)]"\n                      : ""\n                  }`}\n                  data-voice-input-active={voiceListening && voiceTargetBabyId === "A" ? "true" : undefined}\n                  onDoubleClick={() => startVoiceInputForBabyTab("A")}\n',
+          )
+          replace_once(
+              app,
+              '                  className="h-auto px-1 py-0.5"\n                  onDoubleClick={() => startVoiceInputForBabyTab("B")}\n',
+              '                  className={`h-auto px-1 py-0.5 transition-shadow ${\n                    voiceListening && voiceTargetBabyId === "B"\n                      ? "ring-2 ring-white ring-offset-2 ring-offset-background shadow-[0_0_18px_rgba(255,255,255,0.95)]"\n                      : ""\n                  }`}\n                  data-voice-input-active={voiceListening && voiceTargetBabyId === "B" ? "true" : undefined}\n                  onDoubleClick={() => startVoiceInputForBabyTab("B")}\n',
+          )
+
+          test = Path("src/components/VoiceCommandButton.test.tsx")
+          test.write_text(r'''import { act, fireEvent, render, screen } from "@testing-library/react";
+          import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+          import { VoiceCommandButton } from "./VoiceCommandButton";
+
+          type FakeRecognition = {
+            lang: string;
+            interimResults: boolean;
+            maxAlternatives: number;
+            continuous: boolean;
+            onstart: (() => void) | null;
+            onend: (() => void) | null;
+            onerror: ((event: { error: string }) => void) | null;
+            onresult: ((event: any) => void) | null;
+            start: () => void;
+            stop: () => void;
+            abort: () => void;
+          };
+
+          const instances: FakeRecognition[] = [];
+
+          class FakeSpeechRecognition implements FakeRecognition {
+            lang = "";
+            interimResults = false;
+            maxAlternatives = 1;
+            continuous = false;
+            onstart: (() => void) | null = null;
+            onend: (() => void) | null = null;
+            onerror: ((event: { error: string }) => void) | null = null;
+            onresult: ((event: any) => void) | null = null;
+            start = vi.fn(() => this.onstart?.());
+            stop = vi.fn();
+            abort = vi.fn();
+
+            constructor() {
+              instances.push(this);
+            }
+          }
+
+          const speechResults = (transcript: string) => {
+            const item = { transcript };
+            const alternatives = { length: 1, 0: item, item: () => item };
+            return { length: 1, 0: alternatives, item: () => alternatives };
+          };
+
+          describe("VoiceCommandButton retry", () => {
+            beforeEach(() => {
+              vi.useFakeTimers();
+              instances.length = 0;
+              (window as any).SpeechRecognition = FakeSpeechRecognition;
+            });
+
+            afterEach(() => {
+              vi.useRealTimers();
+              delete (window as any).SpeechRecognition;
+            });
+
+            it("returns to an actionable microphone after a parse failure", () => {
+              const onMessage = vi.fn();
+              const onListeningChange = vi.fn();
+              render(
+                <VoiceCommandButton
+                  onCommand={vi.fn()}
+                  onMessage={onMessage}
+                  onListeningChange={onListeningChange}
+                />
+              );
+
+              fireEvent.click(screen.getByRole("button", { name: "start voice input" }));
+              expect(instances).toHaveLength(1);
+              expect(screen.getByRole("button", { name: "stop voice input" })).toBeInTheDocument();
+
+              act(() => {
+                instances[0].onresult?.({ resultIndex: 0, results: speechResults("ミルク") });
+                vi.advanceTimersByTime(1500);
+              });
+
+              expect(onMessage).toHaveBeenCalledWith("ミルク量が聞き取れませんでした");
+              expect(screen.getByRole("button", { name: "start voice input" })).toBeInTheDocument();
+              expect(onListeningChange).toHaveBeenLastCalledWith(false);
+
+              fireEvent.click(screen.getByRole("button", { name: "start voice input" }));
+              expect(instances).toHaveLength(2);
+              expect(instances[1].start).toHaveBeenCalledTimes(1);
+            });
+          });
+          '''.replace("          ", ""))
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Voice retry regression test
+        run: npx vitest run src/components/VoiceCommandButton.test.tsx src/components/BabyTabTrigger.test.tsx
+      - name: Build
+        run: npm run build
+      - name: Commit product changes and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-voice-retry-tab-feedback.yml
+          git add src/App.tsx src/components/VoiceCommandButton.tsx src/components/VoiceCommandButton.test.tsx
+          git commit -m "Fix voice retry and tab listening feedback"
+          git push origin HEAD:development
