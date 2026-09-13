@@ -129,5 +129,3 @@ button[aria-label="起床を記録・長押しで時刻指定"] [data-testid="sl
     display: block !important;
   }
 }
-
-/* production deploy trigger */
