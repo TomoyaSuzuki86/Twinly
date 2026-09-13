@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   apply:
+    if: github.event.head_commit.message != 'Capture voice memo test failure'
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
@@ -35,7 +36,23 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        run: |
+          set +e
+          npm test 2>&1 | tee voice-memo-test-output.txt
+          status=${PIPESTATUS[0]}
+          exit $status
+
+      - name: Capture test failure
+        if: failure()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git reset --hard HEAD
+          git clean -fd
+          printf '%s\n' 'Test failed; see preceding Actions run for details.' > voice-memo-test-failure.txt
+          git add voice-memo-test-failure.txt
+          git commit -m "Capture voice memo test failure"
+          git push
 
       - name: Build
         run: npm run build
