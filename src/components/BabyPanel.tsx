@@ -280,14 +280,11 @@ export function BabyPanel({
     ])
   );
 
-  const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
-  const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
-
-  const lastMilkEvent = latestMilkEvents[0] ?? null;
+  const lastMilkEvent = latestEvents.find((event) => event.type === "milk") ?? null;
   const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
   const lastMilkElapsed = formatElapsed(lastMilkEvent?.timestamp ?? null);
 
-  const lastDiaperEvent = latestDiaperEvents[0] ?? null;
+  const lastDiaperEvent = latestEvents.find((event) => event.type === "diaper") ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
   const careGauges = buildCareGauges({

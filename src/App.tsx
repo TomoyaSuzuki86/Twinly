@@ -301,9 +301,8 @@ export default function App() {
     if (direction === "right" && selectedBabyTab === "B") setSelectedBabyTab("A");
   };
 
-  const updateApp = (updater: (previous: AppState) => AppState, syncRemote = true,
+  const updateApp = (updater: (previous: AppState) => AppState,
     options: { absoluteSettings?: boolean } = {}) => {
-    if (!syncRemote) { setApp(updater); return true; }
     try {
       if (!store.current) throw new Error("記録を読み込んでいます。");
       store.current.update(updater, options);
@@ -314,7 +313,6 @@ export default function App() {
       return false;
     }
   };
-  const updateAppWithPendingEvents = (_events: LogEvent[], updater: (previous: AppState) => AppState) => updateApp(updater);
 
   const ensureNotificationSettingsDocument = async (user: User) => {
     if (!db) return;
@@ -508,10 +506,10 @@ export default function App() {
   }, [authUser, pushPermission]);
 
   useEffect(() => {
-    updateApp((prev) => {
+    setApp((prev) => {
       if (prev.ui.lastViewedDate === activeDate) return prev;
       return { ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } };
-    }, false);
+    });
   }, [activeDate]);
 
   const handleOpenModal = (
@@ -590,7 +588,7 @@ export default function App() {
       }
     }
 
-    if (!updateAppWithPendingEvents(createdEvents, (prevApp) => appendEvents(prevApp, createdEvents))) return false;
+    if (!updateApp((prevApp) => appendEvents(prevApp, createdEvents))) return false;
     scheduleUndo(createdEvents);
     return true;
   };
@@ -755,7 +753,7 @@ export default function App() {
       eventsWithAutoWake.push(event);
     });
 
-    if (!updateAppWithPendingEvents(eventsWithAutoWake, (prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
+    if (!updateApp((prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
 
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
     scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
@@ -1076,7 +1074,7 @@ export default function App() {
         const json = ev.target?.result as string;
         const importedState = parseBackup(json);
         if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
-        if (updateApp(() => importedState, true, { absoluteSettings: true })) {
+        if (updateApp(() => importedState, { absoluteSettings: true })) {
           setActiveDate(importedState.ui.lastViewedDate);
           alert("復元内容を端末に保存しました。同期状況をご確認ください。");
         }
@@ -1690,7 +1688,7 @@ export default function App() {
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;
           const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
-          if (!updateAppWithPendingEvents(events, prev => appendEvents(prev, events))) return false;
+          if (!updateApp(prev => appendEvents(prev, events))) return false;
           scheduleUndo(events); return true;
         }} />}
       />
