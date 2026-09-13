@@ -65,6 +65,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const [status, setStatus] = useState("");
   const [rect, setRect] = useState<Rect | null>(null);
   const [extraRects, setExtraRects] = useState<Rect[]>([]);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
 
   const [tutorialSleeping, setTutorialSleeping] = useState(false);
   const [sleepTransition, setSleepTransition] = useState<SleepType | null>(null);
@@ -111,6 +112,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     setStatus("");
     setRect(null);
     setExtraRects([]);
+    setExitConfirmOpen(false);
     setTutorialSleeping(false);
     setSleepTransition(null);
     setSleepModalOpen(false);
@@ -230,6 +232,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     clearVoiceLongPress();
     clearSleepTransition();
     setVoiceListening(false);
+    setExitConfirmOpen(false);
     setOpen(false);
     void finishTutorial(uid, outcome);
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -531,7 +534,10 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
                 使い方 <span className="ml-2">{step + 1} / {TOTAL_STEPS}</span>
               </span>
-              <Button variant="ghost" size="sm" onClick={skipCurrentStep}>スキップ</Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={skipCurrentStep}>スキップ</Button>
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setExitConfirmOpen(true)}>終了</Button>
+              </div>
             </div>
 
             <div key={step} className="twinly-tutorial-copy">
@@ -762,6 +768,25 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
           </div>
         </Dialog.Content>
       </Dialog.Portal>}
+    </Dialog.Root>
+
+    <Dialog.Root open={exitConfirmOpen} onOpenChange={setExitConfirmOpen}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-black/60" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[91] w-[min(90vw,360px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-card p-5 shadow-2xl"
+          aria-describedby="tutorial-exit-description"
+        >
+          <Dialog.Title className="text-lg font-bold">チュートリアルを終了しますか？</Dialog.Title>
+          <Dialog.Description id="tutorial-exit-description" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            ここで終了すると、次回から自動では表示されません。必要なときは設定からもう一度チュートリアルを開始できます。
+          </Dialog.Description>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setExitConfirmOpen(false)}>キャンセル</Button>
+            <Button onClick={() => finish("skipped")}>終了する</Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
     </Dialog.Root>
 
     <SleepRecordModal
