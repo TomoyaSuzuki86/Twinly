@@ -1,0 +1,50 @@
+name: Refactor AI Advice Menu
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/refactor-ai-menu.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply AI menu refactor
+        run: python3 .github/scripts/refactor-ai-menu.py
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Test AI advice menu integration
+        run: npx vitest run src/components/AiAdviceLauncher.test.tsx
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Remove temporary patch files
+        run: rm -f .github/scripts/refactor-ai-menu.py .github/workflows/refactor-ai-menu.yml
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Move AI advice fully into header menu"
+          git push origin HEAD:development
