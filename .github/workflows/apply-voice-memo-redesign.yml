@@ -18,7 +18,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply source changes
-        run: python3 scripts/apply-voice-memo-redesign.py
+        run: |
+          python3 scripts/apply-voice-memo-redesign.py
+          python3 scripts/fix-voice-memo-redesign.py
 
       - name: Set up Node
         uses: actions/setup-node@v4
