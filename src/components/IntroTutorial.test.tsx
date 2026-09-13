@@ -67,7 +67,7 @@ const openTutorialSleepTime = () => {
 };
 
 describe("IntroTutorial", () => {
-  it("waits for readiness and starts the twelve-step tutorial", async () => {
+  it("waits for readiness and starts the ten-step tutorial", async () => {
     const view = render(<IntroTutorial {...props} ready={false} />);
     expect(shouldShowTutorial).not.toHaveBeenCalled();
 
@@ -76,7 +76,7 @@ describe("IntroTutorial", () => {
 
     view.rerender(<IntroTutorial {...props} />);
     await screen.findByText("まずは、記録する子を選ぶ");
-    expect(screen.getByText("1 / 12")).toBeTruthy();
+    expect(screen.getByText("1 / 10")).toBeTruthy();
   });
 
   it("explains the basic record controls before practice", async () => {
@@ -84,7 +84,7 @@ describe("IntroTutorial", () => {
     await screen.findByText("まずは、記録する子を選ぶ");
     next();
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 12")).toBeTruthy();
+    expect(screen.getByText("2 / 10")).toBeTruthy();
   });
 
   it("uses a tutorial-only sleep button and never touches the live sleep control", async () => {
@@ -129,26 +129,36 @@ describe("IntroTutorial", () => {
     fireEvent.click(screen.getByText("スキップ"));
 
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 12")).toBeTruthy();
+    expect(screen.getByText("2 / 10")).toBeTruthy();
     expect(finishTutorial).not.toHaveBeenCalled();
   });
 
-  it("asks for confirmation before ending the whole tutorial", async () => {
+  it("omits the redundant edit and timeline steps", async () => {
+    setup();
+    await screen.findByText("まずは、記録する子を選ぶ");
+
+    for (let index = 0; index < 7; index += 1) {
+      fireEvent.click(screen.getByText("スキップ"));
+    }
+
+    expect(screen.getByText("ログ下の集計を、すぐ確認")).toBeTruthy();
+    expect(screen.getByText("8 / 10")).toBeTruthy();
+    expect(screen.queryByText("記録は、あとから直せます")).toBeNull();
+
+    fireEvent.click(screen.getByText("スキップ"));
+    expect(screen.getByText("もっと便利に使いたいときは")).toBeTruthy();
+    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.queryByText("タイムラインで、1週間を見渡す")).toBeNull();
+  });
+
+  it("ends the whole tutorial immediately without confirmation", async () => {
     setup();
     await screen.findByText("まずは、記録する子を選ぶ");
 
     fireEvent.click(screen.getByText("終了"));
-    expect(screen.getByText("チュートリアルを終了しますか？")).toBeTruthy();
-    expect(finishTutorial).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText("キャンセル"));
-    expect(screen.queryByText("チュートリアルを終了しますか？")).toBeNull();
-    expect(screen.getByText("まずは、記録する子を選ぶ")).toBeTruthy();
-
-    fireEvent.click(screen.getByText("終了"));
-    fireEvent.click(screen.getByText("終了する"));
 
     await waitFor(() => expect(finishTutorial).toHaveBeenCalledWith("parent-one", "skipped"));
+    expect(screen.queryByText("チュートリアルを終了しますか？")).toBeNull();
     expect(screen.queryByText("まずは、記録する子を選ぶ")).toBeNull();
   });
 
