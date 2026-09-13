@@ -3,6 +3,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WeeklyTimelineModal } from "./WeeklyTimelineModal";
 import { BabyProfile, LogEvent } from "@/types";
 
+// Include both indexed access (scroll lock) and item() (React gesture handlers).
+const touchList = (clientX: number, clientY: number) => {
+  const touch = { clientX, clientY };
+  return Object.assign([touch], { item: () => touch });
+};
+
+const fireTouch = (target: Element, type: "touchstart" | "touchend", x: number, y: number) => {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    touches: { value: type === "touchstart" ? touchList(x, y) : [] },
+    changedTouches: { value: touchList(x, y) },
+  });
+  fireEvent(target, event);
+};
+
 const profiles: Record<"A" | "B", BabyProfile> = {
   A: {
     babyId: "A",
@@ -97,8 +112,8 @@ describe("WeeklyTimelineModal", () => {
 
     const grid = screen.getByRole("group", { name: "7日間24時間タイムライングリッド" });
 
-    fireEvent.touchStart(grid, { touches: [{ clientX: 240, clientY: 120 }] });
-    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 120, clientY: 126 }] });
+    fireTouch(grid, "touchstart", 240, 120);
+    fireTouch(grid, "touchend", 120, 126);
 
     expect(screen.queryByLabelText("奏汰のミルク 09:00")).toBeNull();
     expect(screen.getByLabelText("日向のおしっこ 09:30")).toBeTruthy();
@@ -106,14 +121,14 @@ describe("WeeklyTimelineModal", () => {
       "true"
     );
 
-    fireEvent.touchStart(grid, { touches: [{ clientX: 120, clientY: 120 }] });
-    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 235, clientY: 124 }] });
+    fireTouch(grid, "touchstart", 120, 120);
+    fireTouch(grid, "touchend", 235, 124);
 
     expect(screen.getByLabelText("奏汰のミルク 09:00")).toBeTruthy();
     expect(screen.queryByLabelText("日向のおしっこ 09:30")).toBeNull();
 
-    fireEvent.touchStart(grid, { touches: [{ clientX: 200, clientY: 100 }] });
-    fireEvent.touchEnd(grid, { changedTouches: [{ clientX: 205, clientY: 180 }] });
+    fireTouch(grid, "touchstart", 200, 100);
+    fireTouch(grid, "touchend", 205, 180);
 
     expect(screen.getByLabelText("奏汰のミルク 09:00")).toBeTruthy();
   });

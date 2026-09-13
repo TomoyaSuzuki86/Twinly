@@ -1,7 +1,7 @@
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, Check, ChevronLeft, ChevronRight, HelpCircle, Settings, Undo2 } from "lucide-react";
+import { Baby, ChevronLeft, ChevronRight, HelpCircle, Settings } from "lucide-react";
 import {
   GoogleAuthProvider,
   isSignInWithEmailLink,
@@ -36,11 +36,13 @@ import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
 import { useFamilyAccess } from "./lib/use-family-access";
+import { useAppearancePreferences } from "./lib/use-appearance-preferences";
 import { AiTools } from "./components/AiTools";
 import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { BabyTabTrigger } from "./components/BabyTabTrigger";
+import { SnackbarUndo } from "./components/SnackbarUndo";
 import { iconGradients } from "./lib/utils";
 const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
 import { SkeletonLoader } from "./components/SkeletonLoader";
@@ -135,63 +137,6 @@ const shiftDate = (isoDate: string, days: number) => {
   return fmtDate(date);
 };
 
-function SnackbarUndo({
-  open,
-  message,
-  detail,
-  onUndo,
-  onRetry,
-  onClose,
-}: {
-  open: boolean;
-  message: string;
-  detail?: string;
-  onUndo: () => void;
-  onRetry?: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          className="fixed bottom-4 left-1/2 z-50 w-[min(720px,calc(100%-16px))] -translate-x-1/2"
-          initial={{ y: 18, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 18, opacity: 0 }}
-        >
-          <div className="overflow-hidden rounded-lg border bg-primary text-primary-foreground shadow-2xl">
-            <div className="flex flex-col sm:grid sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-              <div className="flex min-w-0 items-start gap-3 px-4 py-3 sm:px-5 sm:py-4">
-                <Check className="mt-0.5 h-5 w-5 flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold">{message}</div>
-                  {detail ? (
-                    <div className="mt-1 whitespace-normal break-words text-xs leading-relaxed opacity-85">
-                      聞き取り: 「{detail}」
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 border-t sm:contents">
-                <Button variant="ghost" className="h-12 rounded-none sm:h-full sm:border-l" onClick={onUndo}>
-                  <Undo2 className="mr-2 h-5 w-5" />
-                  取り消す
-                </Button>
-                {onRetry ? (
-                  <Button variant="ghost" className="h-12 rounded-none border-l sm:h-full" onClick={onRetry}>
-                    やり直す
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-            <button className="sr-only" onClick={onClose} aria-label="close-snackbar" />
-          </div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
-  );
-}
-
 export default function App() {
   const [tutorialReplay, setTutorialReplay] = useState(0);
   const [app, setApp] = useState<AppState>(() => createEmptyState());
@@ -201,38 +146,10 @@ export default function App() {
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
   const {access: familyAccess, error: accessError} = useFamilyAccess(authUser?.uid, family?.id);
-  const [theme, setTheme] = useState("dark");
-  useEffect(() => {
-    if (!family?.id) return;
-    try {
-      const saved = localStorage.getItem(`twinly-theme:${family.id}`) || "dark";
-      setTheme(saved === "light" ? "milk" : saved === "pink" ? "sakura" : saved === "yellow" ? "sun" : saved);
-    } catch { setTheme("dark"); }
-  }, [family?.id]);
-  useEffect(() => {
-    const freeTheme = theme === "milk";
-    const premiumTheme = ["sakura", "sun", "forest"].includes(theme) && familyAccess?.features.themes;
-    document.documentElement.dataset.theme = freeTheme || premiumTheme ? theme : "dark";
-    return () => { delete document.documentElement.dataset.theme; };
-  }, [theme, familyAccess?.features.themes]);
-  const [layoutMode, setLayoutMode] = useState<"single" | "split">("single");
-  useEffect(() => {
-    if (!family?.id) {
-      setLayoutMode("single");
-      return;
-    }
-    try {
-      setLayoutMode(localStorage.getItem(`twinly-layout:${family.id}`) === "split" ? "split" : "single");
-    } catch {
-      setLayoutMode("single");
-    }
-  }, [family?.id]);
-  useEffect(() => {
-    document.documentElement.dataset.twinlyLayout = layoutMode;
-    return () => {
-      delete document.documentElement.dataset.twinlyLayout;
-    };
-  }, [layoutMode]);
+  const { theme, layoutMode, selectTheme, selectLayoutMode } = useAppearancePreferences(
+    family?.id,
+    Boolean(familyAccess?.features.themes)
+  );
   const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
@@ -301,9 +218,8 @@ export default function App() {
     if (direction === "right" && selectedBabyTab === "B") setSelectedBabyTab("A");
   };
 
-  const updateApp = (updater: (previous: AppState) => AppState, syncRemote = true,
+  const updateApp = (updater: (previous: AppState) => AppState,
     options: { absoluteSettings?: boolean } = {}) => {
-    if (!syncRemote) { setApp(updater); return true; }
     try {
       if (!store.current) throw new Error("記録を読み込んでいます。");
       store.current.update(updater, options);
@@ -314,7 +230,6 @@ export default function App() {
       return false;
     }
   };
-  const updateAppWithPendingEvents = (_events: LogEvent[], updater: (previous: AppState) => AppState) => updateApp(updater);
 
   const ensureNotificationSettingsDocument = async (user: User) => {
     if (!db) return;
@@ -508,10 +423,10 @@ export default function App() {
   }, [authUser, pushPermission]);
 
   useEffect(() => {
-    updateApp((prev) => {
+    setApp((prev) => {
       if (prev.ui.lastViewedDate === activeDate) return prev;
       return { ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } };
-    }, false);
+    });
   }, [activeDate]);
 
   const handleOpenModal = (
@@ -590,7 +505,7 @@ export default function App() {
       }
     }
 
-    if (!updateAppWithPendingEvents(createdEvents, (prevApp) => appendEvents(prevApp, createdEvents))) return false;
+    if (!updateApp((prevApp) => appendEvents(prevApp, createdEvents))) return false;
     scheduleUndo(createdEvents);
     return true;
   };
@@ -755,7 +670,7 @@ export default function App() {
       eventsWithAutoWake.push(event);
     });
 
-    if (!updateAppWithPendingEvents(eventsWithAutoWake, (prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
+    if (!updateApp((prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
 
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
     scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
@@ -1076,7 +991,7 @@ export default function App() {
         const json = ev.target?.result as string;
         const importedState = parseBackup(json);
         if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
-        if (updateApp(() => importedState, true, { absoluteSettings: true })) {
+        if (updateApp(() => importedState, { absoluteSettings: true })) {
           setActiveDate(importedState.ui.lastViewedDate);
           alert("復元内容を端末に保存しました。同期状況をご確認ください。");
         }
@@ -1655,10 +1570,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setLayoutMode("single");
-                    try { localStorage.setItem(`twinly-layout:${family.id}`, "single"); } catch {}
-                  }}
+                  onClick={() => selectLayoutMode("single")}
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "single" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">1人ずつ表示</span>
@@ -1666,10 +1578,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setLayoutMode("split");
-                    try { localStorage.setItem(`twinly-layout:${family.id}`, "split"); } catch {}
-                  }}
+                  onClick={() => selectLayoutMode("split")}
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">左右2人表示</span>
@@ -1683,14 +1592,14 @@ export default function App() {
                 ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
                 ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
                 ["forest", "森の朝", "from-emerald-50 to-green-200"]
-              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
+              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => selectTheme(id)} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
             </section>
           </div>
         }
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;
           const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
-          if (!updateAppWithPendingEvents(events, prev => appendEvents(prev, events))) return false;
+          if (!updateApp(prev => appendEvents(prev, events))) return false;
           scheduleUndo(events); return true;
         }} />}
       />

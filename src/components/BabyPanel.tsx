@@ -25,6 +25,13 @@ import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
+import {
+  adjustNumber,
+  formatDiaperEstimateSummary,
+  formatMilkProgressSummary,
+  roundMilkAmountUp,
+  summarizeBabyPanelLogEvents,
+} from "@/lib/baby-panel-presenters";
 import { EventCard } from "./EventCard";
 import { VoiceCommandButton } from "./VoiceCommandButton";
 import {
@@ -74,63 +81,6 @@ type BabyPanelProps = {
   themeDimmedBgColor: string;
   memberNameByUid?: Record<string, string>;
 };
-
-const adjustNumber = (current: string, amount: number, precision: number) => {
-  const num = parseFloat(current);
-  if (Number.isNaN(num)) return (0).toFixed(precision);
-  return (num + amount).toFixed(precision);
-};
-
-const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
-  if (!estimate) return null;
-
-  if (estimate.level === "unknown") {
-    return {
-      title: "在庫予測は準備中",
-      detail: "記録が増えると、在庫切れの予測を表示します。",
-    };
-  }
-
-  if (estimate.level === "urgent") {
-    return {
-      title: "今日中になくなりそう",
-      detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
-    };
-  }
-
-  const roundedDays = Math.max(1, Math.ceil(estimate.daysRemaining ?? 0));
-  return {
-    title: `このペースだとあと約${roundedDays}日`,
-    detail: `在庫切れ予測: ${estimate.estimatedRunOutDate ?? "-"}`,
-  };
-};
-
-const formatMilkProgressSummary = (progress: MilkProgressComparison | null) => {
-  if (!progress) return null;
-
-  if (progress.status === "no-history") {
-    return {
-      title: `${progress.currentAmount}ml / 平均なし`,
-      detail: "過去7日分の記録がまだありません",
-    };
-  }
-
-  const roundedAverage = Math.round(progress.trailingAverage);
-  const roundedDifference = Math.round(Math.abs(progress.difference));
-  const detail =
-    roundedDifference === 0
-      ? "過去7日平均とほぼ同じ"
-      : progress.difference > 0
-        ? `平均より ${roundedDifference}ml 多め`
-        : `平均より ${roundedDifference}ml 少なめ`;
-
-  return {
-    title: `${progress.currentAmount}ml / 平均${roundedAverage}ml`,
-    detail,
-  };
-};
-
-const roundMilkAmountUp = (amount: number) => Math.ceil(Math.max(0, amount) / 5) * 5;
 
 export function BabyPanel({
   profile,
@@ -221,19 +171,8 @@ export function BabyPanel({
     setDailyNote("");
   };
 
-  const milkEvents = logEvents.filter((event) => event.type === "milk");
-  const solidFoodEvents = logEvents.filter((event) => event.type === "solidFood");
-  const diaperEvents = logEvents.filter((event) => event.type === "diaper");
-  const milkTotal = milkEvents.reduce((sum, event) => sum + (event.milkMl ?? 0), 0);
-  const peeCount = diaperEvents.reduce(
-    (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
-    0
-  );
-  const poopCount = diaperEvents.reduce(
-    (count, event) => count + (event.diaperKind === "poop" || event.diaperKind === "mix" ? 1 : 0),
-    0
-  );
-  const diaperCount = peeCount + poopCount;
+  const { milkTotal, milkCount, solidFoodCount, peeCount, poopCount, diaperCount } =
+    summarizeBabyPanelLogEvents(logEvents);
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const diaperEstimateSummary = diaperStockManagementEnabled && stockForecastEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
@@ -280,14 +219,11 @@ export function BabyPanel({
     ])
   );
 
-  const latestMilkEvents = latestEvents.filter((event) => event.type === "milk");
-  const latestDiaperEvents = latestEvents.filter((event) => event.type === "diaper");
-
-  const lastMilkEvent = latestMilkEvents[0] ?? null;
+  const lastMilkEvent = latestEvents.find((event) => event.type === "milk") ?? null;
   const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
   const lastMilkElapsed = formatElapsed(lastMilkEvent?.timestamp ?? null);
 
-  const lastDiaperEvent = latestDiaperEvents[0] ?? null;
+  const lastDiaperEvent = latestEvents.find((event) => event.type === "diaper") ?? null;
   const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
   const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
   const careGauges = buildCareGauges({
@@ -689,11 +625,11 @@ export function BabyPanel({
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
                     <span>ミルク</span>
-                    <span>{milkEvents.length}回</span>
+                    <span>{milkCount}回</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>離乳食</span>
-                    <span>{solidFoodEvents.length}回</span>
+                    <span>{solidFoodCount}回</span>
                   </div>
                 </div>
               </CardContent>

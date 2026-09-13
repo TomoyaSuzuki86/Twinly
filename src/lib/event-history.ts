@@ -120,45 +120,33 @@ export const filterEventsForTimeRange = (events: LogEvent[], timeRange: TimeRang
   return events.filter((event) => event.timestamp >= rangeStart && event.timestamp <= rangeEnd);
 };
 
-export const buildMilkChartData = (events: LogEvent[], timeRange: TimeRange, now: Date): MilkChartDatum[] => {
-  const visibleEvents = filterEventsForTimeRange(events, timeRange, now);
+const bucketEventsByPeriod = (events: LogEvent[], timeRange: TimeRange, now: Date) => {
   const buckets = new Map<string, LogEvent[]>();
 
-  for (const event of visibleEvents) {
+  for (const event of filterEventsForTimeRange(events, timeRange, now)) {
     const key = getPeriodKey(new Date(event.timestamp), timeRange);
-    const current = buckets.get(key) ?? [];
-    current.push(event);
-    buckets.set(key, current);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(event);
+    else buckets.set(key, [event]);
   }
 
-  return Array.from(buckets.entries())
-    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-    .map(([key, bucketEvents]) => ({
-      key,
-      label: getPeriodLabel(key),
-      ...summarizeMilkEvents(bucketEvents),
-    }));
+  return Array.from(buckets.entries()).sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey));
 };
 
+export const buildMilkChartData = (events: LogEvent[], timeRange: TimeRange, now: Date): MilkChartDatum[] =>
+  bucketEventsByPeriod(events, timeRange, now).map(([key, bucketEvents]) => ({
+    key,
+    label: getPeriodLabel(key),
+    ...summarizeMilkEvents(bucketEvents),
+  }));
+
 export const buildDiaperChartData = (events: LogEvent[], timeRange: TimeRange, now: Date): DiaperChartDatum[] => {
-  const visibleEvents = filterEventsForTimeRange(events, timeRange, now);
-  const buckets = new Map<string, LogEvent[]>();
   const daySpan = getPeriodDaySpan(timeRange);
-
-  for (const event of visibleEvents) {
-    const key = getPeriodKey(new Date(event.timestamp), timeRange);
-    const current = buckets.get(key) ?? [];
-    current.push(event);
-    buckets.set(key, current);
-  }
-
-  return Array.from(buckets.entries())
-    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-    .map(([key, bucketEvents]) => ({
-      key,
-      label: getPeriodLabel(key),
-      ...summarizeDiaperEvents(bucketEvents, daySpan),
-    }));
+  return bucketEventsByPeriod(events, timeRange, now).map(([key, bucketEvents]) => ({
+    key,
+    label: getPeriodLabel(key),
+    ...summarizeDiaperEvents(bucketEvents, daySpan),
+  }));
 };
 
 export const getDefaultHistoryRange = (_historyType: "milk" | "diaper"): TimeRange => "1W";

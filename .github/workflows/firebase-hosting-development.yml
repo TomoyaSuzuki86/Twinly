@@ -47,12 +47,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test data synchronization layer
-        run: npx vitest run src/data
-
-      # Keep the development preview blocking the AI swipe regression that previously reached preview.
-      - name: Test AI advice swipe regression
-        run: npx vitest run src/components/AiAdviceLauncher.test.tsx
+      - name: Test app
+        run: npm test
 
       - name: Build app
         run: npm run build

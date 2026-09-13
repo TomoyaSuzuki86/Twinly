@@ -69,7 +69,7 @@ describe("BabyTabTrigger", () => {
     expect(fullGauge.dataset.full).toBe("true");
     expect(fullGaugeCenter.className).toContain("inset-[5px]");
     expect(fullGaugeCenter.style.backgroundColor).toContain("hsl(var(--care-milk))");
-    expect((fullGauge.lastElementChild as HTMLElement).className).toContain("text-primary-foreground");
+    expect((fullGauge.lastElementChild as HTMLElement).className).toContain("text-white");
     expect(almostFullGauge.dataset.full).toBe("false");
     expect(almostFullGaugeCenter.style.backgroundColor).toBe("");
   });

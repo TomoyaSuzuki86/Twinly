@@ -21,10 +21,11 @@ export const createDefaultMilkDraft = (
   babyId: BabyId,
   now: Date = new Date()
 ): MilkDraft => {
-  const milkEvents = [...events]
-    .filter((event) => event.babyId === babyId && event.type === "milk")
-    .sort((a, b) => b.timestamp - a.timestamp);
-  const lastMilkEvent = milkEvents[0];
+  const lastMilkEvent = events.reduce<LogEvent | undefined>((latest, event) => {
+    if (event.babyId !== babyId || event.type !== "milk") return latest;
+    if (!latest || event.timestamp > latest.timestamp) return event;
+    return latest;
+  }, undefined);
 
   return {
     milkMl: lastMilkEvent?.milkMl ?? 140,
