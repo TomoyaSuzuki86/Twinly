@@ -19,6 +19,7 @@ const PANELS_SELECTOR = ".twinly-baby-tabs-panels";
 const READY_CLASS = "twinly-fluid-tabs-ready";
 const INDICATOR_CLASS = "twinly-fluid-tab-indicator";
 const SETTLING_CLASS = "twinly-fluid-tab-indicator-settling";
+const STYLE_ID = "twinly-baby-tab-swipe-animator-style";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const lerp = (from: number, to: number, amount: number) => from + (to - from) * amount;
@@ -90,8 +91,12 @@ const computeStretchRect = (
   };
 };
 
-const style = document.createElement("style");
-style.textContent = `
+const ensureStyles = () => {
+  if (document.getElementById(STYLE_ID)) return;
+
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = `
 .${READY_CLASS} {
   position: relative !important;
   isolation: isolate;
@@ -135,9 +140,15 @@ style.textContent = `
   }
 }
 `;
-document.head.appendChild(style);
+  document.head.appendChild(style);
+};
+
+let currentCleanup: (() => void) | null = null;
 
 export const installBabyTabSwipeAnimator = () => {
+  currentCleanup?.();
+  ensureStyles();
+
   let list: HTMLElement | null = null;
   let indicator: HTMLSpanElement | null = null;
   let session: SwipeSession | null = null;
@@ -293,23 +304,16 @@ export const installBabyTabSwipeAnimator = () => {
     applyRect(computeStretchRect(from, to, progress), tension, true);
   };
 
-  const handleTouchEnd = () => {
+  const endSwipe = () => {
     if (!session) return;
     session = null;
     scheduleSettle(true);
   };
-
-  const handleTouchCancel = () => {
-    if (!session) return;
-    session = null;
-    scheduleSettle(true);
-  };
-
 
   document.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
-  document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false });
-  document.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
-  document.addEventListener("touchcancel", handleTouchCancel, { capture: true, passive: true });
+  document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
+  document.addEventListener("touchend", endSwipe, { capture: true, passive: true });
+  document.addEventListener("touchcancel", endSwipe, { capture: true, passive: true });
 
   const observer = new MutationObserver((mutations) => {
     let activeChanged = false;
@@ -343,9 +347,32 @@ export const installBabyTabSwipeAnimator = () => {
     attributeFilter: ["data-state"],
   });
 
-  window.addEventListener("resize", () => scheduleSettle(false), { passive: true });
+  const handleResize = () => scheduleSettle(false);
+  window.addEventListener("resize", handleResize, { passive: true });
   ensureIndicator();
   scheduleSettle(false);
+
+  const cleanup = () => {
+    document.removeEventListener("touchstart", handleTouchStart, true);
+    document.removeEventListener("touchmove", handleTouchMove, true);
+    document.removeEventListener("touchend", endSwipe, true);
+    document.removeEventListener("touchcancel", endSwipe, true);
+    window.removeEventListener("resize", handleResize);
+    observer.disconnect();
+    if (refreshFrame) window.cancelAnimationFrame(refreshFrame);
+    clearSettlingAnimation();
+    list?.classList.remove(READY_CLASS);
+    indicator?.remove();
+    session = null;
+    list = null;
+    indicator = null;
+    refreshFrame = 0;
+    if (currentCleanup === cleanup) currentCleanup = null;
+  };
+
+  currentCleanup = cleanup;
+  return cleanup;
 };
 
-installBabyTabSwipeAnimator();
+const uninstallAnimator = installBabyTabSwipeAnimator();
+if (import.meta.hot) import.meta.hot.dispose(uninstallAnimator);
