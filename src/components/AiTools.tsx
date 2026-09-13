@@ -192,21 +192,39 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
       </section>
 
       <section className="rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-background p-5">
-        <div className="text-sm font-bold text-primary">Twinlyをつくった理由</div>
-        <h3 className="mt-2 text-lg font-bold leading-snug">双子育児をする私たち夫婦の、「こんなアプリが欲しかった」から始まりました。</h3>
+        <div className="text-sm font-bold text-primary">開発者より</div>
+        <h3 className="mt-2 text-lg font-bold leading-snug">双子育児をする私たち夫婦の「こんなアプリが欲しかった」という思いから、Twinlyは始まりました。</h3>
         <div className="mt-3 space-y-3 text-sm leading-relaxed text-muted-foreground">
           <p>
-            新生児期、2人分のミルク・おむつ・睡眠を追いながら、双子に特化していて、片手でも素早く記録できるアプリを探しました。でも、自分たちが本当に欲しいものは見つかりませんでした。
+            新生児期、2人分のミルク・おむつ・睡眠を追いながら、双子に特化し、片手で素早く記録できるアプリを探しました。しかし、納得できるものは見つからず、自分たちでTwinlyを作ることにしました。
           </p>
           <p>
-            そこで、自分たちでTwinlyを作りました。実際に毎日使いながら、「これが欲しい」「ここが面倒」をそのまま機能に変え、双子の成長と一緒にアップデートを重ねています。
+            毎日使いながら、「これが欲しい」「ここが面倒」という声を機能に反映し、双子の成長とともにアップデートを重ねています。
           </p>
           <p>
-            これからも夫婦で全力で2人を育てながら、Twinlyももっと頼れるアプリへ育てていきます。
+            中でも、Premiumでぜひ試していただきたいのが「お世話ゲージ」です。
+          </p>
+          <p>
+            ミルクやおむつの記録ボタンがそのままゲージになり、「そろそろミルクかな？」「どちらを先にお世話する？」が、アプリを開くだけで直感的にわかります。
+          </p>
+          <p>
+            この機能を使い始めてから、最後のお世話の時間を確認したり、夫婦で「次はどっちだっけ？」と相談したりすることが大きく減りました。
+          </p>
+          <p>
+            体感では、双子育児が100倍くらいラクになったと思っています。
+          </p>
+          <p>
+            少し大げさに聞こえるかもしれませんが、今では手放せません。記録を残すだけでなく、データが「次に何をすればいいか」を教えてくれる。そこがTwinlyらしさだと思っています。
+          </p>
+          <p>
+            ぜひ、実際の双子育児で使ってみてください。
+          </p>
+          <p>
+            これからも夫婦で2人を育てながら、Twinlyを「双子育児を少しでもラクにするアプリ」として育てていきます。
           </p>
         </div>
         <div className="mt-4 rounded-xl bg-background/70 p-3 text-sm font-semibold leading-relaxed">
-          Premiumは便利な追加機能を使えるだけでなく、Twinlyをこれからも改善し続けるための支えになります。気に入っていただけたら、応援していただけると嬉しいです。
+          Premiumは便利な追加機能を使えるだけでなく、Twinlyの改善を支えるものでもあります。気に入っていただけたら、応援していただけると嬉しいです。
         </div>
       </section>
 
