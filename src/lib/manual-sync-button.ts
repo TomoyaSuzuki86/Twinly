@@ -10,9 +10,9 @@ const ensureStyle = () => {
   style.id = STYLE_ID;
   style.textContent = `
     #${BUTTON_ID} {
-      width: 2.25rem;
-      height: 2.25rem;
-      flex: 0 0 2.25rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      flex: 0 0 2.5rem;
       display: grid;
       place-items: center;
       border: 0;
@@ -20,7 +20,7 @@ const ensureStyle = () => {
       background: transparent;
       color: inherit;
       cursor: pointer;
-      transition: background-color 460ms ease, color 460ms ease, transform 140ms ease;
+      transition: background-color 460ms ease, color 460ms ease, border-radius 460ms ease, transform 140ms ease;
       -webkit-tap-highlight-color: transparent;
     }
     #${BUTTON_ID}:hover {
@@ -31,12 +31,13 @@ const ensureStyle = () => {
       transform: scale(.96);
     }
     #${BUTTON_ID}[data-state='success'] {
+      border-radius: 9999px;
       background: rgb(34 197 94);
       color: white;
     }
     #${BUTTON_ID} svg {
-      width: 1.25rem;
-      height: 1.25rem;
+      width: 1rem;
+      height: 1rem;
       transition: color 460ms ease;
     }
     #${BUTTON_ID}[data-state='syncing'] svg {
