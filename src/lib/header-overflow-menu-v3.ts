@@ -12,6 +12,7 @@ const MENU_ID = 'twinly-header-menu';
 const PLAYER_ID = 'twinly-mini-player';
 const STYLE_ID = 'twinly-header-menu-style-v3';
 const HINT_TEXT = 'ダブルクリック／長押しで音声入力';
+const AI_ADVICE_SELECTOR = 'button[aria-label="AIアドバイスを見る"]';
 
 let comfortState: ComfortState = { active: false, paused: false, trackId: '', trackLabel: '' };
 let observer: MutationObserver | null = null;
@@ -22,6 +23,7 @@ const icon = (body: string) => `
 
 const icons = {
   more: icon('<circle cx="12" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/>'),
+  sparkles: icon('<path d="m12 3-1.1 2.9a2 2 0 0 1-1.2 1.2L7 8.2l2.7 1.1a2 2 0 0 1 1.2 1.2L12 13.4l1.1-2.9a2 2 0 0 1 1.2-1.2L17 8.2l-2.7-1.1a2 2 0 0 1-1.2-1.2L12 3Z"/><path d="m5 14-.7 1.8a1.5 1.5 0 0 1-.9.9L2 17.2l1.4.6a1.5 1.5 0 0 1 .9.9L5 20.5l.7-1.8a1.5 1.5 0 0 1 .9-.9l1.4-.6-1.4-.5a1.5 1.5 0 0 1-.9-.9L5 14Z"/><path d="m19 14-.7 1.8a1.5 1.5 0 0 1-.9.9l-1.4.5 1.4.6a1.5 1.5 0 0 1 .9.9l.7 1.8.7-1.8a1.5 1.5 0 0 1 .9-.9l1.4-.6-1.4-.5a1.5 1.5 0 0 1-.9-.9L19 14Z"/>'),
   music: icon('<path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/>'),
   help: icon('<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.2 2c-1.3 1-2.3 1.6-2.3 3"/><path d="M12 17h.01"/>'),
   settings: icon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/>'),
@@ -33,6 +35,7 @@ const ensureStyle = () => {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
+    ${AI_ADVICE_SELECTOR} { display:none !important; }
     #${MENU_WRAPPER_ID} { position: relative; display: flex; align-items: center; }
     #${MENU_WRAPPER_ID} > .twinly-menu-trigger { width:2.5rem;height:2.5rem;display:grid;place-items:center;flex:0 0 2.5rem;border:0;border-radius:.375rem;background:transparent;color:inherit;cursor:pointer;transition:background-color 160ms ease,color 160ms ease;-webkit-tap-highlight-color:transparent; }
     #${MENU_WRAPPER_ID} > .twinly-menu-trigger:hover,#${MENU_WRAPPER_ID} > .twinly-menu-trigger[aria-expanded='true'] { background:hsl(var(--accent));color:hsl(var(--accent-foreground)); }
@@ -56,6 +59,8 @@ const ensureStyle = () => {
 };
 
 const stopHeaderGesture = (event: Event) => event.stopPropagation();
+
+const getAiAdviceButton = () => document.querySelector<HTMLButtonElement>(AI_ADVICE_SELECTOR);
 
 const setMenuOpen = (open: boolean) => {
   const menu = document.getElementById(MENU_ID);
@@ -113,7 +118,7 @@ const updatePlayer = () => {
   if (!elements) return;
   const { hint, player } = elements;
   const showPlayer = comfortState.active && !comfortState.paused;
-  if (hint.hidden === showPlayer) hint.hidden = !showPlayer;
+  if (hint.hidden !== showPlayer) hint.hidden = showPlayer;
   if (player.hidden !== !showPlayer) player.hidden = !showPlayer;
   if (!showPlayer) return;
 
@@ -123,6 +128,11 @@ const updatePlayer = () => {
     if (label.textContent !== nextLabel) label.textContent = nextLabel;
     if (label.title !== nextLabel) label.title = nextLabel;
   }
+};
+
+const updateAiMenuVisibility = () => {
+  const item = document.querySelector<HTMLButtonElement>(`#${MENU_ID} [data-menu-action="ai-advice"]`);
+  if (item) item.hidden = !getAiAdviceButton();
 };
 
 const mount = () => {
@@ -160,7 +170,11 @@ const mount = () => {
     menu.id = MENU_ID;
     menu.setAttribute('role', 'menu');
     menu.dataset.open = 'false';
+
+    const aiItem = createMenuItem('AIアドバイス', icons.sparkles, () => getAiAdviceButton()?.click());
+    aiItem.dataset.menuAction = 'ai-advice';
     menu.append(
+      aiItem,
       createMenuItem('おやすみ音楽', icons.music, () => window.dispatchEvent(new Event('twinly-comfort-open'))),
       createMenuItem('ヘルプ', icons.help, () => help.click()),
       createMenuItem('設定', icons.settings, () => settings.click()),
@@ -171,6 +185,7 @@ const mount = () => {
     account.before(wrapper);
   }
 
+  updateAiMenuVisibility();
   updatePlayer();
 };
 
