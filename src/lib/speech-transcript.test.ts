@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeTranscriptSegments } from "./speech-transcript";
+import { collapseRepeatedTranscriptPrefix, mergeTranscriptSegments } from "./speech-transcript";
 
 describe("speech transcript cumulative results", () => {
   it("does not repeat a phrase included in the next cumulative result", () => {
@@ -16,5 +16,17 @@ describe("speech transcript cumulative results", () => {
 
   it("does not remove legitimate non-adjacent words", () => {
     expect(mergeTranscriptSegments(["かなた", "おむつ", "10分前"])).toBe("かなた おむつ 10分前");
+  });
+
+  it("collapses a repeated prefix inside one Android Chrome transcript", () => {
+    expect(
+      collapseRepeatedTranscriptPrefix("ひなた ミルク飲み中 ひなた ミルク飲み中 とてもニコニコしていて可愛い")
+    ).toBe("ひなた ミルク飲み中 とてもニコニコしていて可愛い");
+  });
+
+  it("keeps ordinary non-duplicated speech unchanged", () => {
+    expect(collapseRepeatedTranscriptPrefix("ひなた ミルク飲み中 とてもニコニコしていて可愛い")).toBe(
+      "ひなた ミルク飲み中 とてもニコニコしていて可愛い"
+    );
   });
 });
