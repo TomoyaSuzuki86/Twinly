@@ -8,10 +8,22 @@ const mock=vi.hoisted(()=>({service:vi.fn()}));
 vi.mock('@/lib/ai',()=>({callService:mock.service}));
 
 const premium={plan:'premium',canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
+const free={plan:'free',canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
 
 describe('AI advice follow-up',()=>{
   afterEach(()=>{cleanup();localStorage.clear();});
   beforeEach(()=>mock.service.mockReset());
+
+
+  it('keeps AI advice visible but inactive on the free plan',async()=>{
+    mock.service.mockImplementation(async(name)=>name==='getFamilyAccess'?free:free);
+    render(<div><button aria-label="週間タイムラインを開く">timeline</button><AiAdviceLauncher/></div>);
+    const launcher=await screen.findByRole('button',{name:'AIアドバイス（Premium限定）'});
+    expect(launcher).toHaveAttribute('aria-disabled','true');
+    expect(launcher).toHaveTextContent('Premium');
+    fireEvent.click(launcher);
+    expect(screen.queryByText('今日のAIアドバイス')).not.toBeInTheDocument();
+  });
 
   it('places text and voice question controls below the generated advice',async()=>{
     mock.service.mockImplementation(async(name,data)=>{

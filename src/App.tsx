@@ -210,8 +210,9 @@ export default function App() {
     } catch { setTheme("dark"); }
   }, [family?.id]);
   useEffect(() => {
-    const allowed = ["milk", "sakura", "sun", "forest"].includes(theme) && familyAccess?.features.themes;
-    document.documentElement.dataset.theme = allowed ? theme : "dark";
+    const freeTheme = theme === "milk";
+    const premiumTheme = ["sakura", "sun", "forest"].includes(theme) && familyAccess?.features.themes;
+    document.documentElement.dataset.theme = freeTheme || premiumTheme ? theme : "dark";
     return () => { delete document.documentElement.dataset.theme; };
   }, [theme, familyAccess?.features.themes]);
   const [layoutMode, setLayoutMode] = useState<"single" | "split">("single");
@@ -1622,6 +1623,7 @@ export default function App() {
         open={modal?.kind === "settings"}
         onOpenChange={(open) => !open && setModal(null)}
         app={app}
+        premiumGaugesEnabled={Boolean(familyAccess?.features.gauges)}
         setApp={(updater) => {
           updateApp((prevApp) => {
             const nextApp = typeof updater === "function" ? updater(prevApp) : updater;
@@ -1681,7 +1683,7 @@ export default function App() {
                 ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
                 ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
                 ["forest", "森の朝", "from-emerald-50 to-green-200"]
-              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
+              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => { setTheme(id); try { localStorage.setItem(`twinly-theme:${family.id}`, id); } catch {} }} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
             </section>
           </div>
         }

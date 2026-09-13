@@ -118,18 +118,17 @@ style.textContent = `
   background: hsl(var(--background));
   box-shadow: 0 1px 3px hsl(var(--foreground) / 0.12), 0 0 0 1px hsl(var(--border) / 0.38);
   transform-origin: center;
-  will-change: left, width, transform, clip-path;
+  will-change: left, width, transform, border-radius;
 }
 
 .${SETTLING_CLASS} {
-  animation: twinly-tab-slime-settle 390ms cubic-bezier(.2,.9,.28,1.25);
+  animation: twinly-tab-spring-settle 360ms cubic-bezier(.2,.9,.28,1.18);
 }
 
-@keyframes twinly-tab-slime-settle {
-  0% { transform: scaleX(1.02) scaleY(.97); }
-  38% { transform: scaleX(.965) scaleY(1.055); }
-  68% { transform: scaleX(1.022) scaleY(.985); }
-  86% { transform: scaleX(.995) scaleY(1.01); }
+@keyframes twinly-tab-spring-settle {
+  0% { transform: scaleX(1.035) scaleY(.975); }
+  45% { transform: scaleX(.982) scaleY(1.025); }
+  72% { transform: scaleX(1.012) scaleY(.993); }
   100% { transform: scale(1); }
 }
 
@@ -202,8 +201,7 @@ export const installBabyTabSwipeAnimator = () => {
         "width 430ms cubic-bezier(.2,1.42,.32,1)",
         "top 320ms cubic-bezier(.2,.9,.3,1)",
         "height 320ms cubic-bezier(.2,.9,.3,1)",
-        "clip-path 220ms ease-out",
-        "border-radius 220ms ease-out",
+        "border-radius 180ms ease-out",
       ].join(", ");
     }
 
@@ -213,12 +211,12 @@ export const installBabyTabSwipeAnimator = () => {
     indicator.style.height = `${rect.height}px`;
 
     if (tension > 0.015) {
-      const waist = Math.min(72, rect.width * 0.18) * tension;
-      indicator.style.clipPath = `polygon(0 0, 100% 0, calc(100% - ${waist.toFixed(2)}px) 50%, 100% 100%, 0 100%, ${waist.toFixed(2)}px 50%)`;
-      indicator.style.borderRadius = `${Math.round(7 + tension * 9)}px`;
-      indicator.style.transform = `scaleX(${(1 + tension * 0.012).toFixed(4)}) scaleY(${(1 - tension * 0.075).toFixed(4)})`;
+      const pillRadius = lerp(8, Math.max(18, rect.height / 2), tension);
+      indicator.style.clipPath = "none";
+      indicator.style.borderRadius = `${pillRadius.toFixed(2)}px`;
+      indicator.style.transform = `scaleY(${(1 - tension * 0.04).toFixed(4)})`;
     } else {
-      indicator.style.clipPath = "inset(0 round 8px)";
+      indicator.style.clipPath = "none";
       indicator.style.borderRadius = "8px";
       indicator.style.transform = "scale(1)";
     }

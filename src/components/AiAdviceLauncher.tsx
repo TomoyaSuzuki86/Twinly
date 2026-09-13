@@ -232,6 +232,7 @@ export function AiAdviceLauncher() {
   };
 
   const openAdvice = () => {
+    if (!access?.features.aiReview) return;
     setOpen(true);
     setError("");
     if (consent) void loadReview();
@@ -244,12 +245,14 @@ export function AiAdviceLauncher() {
     void loadReview();
   };
 
+  const aiAdviceEnabled = Boolean(access?.features.aiReview);
+
   const launcher = (
     <Button
       type="button"
       variant="outline"
       size="sm"
-      className="h-8 select-none gap-1 px-2 text-xs"
+      className={`h-8 select-none gap-1 px-2 text-xs ${aiAdviceEnabled ? "" : "cursor-not-allowed opacity-45"}`}
       style={{ touchAction: "none" }}
       data-twinly-ai-advice-button="true"
       onPointerDown={handleLauncherPointerDown}
@@ -266,18 +269,28 @@ export function AiAdviceLauncher() {
           event.stopPropagation();
           return;
         }
+        if (!aiAdviceEnabled) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         openAdvice();
       }}
-      aria-label="AIアドバイスを見る"
+      aria-disabled={!aiAdviceEnabled}
+      aria-label={aiAdviceEnabled ? "AIアドバイスを見る" : "AIアドバイス（Premium限定）"}
+      title={aiAdviceEnabled ? "AIアドバイス" : "Premiumで利用できます"}
     >
       <Sparkles className="h-4 w-4" />
       <span>AIアドバイス</span>
+      {!aiAdviceEnabled ? (
+        <span className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-bold text-primary">Premium</span>
+      ) : null}
     </Button>
   );
 
   return (
     <>
-      {access?.features.aiReview ? targets.map((target, index) => createPortal(launcher, target, `ai-advice-${index}`)) : null}
+      {access ? targets.map((target, index) => createPortal(launcher, target, `ai-advice-${index}`)) : null}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
