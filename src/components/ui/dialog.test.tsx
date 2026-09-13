@@ -22,15 +22,6 @@ const fireSwipe = (target: Element, startX: number, endX: number) => {
   fireEvent(target, end);
 };
 
-function TwinIconSources() {
-  return (
-    <>
-      <div data-twinly-baby-icon="A"><span>かなアイコン</span></div>
-      <div data-twinly-baby-icon="B"><span>ひなアイコン</span></div>
-    </>
-  );
-}
-
 function HistoryDialogFixture({
   title,
   onOpenA,
@@ -42,11 +33,12 @@ function HistoryDialogFixture({
 }) {
   return (
     <>
-      <TwinIconSources />
       <div className="twinly-baby-tabs-content">
+        <div data-twinly-baby-icon="A"><span>かなアイコン</span></div>
         <button aria-label="かなちゃんの食事履歴を開く" onClick={onOpenA}>A</button>
       </div>
       <div className="twinly-baby-tabs-content">
+        <div data-twinly-baby-icon="B"><span>ひなアイコン</span></div>
         <button aria-label="ひなちゃんの食事履歴を開く" onClick={onOpenB}>B</button>
       </div>
       <Dialog open>

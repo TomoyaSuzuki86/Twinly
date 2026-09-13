@@ -1,14 +1,16 @@
+import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsModal, shouldDisablePushEnable } from "./SettingsModal";
 import { createInitialAppState } from "@/lib/app-state";
 
-const renderSettings = (app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"))) =>
+const renderSettings = (app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00")), premiumGaugesEnabled = false) =>
   render(
     <SettingsModal
       open
       onOpenChange={vi.fn()}
       app={app}
+      premiumGaugesEnabled={premiumGaugesEnabled}
       setApp={vi.fn()}
       user={null}
       onSignIn={vi.fn()}
@@ -47,7 +49,7 @@ describe("SettingsModal", () => {
   it("allows activity limits to be overridden and restored to the age default", () => {
     const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
     app.profiles.A.activityLimitMinutesOverride = 120;
-    renderSettings(app);
+    renderSettings(app, true);
 
     const activityLimitInputs = screen.getAllByLabelText("活動可能時間") as HTMLInputElement[];
     expect(activityLimitInputs[0].value).toBe("120");
@@ -63,7 +65,7 @@ describe("SettingsModal", () => {
   it("allows daily sleep targets to be overridden and restored to the age default", () => {
     const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
     app.profiles.A.sleepTargetHoursOverride = 14;
-    renderSettings(app);
+    renderSettings(app, true);
 
     const sleepTargetInputs = screen.getAllByLabelText("1日の必要睡眠時間") as HTMLInputElement[];
     expect(sleepTargetInputs[0].value).toBe("14");
@@ -76,7 +78,7 @@ describe("SettingsModal", () => {
 
   it("moves sleep management to data management and hides sleep profile settings when disabled", () => {
     renderSettings();
-    fireEvent.click(screen.getByRole("tab", { name: "データ管理" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "データ管理" }), { button: 0, ctrlKey: false });
     fireEvent.click(screen.getByRole("button", { name: "睡眠管理を切り替え" }));
 
     expect(screen.getByRole("button", { name: "睡眠管理を切り替え" })).toHaveTextContent("オフ");
@@ -86,7 +88,7 @@ describe("SettingsModal", () => {
 
   it("keeps diaper stock management inside data management", () => {
     renderSettings();
-    fireEvent.click(screen.getByRole("tab", { name: "データ管理" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "データ管理" }), { button: 0, ctrlKey: false });
     expect(screen.getByRole("button", { name: "おむつ在庫管理を切り替え" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "おむつ在庫" })).toBeNull();
   });
