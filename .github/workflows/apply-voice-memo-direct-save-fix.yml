@@ -1,0 +1,160 @@
+name: Apply Voice Memo Direct Save Fix
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - .github/workflows/apply-voice-memo-direct-save-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          panel = Path("src/components/BabyPanel.tsx")
+          text = panel.read_text()
+          old = '                onTranscript={(text) => setDailyNote(text.trim())}'
+          new = '''                onTranscript={(text) => {
+                  const note = text.trim();
+                  if (!note) return;
+                  onAddEvent({
+                    babyId,
+                    type: "daily",
+                    note,
+                  });
+                  setDailyNote("");
+                }}'''
+          if old not in text:
+              raise SystemExit("BabyPanel voice transcript target not found")
+          panel.write_text(text.replace(old, new, 1))
+
+          transcript = Path("src/lib/speech-transcript.ts")
+          transcript.write_text('''const compactText = (value: string) => value.replace(/\\s+/g, "");
+
+const rawOffsetForCompactIndex = (value: string, compactIndex: number) => {
+  let seen = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!/\\s/.test(value[index])) {
+      if (seen === compactIndex) return index;
+      seen += 1;
+    }
+  }
+  return value.length;
+};
+
+export const collapseRepeatedTranscriptPrefix = (rawValue: string) => {
+  const value = rawValue.trim().replace(/\\s+/g, " ");
+  const compact = compactText(value);
+  if (compact.length < 12) return value;
+
+  // Android Chrome can occasionally return one alternative as
+  // "prefix + prefix + continuation". Prefer the second, more complete copy.
+  for (let prefixLength = Math.floor(compact.length / 2); prefixLength >= 6; prefixLength -= 1) {
+    const prefix = compact.slice(0, prefixLength);
+    if (!compact.slice(prefixLength).startsWith(prefix)) continue;
+
+    const secondCopyOffset = rawOffsetForCompactIndex(value, prefixLength);
+    const deduped = value.slice(secondCopyOffset).trim();
+    return deduped || value;
+  }
+
+  return value;
+};
+
+export const mergeTranscriptSegments = (segments: string[]) => {
+  return segments.reduce((merged, rawSegment) => {
+    const segment = collapseRepeatedTranscriptPrefix(rawSegment);
+    if (!segment) return merged;
+    if (!merged) return segment;
+
+    const compactMerged = compactText(merged);
+    const compactSegment = compactText(segment);
+
+    // Chrome on Android may expose a new result as the whole utterance while
+    // keeping the preceding result in the list. Avoid appending that shared
+    // prefix twice (for example: "おむつ" + "おむつ 10分前").
+    if (compactSegment.startsWith(compactMerged)) return segment;
+    if (compactMerged.endsWith(compactSegment)) return merged;
+
+    const maxOverlap = Math.min(compactMerged.length, compactSegment.length);
+    for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+      if (compactMerged.slice(-overlap) === compactSegment.slice(0, overlap)) {
+        let compactCharactersSeen = 0;
+        let appendFrom = 0;
+        while (appendFrom < segment.length && compactCharactersSeen < overlap) {
+          if (!/\\s/.test(segment[appendFrom])) compactCharactersSeen += 1;
+          appendFrom += 1;
+        }
+        const remainder = segment.slice(appendFrom).trim();
+        return remainder ? `${merged} ${remainder}` : merged;
+      }
+    }
+
+    return `${merged} ${segment}`;
+  }, "");
+};
+''')
+
+          test = Path("src/lib/speech-transcript.test.ts")
+          test.write_text('''import { describe, expect, it } from "vitest";
+import { collapseRepeatedTranscriptPrefix, mergeTranscriptSegments } from "./speech-transcript";
+
+describe("speech transcript normalization", () => {
+  it("collapses a repeated prefix inside one Android Chrome transcript", () => {
+    expect(
+      collapseRepeatedTranscriptPrefix("ひなた ミルク飲み中 ひなた ミルク飲み中 とてもニコニコしていて可愛い")
+    ).toBe("ひなた ミルク飲み中 とてもニコニコしていて可愛い");
+  });
+
+  it("keeps ordinary non-duplicated speech unchanged", () => {
+    expect(collapseRepeatedTranscriptPrefix("ひなた ミルク飲み中 とてもニコニコしていて可愛い")).toBe(
+      "ひなた ミルク飲み中 とてもニコニコしていて可愛い"
+    );
+  });
+
+  it("still merges duplicated recognition segments without repeating the prefix", () => {
+    expect(mergeTranscriptSegments(["ひなた ミルク飲み中", "ひなた ミルク飲み中 とてもニコニコ"])).toBe(
+      "ひなた ミルク飲み中 とてもニコニコ"
+    );
+  });
+});
+''')
+
+          Path(".github/workflows/apply-voice-memo-direct-save-fix.yml").unlink()
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused tests
+        run: npx vitest run src/lib/speech-transcript.test.ts src/lib/voice-command.test.ts src/lib/voice-command.target.test.ts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/BabyPanel.tsx src/lib/speech-transcript.ts src/lib/speech-transcript.test.ts .github/workflows/apply-voice-memo-direct-save-fix.yml
+          git commit -m "Fix voice memo duplication and save directly"
+          git push origin HEAD:development
