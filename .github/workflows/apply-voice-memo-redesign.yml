@@ -12,6 +12,8 @@ jobs:
   apply:
     if: github.event.head_commit.message != 'Capture voice memo test failure'
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Tokyo
     steps:
       - name: Check out branch
         uses: actions/checkout@v4
