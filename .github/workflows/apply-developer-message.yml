@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - copy/developer-message
+    paths:
+      - .github/workflows/apply-developer-message.yml
 
 permissions:
   contents: write
@@ -12,25 +14,28 @@ jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout copy branch
         uses: actions/checkout@v4
-        with:
-          ref: copy/developer-message
-          fetch-depth: 0
 
       - name: Update developer message
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
-          import re
 
-          path = Path("src/components/AiTools.tsx")
+          path = Path('src/components/AiTools.tsx')
           text = path.read_text()
 
-          pattern = re.compile(
-              r'''      <section className="rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-background p-5">\n        <div className="text-sm font-bold text-primary">Twinlyをつくった理由</div>.*?      </section>\n\n      <section className="min-w-0 overflow-hidden rounded-xl border">''',
-              re.S,
-          )
+          start_marker = '''      <section className="rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-background p-5">
+        <div className="text-sm font-bold text-primary">Twinlyをつくった理由</div>'''
+          end_marker = '''
+
+      <section className="min-w-0 overflow-hidden rounded-xl border">'''
+
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start == -1 or end == -1:
+              raise SystemExit('developer message section markers were not found')
 
           replacement = '''      <section className="rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-background p-5">
         <div className="text-sm font-bold text-primary">開発者より</div>
@@ -67,21 +72,17 @@ jobs:
         <div className="mt-4 rounded-xl bg-background/70 p-3 text-sm font-semibold leading-relaxed">
           Premiumは便利な追加機能を使えるだけでなく、Twinlyの改善を支えるものでもあります。気に入っていただけたら、応援していただけると嬉しいです。
         </div>
-      </section>
+      </section>'''
 
-      <section className="min-w-0 overflow-hidden rounded-xl border">'''
-
-          updated, count = pattern.subn(replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f"expected exactly one developer message section, replaced {count}")
-          path.write_text(updated)
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
 
       - name: Commit copy update and remove helper workflow
         shell: bash
         run: |
-          git config user.name "TomoyaSuzuki86"
-          git config user.email "tmgo31586w@gmail.com"
-          git rm .github/workflows/apply-developer-message.yml
-          git add src/components/AiTools.tsx
+          rm .github/workflows/apply-developer-message.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/AiTools.tsx .github/workflows/apply-developer-message.yml
           git commit -m "copy: rewrite developer message in pricing section"
           git push origin HEAD:copy/developer-message
