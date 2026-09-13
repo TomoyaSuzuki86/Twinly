@@ -133,6 +133,25 @@ describe("IntroTutorial", () => {
     expect(finishTutorial).not.toHaveBeenCalled();
   });
 
+  it("asks for confirmation before ending the whole tutorial", async () => {
+    setup();
+    await screen.findByText("まずは、記録する子を選ぶ");
+
+    fireEvent.click(screen.getByText("終了"));
+    expect(screen.getByText("チュートリアルを終了しますか？")).toBeTruthy();
+    expect(finishTutorial).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("キャンセル"));
+    expect(screen.queryByText("チュートリアルを終了しますか？")).toBeNull();
+    expect(screen.getByText("まずは、記録する子を選ぶ")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("終了"));
+    fireEvent.click(screen.getByText("終了する"));
+
+    await waitFor(() => expect(finishTutorial).toHaveBeenCalledWith("parent-one", "skipped"));
+    expect(screen.queryByText("まずは、記録する子を選ぶ")).toBeNull();
+  });
+
   it("allows replay after completion", async () => {
     vi.mocked(shouldShowTutorial).mockResolvedValue(false);
     const view = render(<IntroTutorial {...props} />);

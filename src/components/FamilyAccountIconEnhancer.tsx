@@ -9,6 +9,12 @@ const initialFromNickname = (nickname: unknown) =>
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const lerp = (from: number, to: number, progress: number) => from + (to - from) * progress;
 
+const MORPH_START_INTRUSION = -4;
+const MORPH_FINAL_INTRUSION = 136;
+const MORPH_MIDPOINT_INTRUSION = (MORPH_START_INTRUSION + MORPH_FINAL_INTRUSION) / 2;
+const MORPH_SNAP_EPSILON = 2;
+const MORPH_SCROLL_SETTLE_MS = 160;
+
 type PrimaryActionKey = "food" | "diaper" | "sleep";
 type PrimaryActionSource = {
   key: PrimaryActionKey;
@@ -371,6 +377,10 @@ export function FamilyAccountIconEnhancer() {
     let entries = new Map<string, MorphEntry>();
     let signature = "";
     let frame = 0;
+    let scrollSettleTimer = 0;
+    let snapReleaseTimer = 0;
+    let touchScrolling = false;
+    let snapInProgress = false;
 
     const entryKey = (groupId: string, key: PrimaryActionKey) => `${groupId}:${key}`;
 
@@ -485,8 +495,8 @@ export function FamilyAccountIconEnhancer() {
         // Phase 1: food + diaper move upward and shrink.
         // Phase 2: they move left while sleep rises into the third slot.
         const intrusion = stickyBottom - foodRect.top;
-        const phase1 = clamp01((intrusion + 4) / 88);
-        const phase2 = sleep ? clamp01((intrusion - 34) / 102) : phase1;
+        const phase1 = clamp01((intrusion - MORPH_START_INTRUSION) / 88);
+        const phase2 = sleep ? clamp01((intrusion - 34) / (MORPH_FINAL_INTRUSION - 34)) : phase1;
 
         const horizontalPadding = splitLayoutActive ? 4 : 6;
         const gap = splitLayoutActive ? 4 : 6;
@@ -550,6 +560,78 @@ export function FamilyAccountIconEnhancer() {
       });
     };
 
+    const getCurrentMorphIntrusion = () => {
+      const stickyShell = document.querySelector<HTMLElement>(".twinly-baby-tabs > .sticky");
+      if (!stickyShell) return null;
+
+      const splitLayoutActive =
+        document.documentElement.dataset.twinlyLayout === "split" &&
+        window.matchMedia("(min-width: 1180px)").matches;
+      const group = getMorphGroups(splitLayoutActive).find((candidate) => {
+        const keys = new Set(candidate.sources.map((source) => source.key));
+        return keys.has("food") && keys.has("diaper") && keys.has("sleep");
+      });
+      if (!group) return null;
+
+      const food = group.sources.find((source) => source.key === "food");
+      if (!food) return null;
+      return stickyShell.getBoundingClientRect().bottom - food.button.getBoundingClientRect().top;
+    };
+
+    const settleMorphPosition = () => {
+      scrollSettleTimer = 0;
+      if (touchScrolling || snapInProgress) return;
+
+      const intrusion = getCurrentMorphIntrusion();
+      if (intrusion === null) return;
+      if (intrusion <= MORPH_START_INTRUSION + MORPH_SNAP_EPSILON) return;
+      if (intrusion >= MORPH_FINAL_INTRUSION - MORPH_SNAP_EPSILON) return;
+
+      const targetIntrusion = intrusion < MORPH_MIDPOINT_INTRUSION
+        ? MORPH_START_INTRUSION
+        : MORPH_FINAL_INTRUSION;
+      const delta = targetIntrusion - intrusion;
+      if (Math.abs(delta) < 1) return;
+
+      snapInProgress = true;
+      window.scrollBy({
+        top: delta,
+        left: 0,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      });
+
+      if (snapReleaseTimer) window.clearTimeout(snapReleaseTimer);
+      snapReleaseTimer = window.setTimeout(() => {
+        snapReleaseTimer = 0;
+        snapInProgress = false;
+        scheduleRefresh();
+      }, 420);
+    };
+
+    const scheduleMorphSnap = (delay = MORPH_SCROLL_SETTLE_MS) => {
+      if (touchScrolling || snapInProgress) return;
+      if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = window.setTimeout(settleMorphPosition, delay);
+    };
+
+    const handleScroll = () => {
+      scheduleRefresh();
+      scheduleMorphSnap();
+    };
+
+    const handleTouchStart = () => {
+      touchScrolling = true;
+      if (scrollSettleTimer) {
+        window.clearTimeout(scrollSettleTimer);
+        scrollSettleTimer = 0;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      touchScrolling = false;
+      scheduleMorphSnap(80);
+    };
+
     const observer = new MutationObserver(scheduleRefresh);
     observer.observe(document.getElementById("root") ?? document.body, {
       childList: true,
@@ -559,15 +641,23 @@ export function FamilyAccountIconEnhancer() {
       attributeFilter: ["data-state", "style", "disabled", "aria-label", "class"],
     });
 
-    window.addEventListener("scroll", scheduleRefresh, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", scheduleRefresh, { passive: true });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", handleTouchEnd, { passive: true });
     scheduleRefresh();
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      if (scrollSettleTimer) window.clearTimeout(scrollSettleTimer);
+      if (snapReleaseTimer) window.clearTimeout(snapReleaseTimer);
       observer.disconnect();
-      window.removeEventListener("scroll", scheduleRefresh);
+      window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", scheduleRefresh);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
       clearMorph();
       layer.remove();
       style.remove();
