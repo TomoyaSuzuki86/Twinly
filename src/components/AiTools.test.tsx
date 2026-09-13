@@ -32,7 +32,7 @@ describe('pricing and plans',()=>{
     expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();
     expect(screen.getByText('おむつ在庫切れ予測')).toBeInTheDocument();
     expect(screen.getAllByText('今日のまとめ通知').length).toBeGreaterThan(0);
-    expect(screen.getByText('Twinlyをつくった理由')).toBeInTheDocument();
+    expect(screen.getByText('開発者より')).toBeInTheDocument();
     expect(screen.getByText(/双子育児をする私たち夫婦の/)).toBeInTheDocument();
     expect(screen.queryByText('Premiumを、画面で見てみる')).not.toBeInTheDocument();
     expect(screen.queryByText(/横にスワイプ/)).not.toBeInTheDocument();
