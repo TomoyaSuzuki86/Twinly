@@ -680,12 +680,25 @@ export default function App() {
     }
 
     if (command.type === "daily") {
-      createdEvents.push(
-        createEvent(command.babyId, "daily", {
-          timestamp: command.timestamp,
-          note: command.dailyNote,
-        })
-      );
+      if (command.babyId === "both") {
+        const sharedDailyId = uid();
+        (["A", "B"] as BabyId[]).forEach((babyId) => {
+          createdEvents.push(
+            createEvent(babyId, "daily", {
+              timestamp: command.timestamp,
+              note: command.dailyNote,
+              sharedDailyId,
+            })
+          );
+        });
+      } else {
+        createdEvents.push(
+          createEvent(command.babyId, "daily", {
+            timestamp: command.timestamp,
+            note: command.dailyNote,
+          })
+        );
+      }
     }
 
     if (command.type === "temperature") {
@@ -754,8 +767,11 @@ export default function App() {
     updateApp((prevApp) => {
       const originalEvent = prevApp.events.find((event) => event.id === eventId);
       if (!originalEvent) return prevApp;
-      const updatedEvent = { ...originalEvent, ...auditPayload };
-      const nextEvents = prevApp.events.map((event) => (event.id === eventId ? updatedEvent : event));
+      const sharedDailyId = originalEvent.sharedDailyId;
+      const nextEvents = prevApp.events.map((event) => {
+        const sameRecord = event.id === eventId || (sharedDailyId && event.sharedDailyId === sharedDailyId);
+        return sameRecord ? { ...event, ...auditPayload } : event;
+      });
       return { ...prevApp, events: nextEvents };
     });
   };
@@ -777,7 +793,13 @@ export default function App() {
 
   const removeEvent = (eventId: string) => {
     if (!authUser || !db) return;
-    updateApp((prevApp) => removeEvents(prevApp, new Set([eventId])));
+    updateApp((prevApp) => {
+      const target = prevApp.events.find((event) => event.id === eventId);
+      const ids = target?.sharedDailyId
+        ? prevApp.events.filter((event) => event.sharedDailyId === target.sharedDailyId).map((event) => event.id)
+        : [eventId];
+      return removeEvents(prevApp, new Set(ids));
+    });
   };
 
   const undoLast = () => {
@@ -1476,6 +1498,7 @@ export default function App() {
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("A"); setTimelineModalOpen(true); }}
+                onVoiceMessage={showVoiceMessage}
                 lastWeight={lastWeights.A}
                 lastHeight={lastHeights.A}
                 themeDimmedBgColor={
@@ -1508,6 +1531,7 @@ export default function App() {
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("B"); setTimelineModalOpen(true); }}
+                onVoiceMessage={showVoiceMessage}
                 lastWeight={lastWeights.B}
                 lastHeight={lastHeights.B}
                 themeDimmedBgColor={

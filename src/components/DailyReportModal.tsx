@@ -25,6 +25,11 @@ type DailyReportModalProps = {
 };
 
 type FilterValue = "all" | BabyId;
+type DailyReportItem = {
+  key: string;
+  event: LogEvent;
+  babyIds: BabyId[];
+};
 
 const calcAgeLabel = (birthDate: string, at: Date) => {
   const birth = new Date(`${birthDate}T00:00:00`);
@@ -47,6 +52,9 @@ const calcAgeLabel = (birthDate: string, at: Date) => {
   return `生後${months}か月${days}日`;
 };
 
+const uniqueBabyIds = (events: LogEvent[]) =>
+  (["A", "B"] as BabyId[]).filter((babyId) => events.some((event) => event.babyId === babyId));
+
 export function DailyReportModal({
   open,
   onOpenChange,
@@ -56,11 +64,36 @@ export function DailyReportModal({
   const [filter, setFilter] = useState<FilterValue>("all");
 
   const reports = useMemo(() => {
-    const sorted = events
-      .filter((e) => e.type === "daily")
+    const dailyEvents = events
+      .filter((event) => event.type === "daily")
       .sort((a, b) => b.timestamp - a.timestamp);
-    if (filter === "all") return sorted;
-    return sorted.filter((e) => e.babyId === filter);
+    const bySharedId = new Map<string, LogEvent[]>();
+    dailyEvents.forEach((event) => {
+      if (!event.sharedDailyId) return;
+      const group = bySharedId.get(event.sharedDailyId) ?? [];
+      group.push(event);
+      bySharedId.set(event.sharedDailyId, group);
+    });
+
+    const seenSharedIds = new Set<string>();
+    const items: DailyReportItem[] = [];
+    dailyEvents.forEach((event) => {
+      if (!event.sharedDailyId) {
+        items.push({ key: event.id, event, babyIds: [event.babyId] });
+        return;
+      }
+      if (seenSharedIds.has(event.sharedDailyId)) return;
+      seenSharedIds.add(event.sharedDailyId);
+      const group = bySharedId.get(event.sharedDailyId) ?? [event];
+      items.push({
+        key: `shared:${event.sharedDailyId}`,
+        event,
+        babyIds: uniqueBabyIds(group),
+      });
+    });
+
+    if (filter === "all") return items;
+    return items.filter((item) => item.babyIds.includes(filter));
   }, [events, filter]);
 
   return (
@@ -95,40 +128,56 @@ export function DailyReportModal({
           ) : (
             <div className="space-y-3">
               {reports.map((report) => {
-                const profile = profiles[report.babyId];
-                const gradient =
-                  iconGradients.find(
-                    (g) => g.value === profile.iconGradient
-                  ) ?? iconGradients[0];
-                const createdAt = new Date(report.timestamp);
+                const firstBabyId = report.babyIds[0] ?? report.event.babyId;
+                const firstProfile = profiles[firstBabyId];
+                const createdAt = new Date(report.event.timestamp);
+                const shared = report.babyIds.length > 1;
+                const label = report.babyIds.map((babyId) => profiles[babyId].displayName).join(" & ");
+                const firstGradient =
+                  iconGradients.find((gradient) => gradient.value === firstProfile.iconGradient) ?? iconGradients[0];
                 return (
                   <div
-                    key={report.id}
-                    className={`flex items-start gap-3 rounded-lg border p-4 ${gradient.dimmedBgColor}`}
+                    key={report.key}
+                    className={`flex items-start gap-3 rounded-lg border p-4 ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
                   >
-                    <div
-                      className={`grid h-12 w-12 place-items-center rounded-full ${gradient.bgColor}`}
-                    >
-                      {profile.iconEmoji ? (
-                        <span className="text-xl">{profile.iconEmoji}</span>
-                      ) : (
-                        <Baby className="h-6 w-6 text-white" />
-                      )}
-                    </div>
+                    {shared ? (
+                      <div className="relative h-12 w-16 flex-shrink-0" aria-label={`${label}の共通メモ`}>
+                        {report.babyIds.map((babyId, index) => {
+                          const profile = profiles[babyId];
+                          const gradient =
+                            iconGradients.find((option) => option.value === profile.iconGradient) ?? iconGradients[0];
+                          return (
+                            <div
+                              key={babyId}
+                              className={`absolute top-0 grid h-12 w-12 place-items-center rounded-full ring-2 ring-background ${gradient.bgColor}`}
+                              style={{ left: `${index * 18}px`, zIndex: report.babyIds.length - index }}
+                            >
+                              {profile.iconEmoji ? (
+                                <span className="text-xl">{profile.iconEmoji}</span>
+                              ) : (
+                                <Baby className="h-6 w-6 text-white" />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className={`grid h-12 w-12 flex-shrink-0 place-items-center rounded-full ${firstGradient.bgColor}`}>
+                        {firstProfile.iconEmoji ? (
+                          <span className="text-xl">{firstProfile.iconEmoji}</span>
+                        ) : (
+                          <Baby className="h-6 w-6 text-white" />
+                        )}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">
-                          {profile.displayName}
-                        </span>
-                        <span>
-                          {fmtDate(createdAt)} {fmtTime(createdAt)}
-                        </span>
-                        <span>
-                          {calcAgeLabel(profile.birthDate, createdAt)}
-                        </span>
+                        <span className="font-semibold text-foreground">{label || firstProfile.displayName}</span>
+                        <span>{fmtDate(createdAt)} {fmtTime(createdAt)}</span>
+                        <span>{calcAgeLabel(firstProfile.birthDate, createdAt)}</span>
                       </div>
                       <div className="mt-2 whitespace-pre-wrap text-sm">
-                        {report.note?.trim() || "（内容なし）"}
+                        {report.event.note?.trim() || "（内容なし）"}
                       </div>
                     </div>
                   </div>

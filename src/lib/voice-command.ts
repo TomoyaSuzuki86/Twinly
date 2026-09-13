@@ -36,11 +36,12 @@ export type VoiceCommand =
     }
   | {
       kind: "event";
-      babyId: BabyId;
+      babyId: VoiceCommandTarget;
       type: "daily";
       dailyNote: string;
       timestamp: number;
       note: string;
+      fallbackMemo?: boolean;
     }
   | {
       kind: "event";
@@ -74,7 +75,7 @@ export type VoiceCommandParseResult =
 export type VoiceCommandParseOptions = {
   babyNames?: VoiceCommandBabyNames;
   defaultMilkMlByBaby?: Partial<Record<BabyId, number>>;
-  forcedBabyId?: BabyId;
+  forcedBabyId?: VoiceCommandTarget;
   now?: Date;
 };
 
@@ -213,9 +214,15 @@ const detectTemperature = (text: string) => {
   return detectDecimalNumber(text);
 };
 
-const detectDailyNote = (originalText: string) => {
-  const match = originalText.match(/(?:ひとこと|一言|めも|メモ)(?:は|を|:|：)?\s*(.+)$/i);
-  return match?.[1]?.trim() || originalText.trim();
+const detectDailyNote = (originalText: string, preservePrefix = false) => {
+  if (!preservePrefix) {
+    const match = originalText.match(/(?:ひとこと|一言|めも|メモ)(?:は|を|:|：)?\s*(.+)$/i);
+    return match?.[1]?.trim() || originalText.trim();
+  }
+
+  const match = originalText.match(/^(.*?)(?:ひとこと|一言|めも|メモ)(?:は|を|:|：)?\s*(.*)$/i);
+  if (!match) return originalText.trim();
+  return [match[1]?.trim(), match[2]?.trim()].filter(Boolean).join(" ") || originalText.trim();
 };
 
 const detectTimestamp = (text: string, now: Date) => {
@@ -267,9 +274,11 @@ export const parseVoiceCommand = (
   const babyNames = options.babyNames ?? {};
   const now = options.now ?? new Date();
   const normalizedText = normalizeText(text);
-  const babyId = options.forcedBabyId ?? detectBabyId(normalizedText, babyNames);
+  const explicitTarget = options.forcedBabyId;
+  const detectedBabyId = explicitTarget === undefined ? detectBabyId(normalizedText, babyNames) : null;
+  const targetBabyId: VoiceCommandTarget = explicitTarget ?? detectedBabyId ?? "both";
+  const singleBabyId: BabyId | null = targetBabyId === "both" ? null : targetBabyId;
   const timestamp = detectTimestamp(normalizedText, now) ?? now.getTime();
-  const targetBabyId: VoiceCommandTarget = babyId ?? "both";
 
   const isDailyNote = includesAny(normalizedText, ["ひとこと", "一言", "めも", "メモ"]);
   const isTemperature = includesAny(normalizedText, ["体温", "熱"]);
@@ -296,15 +305,17 @@ export const parseVoiceCommand = (
   const isSleepStart = includesAny(normalizedText, ["入眠", "睡眠", "寝ました", "寝た", "お休み", "おやすみ"]);
 
   if (isDailyNote) {
-    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    if (!singleBabyId && explicitTarget === undefined) {
+      return { ok: false, reason: "missingBaby", normalizedText };
+    }
 
     return {
       ok: true,
       command: {
         kind: "event",
-        babyId,
+        babyId: targetBabyId,
         type: "daily",
-        dailyNote: detectDailyNote(text),
+        dailyNote: detectDailyNote(text, explicitTarget !== undefined),
         timestamp,
         note: `voice: ${text}`,
       },
@@ -312,7 +323,7 @@ export const parseVoiceCommand = (
   }
 
   if (isTemperature) {
-    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    if (!singleBabyId) return { ok: false, reason: "missingBaby", normalizedText };
     const temperature = detectTemperature(text);
     if (!temperature) return { ok: false, reason: "missingType", normalizedText };
 
@@ -320,7 +331,7 @@ export const parseVoiceCommand = (
       ok: true,
       command: {
         kind: "event",
-        babyId,
+        babyId: singleBabyId,
         type: "temperature",
         temperature,
         timestamp,
@@ -330,7 +341,7 @@ export const parseVoiceCommand = (
   }
 
   if (isWeight) {
-    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    if (!singleBabyId) return { ok: false, reason: "missingBaby", normalizedText };
     const weight = detectDecimalNumber(text);
     if (!weight) return { ok: false, reason: "missingType", normalizedText };
 
@@ -338,7 +349,7 @@ export const parseVoiceCommand = (
       ok: true,
       command: {
         kind: "event",
-        babyId,
+        babyId: singleBabyId,
         type: "weight",
         weight,
         timestamp,
@@ -348,7 +359,7 @@ export const parseVoiceCommand = (
   }
 
   if (isHeight) {
-    if (!babyId) return { ok: false, reason: "missingBaby", normalizedText };
+    if (!singleBabyId) return { ok: false, reason: "missingBaby", normalizedText };
     const height = detectDecimalNumber(text);
     if (!height) return { ok: false, reason: "missingType", normalizedText };
 
@@ -356,7 +367,7 @@ export const parseVoiceCommand = (
       ok: true,
       command: {
         kind: "event",
-        babyId,
+        babyId: singleBabyId,
         type: "height",
         height,
         timestamp,
@@ -437,6 +448,21 @@ export const parseVoiceCommand = (
     };
   }
 
+  if (explicitTarget === "both" && text.trim()) {
+    return {
+      ok: true,
+      command: {
+        kind: "event",
+        babyId: targetBabyId,
+        type: "daily",
+        dailyNote: text.trim(),
+        timestamp,
+        note: `voice: ${text}`,
+        fallbackMemo: true,
+      },
+    };
+  }
+
   return { ok: false, reason: "missingType", normalizedText };
 };
 
@@ -447,10 +473,20 @@ export const selectVoiceCommandFromAlternatives = (
   const uniqueTranscripts = transcripts.map((transcript) => transcript.trim()).filter(Boolean);
   const parsedResults = [...new Set(uniqueTranscripts)].map((transcript) => parseVoiceCommand(transcript, options));
 
-  const namedMatch = parsedResults.find(
-    (result) => result.ok && result.command.babyId !== "both"
+  if (options.forcedBabyId === undefined) {
+    const namedMatch = parsedResults.find(
+      (result) =>
+        result.ok &&
+        result.command.babyId !== "both" &&
+        !(result.command.type === "daily" && result.command.fallbackMemo)
+    );
+    if (namedMatch) return namedMatch;
+  }
+
+  const typedMatch = parsedResults.find(
+    (result) => result.ok && !(result.command.type === "daily" && result.command.fallbackMemo)
   );
-  if (namedMatch) return namedMatch;
+  if (typedMatch) return typedMatch;
 
   const anyMatch = parsedResults.find((result) => result.ok);
   if (anyMatch) return anyMatch;

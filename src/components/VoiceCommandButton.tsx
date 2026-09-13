@@ -7,6 +7,7 @@ import {
   VoiceCommand,
   VoiceCommandBabyNames,
   VoiceCommandParseResult,
+  VoiceCommandTarget,
 } from "@/lib/voice-command";
 import { mergeTranscriptSegments } from "@/lib/speech-transcript";
 import {
@@ -22,10 +23,11 @@ type VoiceCommandButtonProps = {
   onCommand: (command: VoiceCommand) => void;
   onMessage: (message: string) => void;
   onTranscript?: (text: string) => void;
+  className?: string;
 };
 
 export type VoiceCommandButtonHandle = {
-  startListening: (forcedBabyId?: BabyId) => void;
+  startListening: (forcedBabyId?: VoiceCommandTarget) => void;
 };
 
 const collectTranscripts = (result: SpeechRecognitionAlternativeList) => {
@@ -65,7 +67,7 @@ const collectBestTranscripts = (results: SpeechRecognitionResultList, resultInde
 type VoiceCommandParseErrorReason = Extract<VoiceCommandParseResult, { ok: false }>["reason"];
 
 const parseErrorMessage = (reason: VoiceCommandParseErrorReason) => {
-  if (reason === "missingBaby") return "A/Bが聞き取れませんでした";
+  if (reason === "missingBaby") return "この記録は赤ちゃんタブから音声入力してください";
   if (reason === "missingMilkAmount") return "ミルク量が聞き取れませんでした";
   return "ミルク/離乳食/おむつが聞き取れませんでした";
 };
@@ -75,7 +77,7 @@ const RESTART_DELAY_MS = 180;
 const MAX_LISTENING_MS = 20000;
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
-  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript },
+  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, className },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -84,7 +86,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
   const maxListeningTimerRef = useRef<number | null>(null);
   const sessionIdRef = useRef(0);
   const latestTranscriptsRef = useRef<string[]>([]);
-  const forcedBabyIdRef = useRef<BabyId | undefined>(undefined);
+  const forcedBabyIdRef = useRef<VoiceCommandTarget | undefined>(undefined);
   const keepListeningRef = useRef(false);
   const submittedRef = useRef(false);
   const [listening, setListening] = useState(false);
@@ -175,7 +177,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     resetSession();
   };
 
-  const startListening = (forcedBabyId?: BabyId) => {
+  const startListening = (forcedBabyId: VoiceCommandTarget = "both") => {
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
     clearTimers();
@@ -278,6 +280,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     <Button
       variant={listening ? "default" : "ghost"}
       size="icon"
+      className={className}
       onClick={() => (listening ? stopListening() : startListening())}
       aria-label={listening ? "stop voice input" : "start voice input"}
       title={supported ? "音声入力" : "音声入力はこのブラウザで使えません"}
