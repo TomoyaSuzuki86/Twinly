@@ -2,9 +2,10 @@ name: Fix compact sleep percent color
 
 on:
   push:
-    branches: [development]
+    branches:
+      - development
     paths:
-      - '.github/workflows/fix-sleep-percent-color.yml'
+      - .github/workflows/fix-sleep-percent-color.yml
 
 permissions:
   contents: write
@@ -19,33 +20,8 @@ jobs:
           ref: development
           fetch-depth: 0
       - name: Patch morph percentage color
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/components/FamilyAccountIconEnhancer.tsx')
-          s = p.read_text()
-          anchor = '''.twinly-primary-action-morph-button[data-morph-compact="true"] .twinly-primary-action-morph-percent {
-  opacity: .72;
-}
-'''
-          replacement = '''.twinly-primary-action-morph-button[data-morph-compact="true"] .twinly-primary-action-morph-percent {
-  opacity: .72;
-}
-
-.twinly-primary-action-morph-button[data-morph-action="sleep"][aria-checked="true"] .twinly-primary-action-morph-percent {
-  color: hsl(var(--gauge-sleep-on)) !important;
-}
-
-.twinly-primary-action-morph-button[data-morph-action="sleep"][aria-checked="false"] .twinly-primary-action-morph-percent {
-  color: hsl(var(--gauge-wake-on)) !important;
-}
-'''
-          if replacement not in s:
-              if anchor not in s:
-                  raise SystemExit('anchor not found')
-              s = s.replace(anchor, replacement, 1)
-              p.write_text(s)
-          PY
+        shell: bash
+        run: python3 -c 'from pathlib import Path; p=Path("src/components/FamilyAccountIconEnhancer.tsx"); s=p.read_text(); a=".twinly-primary-action-morph-button[data-morph-compact=\"true\"] .twinly-primary-action-morph-percent {\n  opacity: .72;\n}\n"; r=a+"\n.twinly-primary-action-morph-button[data-morph-action=\"sleep\"][aria-checked=\"true\"] .twinly-primary-action-morph-percent {\n  color: hsl(var(--gauge-sleep-on)) !important;\n}\n\n.twinly-primary-action-morph-button[data-morph-action=\"sleep\"][aria-checked=\"false\"] .twinly-primary-action-morph-percent {\n  color: hsl(var(--gauge-wake-on)) !important;\n}\n"; assert a in s or r in s; p.write_text(s if r in s else s.replace(a,r,1))'
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
@@ -53,6 +29,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Remove temporary workflow and commit
+        shell: bash
         run: |
           rm .github/workflows/fix-sleep-percent-color.yml
           git config user.name 'github-actions[bot]'
