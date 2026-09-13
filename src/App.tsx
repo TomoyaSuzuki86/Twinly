@@ -1315,8 +1315,8 @@ export default function App() {
                   </button>
                 </div>
               </header>
-              {(syncStatus.pending > 0 || syncStatus.error || syncStatus.fromCache) && <div className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm" role="status">
-                <span>{syncStatus.error ? `未同期 ${syncStatus.pending}件：${syncStatus.error}` : syncStatus.pending ? `端末に保存済み・同期待ち ${syncStatus.pending}件` : "端末の保存データを表示中"}</span>
+              {(syncStatus.pending > 0 || syncStatus.error) && <div className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm" role="status">
+                <span>{syncStatus.error ? `未同期 ${syncStatus.pending}件：${syncStatus.error}` : `端末に保存済み・同期待ち ${syncStatus.pending}件`}</span>
                 {syncStatus.error && <Button size="sm" variant="outline" onClick={() => syncStatus.pending ? void store.current?.flush() : window.location.reload()}>再試行</Button>}
                 {syncStatus.error && syncStatus.pending > 0 && <>
                   <Button size="sm" variant="outline" onClick={() => {
