@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AiAdviceLauncher } from "./components/AiAdviceLauncher";
 import { FamilyAccountIconEnhancer } from "./components/FamilyAccountIconEnhancer";
-import { installPrimaryActionsDock } from "./lib/primary-actions-dock";
 import "./index.css";
 import "./theme-polish.css";
 import "./sync-status.css";
@@ -41,9 +40,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <FamilyAccountIconEnhancer />
   </React.StrictMode>
 );
-
-const uninstallPrimaryActionsDock = installPrimaryActionsDock();
-if (import.meta.hot) import.meta.hot.dispose(uninstallPrimaryActionsDock);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
