@@ -29,4 +29,10 @@ describe("speech transcript cumulative results", () => {
       "ひなた ミルク飲み中 とてもニコニコしていて可愛い"
     );
   });
+
+  it("keeps an intentional exact phrase repetition", () => {
+    expect(collapseRepeatedTranscriptPrefix("とてもかわいい とてもかわいい")).toBe(
+      "とてもかわいい とてもかわいい"
+    );
+  });
 });
