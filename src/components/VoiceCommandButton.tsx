@@ -301,6 +301,8 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       className={className}
       onClick={() => (listening ? stopListening() : startListening())}
       aria-label={listening ? "stop voice input" : "start voice input"}
+      aria-pressed={listening}
+      data-voice-listening={listening ? "true" : "false"}
       title={supported ? "音声入力" : "音声入力はこのブラウザで使えません"}
     >
       {listening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
