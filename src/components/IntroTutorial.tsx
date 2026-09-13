@@ -27,20 +27,21 @@ const activePanel = () =>
 
 const targetResolvers: Array<() => HTMLElement | null> = [
   () => document.querySelector<HTMLElement>('[data-tutorial="babies"]'),
-  () => activePanel()?.querySelector<HTMLElement>('[aria-label^="食事を記録"]') ?? null,
+  () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="primary-action"]') ?? null,
   () => null,
   () => null,
   () => document.querySelector<HTMLElement>('[data-tutorial="baby-A"]'),
   () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
   () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
   () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="logs"]') ?? null,
-  () => null,
+  () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="log-summary"]') ?? null,
+  () => activePanel()?.querySelector<HTMLElement>('[aria-label="週間タイムラインを開く"]') ?? null,
   () => null,
   () => document.querySelector<HTMLElement>('[aria-label="settings"]'),
 ];
 
 const TOTAL_STEPS = targetResolvers.length;
-const scrollTargetIntoView = new Set([1, 7]);
+const scrollTargetIntoView = new Set([1, 7, 8, 9]);
 const voiceSteps = new Set([4, 5]);
 
 const premiumShots = [
@@ -63,6 +64,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   const [practiced, setPracticed] = useState(false);
   const [status, setStatus] = useState("");
   const [rect, setRect] = useState<Rect | null>(null);
+  const [extraRects, setExtraRects] = useState<Rect[]>([]);
 
   const [tutorialSleeping, setTutorialSleeping] = useState(false);
   const [sleepTransition, setSleepTransition] = useState<SleepType | null>(null);
@@ -108,6 +110,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     setPracticed(false);
     setStatus("");
     setRect(null);
+    setExtraRects([]);
     setTutorialSleeping(false);
     setSleepTransition(null);
     setSleepModalOpen(false);
@@ -163,17 +166,28 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       const box = target?.getBoundingClientRect();
       if (!box || !box.width || !box.height) {
         setRect(null);
+        setExtraRects([]);
         return;
       }
 
-      const left = Math.max(8, box.left - 4);
-      const top = Math.max(8, box.top - 4);
-      setRect({
-        top,
-        left,
-        width: Math.min(box.width + 8, window.innerWidth - left - 8),
-        height: box.height + 8,
-      });
+      const toRect = (targetBox: DOMRect): Rect => {
+        const left = Math.max(8, targetBox.left - 4);
+        const top = Math.max(8, targetBox.top - 4);
+        return {
+          top,
+          left,
+          width: Math.min(targetBox.width + 8, window.innerWidth - left - 8),
+          height: targetBox.height + 8,
+        };
+      };
+
+      setRect(toRect(box));
+      if (step === 1) {
+        const actionTargets = Array.from(activePanel()?.querySelectorAll<HTMLElement>('[data-tutorial="primary-action"]') ?? []);
+        setExtraRects(actionTargets.slice(1).map((action) => toRect(action.getBoundingClientRect())));
+      } else {
+        setExtraRects([]);
+      }
     };
 
     measure();
@@ -398,6 +412,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "ヘッダーから、2人へまとめて入力",
     "声では、いろいろな記録ができます",
     "記録は、あとから直せます",
+    "ログ下の集計を、すぐ確認",
     "タイムラインで、1週間を見渡す",
     "もっと便利に使いたいときは",
     "最後に、設定を確認",
@@ -412,6 +427,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。ヘッダーから始めた音声入力は常に2人が対象です。話の中に赤ちゃんの名前が入っていても振り分けには使いません。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応します。一言メモ欄は空のときマイクになり、話した内容が入るとチェックの保存ボタンに変わります。ヘッダーで普通の文章を話した場合は、2人の共通メモとして残せます。",
     "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。",
+    "ログ見出しのすぐ下には、その日の食事・おむつ・睡眠の集計カードがあります。横にスワイプして3項目を見比べられ、各カードをタップすると詳しい履歴を開けます。",
     "タイムラインでは、1週間のミルク・離乳食・おむつ・睡眠を24時間軸でまとめて確認できます。生活リズムをざっと振り返りたいときに便利です。",
     "Twinlyには、画面テーマの追加やAIアドバイスなどの有料機能もあります。必要になったときに試せる程度に覚えておけば大丈夫です。",
     "設定では、2人の表示名・生年月日・アイコン・ミルクや睡眠の目安などを自分たちに合わせられます。音声入力の対象は名前の読み方ではなく、入力を始めた場所で決まります。最後にプロフィール設定を一度確認しておきましょう。",
@@ -428,13 +444,15 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   ];
 
   const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5;
-  const interactiveSpotlight = step === 4 || step === 5 || step === 10;
+  const interactiveSpotlight = step === 4 || step === 5 || step === 11;
   const isVoiceStep = voiceSteps.has(step);
 
   const spotlightLabel =
     step === 4 ? "選択中の赤ちゃんの音声入力を練習" :
     step === 5 ? "2人同時の音声入力を練習" :
-    step === 10 ? "設定を開く" :
+    step === 8 ? "食事・おむつ・睡眠の集計" :
+    step === 9 ? "週間タイムラインを開くボタン" :
+    step === 11 ? "設定を開く" :
     "チュートリアル対象";
 
   const skipCurrentStep = () => {
@@ -455,7 +473,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   };
 
   const completeAndOpenSettings = () => {
-    const settingsButton = targetResolvers[10]?.();
+    const settingsButton = targetResolvers[11]?.();
     finish("completed", () => {
       window.setTimeout(() => settingsButton?.click(), 0);
     });
@@ -497,12 +515,18 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               voiceLastTapRef.current = 0;
             }}
             onClick={() => {
-              if (step === 10) completeAndOpenSettings();
+              if (step === 11) completeAndOpenSettings();
             }}
             onContextMenu={(event) => event.preventDefault()}
           />}
+          {extraRects.map((extraRect, index) => (
+            <span key={`tutorial-extra-spotlight-${index}`} className="twinly-tutorial-spotlight twinly-tutorial-spotlight-static" style={extraRect} aria-hidden="true" />
+          ))}
 
-          <section className="twinly-tutorial-card">
+          <section
+            className={`twinly-tutorial-card ${step === 9 ? "twinly-tutorial-card-above-target" : ""}`}
+            style={step === 9 && rect ? { top: `${Math.max(12, rect.top - 12)}px` } : undefined}
+          >
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
                 使い方 <span className="ml-2">{step + 1} / {TOTAL_STEPS}</span>
@@ -654,6 +678,15 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
               </p>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-lg border bg-card px-2 py-3 font-bold">食事<br /><span className="text-muted-foreground">量・回数</span></div>
+                  <div className="rounded-lg border bg-card px-2 py-3 font-bold">おむつ<br /><span className="text-muted-foreground">回数</span></div>
+                  <div className="rounded-lg border bg-card px-2 py-3 font-bold">睡眠<br /><span className="text-muted-foreground">時間・回数</span></div>
+                </div>
+                <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">横にスワイプして確認。カードをタップすると、その項目の詳しい履歴を開けます。</p>
+              </div>}
+
+              {step === 9 && <div className="twinly-tutorial-demo">
                 <div className="overflow-hidden rounded-xl border bg-[#020817] shadow-sm">
                   <img
                     src="/tutorial/timeline.webp"
@@ -677,7 +710,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
                 </div>
               </div>}
 
-              {step === 9 && <div className="twinly-tutorial-demo">
+              {step === 10 && <div className="twinly-tutorial-demo">
                 <div className="grid grid-cols-2 gap-2">
                   {premiumShots.map((shot) => <figure key={shot.src} className="overflow-hidden rounded-xl border bg-card shadow-sm">
                     <div className="aspect-[0.7] overflow-hidden bg-muted">
@@ -694,7 +727,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
                 </div>
               </div>}
 
-              {step === 10 && <div className="twinly-tutorial-demo">
+              {step === 11 && <div className="twinly-tutorial-demo">
                 <div className="flex items-center justify-center gap-2 text-sm font-semibold">
                   <SettingsIcon size={16} aria-hidden="true" />プロフィール設定を仕上げる
                 </div>
