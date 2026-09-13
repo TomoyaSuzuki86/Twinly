@@ -508,7 +508,16 @@ export function BabyPanel({
                 className="h-7 w-7 flex-shrink-0"
                 onCommand={() => {}}
                 onMessage={onVoiceMessage}
-                onTranscript={(text) => setDailyNote(text.trim())}
+                onTranscript={(text) => {
+                  const note = text.trim();
+                  if (!note) return;
+                  onAddEvent({
+                    babyId,
+                    type: "daily",
+                    note,
+                  });
+                  setDailyNote("");
+                }}
               />
             )}
             <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onOpenDailyReport} aria-label="show daily reports">
