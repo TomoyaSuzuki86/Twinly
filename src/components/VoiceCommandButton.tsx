@@ -76,6 +76,19 @@ const SILENCE_SUBMIT_MS = 1400;
 const RESTART_DELAY_MS = 180;
 const MAX_LISTENING_MS = 20000;
 
+const setBabyTabVoiceHighlight = (target: VoiceCommandTarget | undefined, active: boolean) => {
+  if (typeof document === "undefined") return;
+
+  document.querySelectorAll<HTMLElement>('[role="tab"][data-voice-input-active="true"]').forEach((tab) => {
+    tab.removeAttribute("data-voice-input-active");
+  });
+
+  if (!active || (target !== "A" && target !== "B")) return;
+  const babyIcon = document.querySelector<HTMLElement>(`[data-twinly-baby-icon="${target}"]`);
+  const tab = babyIcon?.closest<HTMLElement>('[role="tab"]');
+  tab?.setAttribute("data-voice-input-active", "true");
+};
+
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
   { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, className },
   ref
@@ -121,6 +134,8 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
 
   const resetSession = (sessionId?: number) => {
     if (sessionId !== undefined && sessionId !== sessionIdRef.current) return;
+    clearTimers();
+    setBabyTabVoiceHighlight(forcedBabyIdRef.current, false);
     recognitionRef.current = null;
     latestTranscriptsRef.current = [];
     forcedBabyIdRef.current = undefined;
@@ -144,8 +159,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
 
     if (onTranscript) {
       onTranscript(transcripts[0]);
-      forcedBabyIdRef.current = undefined;
-      setListening(false);
+      resetSession(sessionId);
       return;
     }
     const parsed = selectVoiceCommandFromAlternatives(transcripts, {
@@ -154,13 +168,14 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       forcedBabyId: forcedBabyIdRef.current,
       now: new Date(),
     });
-    forcedBabyIdRef.current = undefined;
     if (!parsed.ok) {
-      onMessage(parseErrorMessage(parsed.reason));
+      const message = parseErrorMessage(parsed.reason);
+      resetSession(sessionId);
+      onMessage(message);
       return;
     }
     onCommand(parsed.command);
-    setListening(false);
+    resetSession(sessionId);
   };
 
   const scheduleSilenceSubmit = () => {
@@ -186,6 +201,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     forcedBabyIdRef.current = forcedBabyId;
     keepListeningRef.current = true;
     submittedRef.current = false;
+    setBabyTabVoiceHighlight(forcedBabyId, true);
     setListening(true);
 
     const SpeechRecognition = getSpeechRecognition();
@@ -216,6 +232,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
 
         if (!keepListeningRef.current || submittedRef.current) {
           setListening(false);
+          setBabyTabVoiceHighlight(forcedBabyIdRef.current, false);
           return;
         }
 
@@ -272,6 +289,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     return () => {
       sessionIdRef.current += 1;
       clearTimers();
+      setBabyTabVoiceHighlight(forcedBabyIdRef.current, false);
       recognitionRef.current?.abort();
     };
   }, []);
