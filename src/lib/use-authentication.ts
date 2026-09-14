@@ -12,6 +12,15 @@ import {
 } from "firebase/auth";
 import { auth, ensureAuthPersistence, isFirebaseConfigured } from "@/firebase";
 
+declare global {
+  interface Window {
+    TwinlyAndroid?: {
+      saveWearToken?: (token: string) => void;
+      signInWithGoogle?: () => void;
+    };
+  }
+}
+
 const EMAIL_FOR_SIGN_IN_KEY = "twinly-email-for-sign-in";
 
 export type AuthUser = User;
