@@ -103,6 +103,7 @@ for (const temporaryPath of [
   "scripts/step10-baby-panel-actions.txt",
   "scripts/apply-step10-primary-action-morph.cjs",
   ".github/workflows/step10-primary-action-morph.yml",
+  "step10-test-output.txt",
 ]) {
   if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
 }
