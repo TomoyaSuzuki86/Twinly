@@ -207,6 +207,17 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
           <p>
             ミルクやおむつの記録ボタンがそのままゲージになり、「そろそろミルクかな？」「どちらを先にお世話する？」が、アプリを開くだけで直感的にわかります。
           </p>
+          <figure className="my-4 overflow-hidden rounded-xl bg-white">
+            <img
+              src="/premium/care-gauge-notice.webp"
+              alt="Twinlyのお世話ゲージを見て、そろそろミルクの時間だと気づく様子"
+              width={600}
+              height={800}
+              loading="lazy"
+              decoding="async"
+              className="block h-auto w-full"
+            />
+          </figure>
           <p>
             この機能を使い始めてから、最後のお世話の時間を確認したり、夫婦で「次はどっちだっけ？」と相談したりすることが大きく減りました。
           </p>
