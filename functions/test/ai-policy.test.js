@@ -9,6 +9,8 @@ test('default is free; preview is ignored outside allowed family',()=>{
   assert.equal(accessFor({previewPlan:'premium'},false).features.aiChat,false);
   assert.equal(accessFor({previewPlan:'premium'},true).features.aiChat,true);
   assert.equal(accessFor({previewPlan:'premium'},true).features.dailySummaryEmail,true);
+  assert.equal(accessFor().features.careNotifications,false);
+  assert.equal(accessFor({previewPlan:'premium'},true).features.careNotifications,true);
   assert.equal(accessFor({plan:'premium',previewPlan:'free'},true).features.aiReview,false);
   assert.equal(accessFor({plan:'premium',previewPlan:'free'},false).features.aiReview,true);
 });

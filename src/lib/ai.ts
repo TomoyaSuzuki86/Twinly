@@ -11,6 +11,7 @@ export type FamilyAccess = {
     dailySummaryEmail: boolean;
     themes?: boolean;
     gauges?: boolean;
+    careNotifications?: boolean;
     stockForecast?: boolean;
     stockNotifications?: boolean;
     familySharing?: boolean;

@@ -30,6 +30,7 @@ describe('pricing and plans',()=>{
     expect(screen.getByText('Premiumでできること')).toBeInTheDocument();
     expect(screen.getByText('AIアドバイス & AI質問')).toBeInTheDocument();
     expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();
+    expect(screen.getByText('お世話タイミング通知')).toBeInTheDocument();
     expect(screen.getByText('おむつ在庫切れ予測')).toBeInTheDocument();
     expect(screen.getAllByText('今日のまとめ通知').length).toBeGreaterThan(0);
     expect(screen.getByText('開発者より')).toBeInTheDocument();
