@@ -1,0 +1,82 @@
+name: Validate step 10 primary action morph
+
+on:
+  push:
+    branches:
+      - refactor/full-codebase-cleanup
+
+permissions:
+  contents: write
+
+concurrency:
+  group: step10-primary-action-morph
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout refactor branch
+        uses: actions/checkout@v4
+        with:
+          ref: refactor/full-codebase-cleanup
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci
+
+      - name: Apply step 10 refactor
+        run: node scripts/apply-step10-primary-action-morph.cjs
+
+      - name: Verify React-owned morph boundary
+        shell: bash
+        run: |
+          test ! -e src/components/PrimaryActionMorphEnhancer.tsx
+          ! grep -q 'PrimaryActionMorphEnhancer' src/main.tsx
+          ! grep -Eq 'cloneNode|querySelector|MutationObserver' src/components/PrimaryActionMorph.tsx
+          grep -q 'PrimaryActionMorph' src/components/BabyPanel.tsx
+          grep -q 'primaryActionStickyRef' src/App.tsx
+          git diff --check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test app
+        run: npm test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Test Functions
+        run: npm --prefix functions test
+
+      - name: Syntax-check Functions modules
+        shell: bash
+        run: |
+          for file in functions/*.js; do
+            node --check "$file"
+          done
+
+      - name: Commit validated step 10 refactor
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git commit -m 'refactor: integrate primary action morph into React'
+          git push origin HEAD:refactor/full-codebase-cleanup
