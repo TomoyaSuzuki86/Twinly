@@ -6,6 +6,7 @@ on:
       - refactor/step-9-tutorial-anchors
     paths:
       - scripts/refactor-step9.mjs
+      - scripts/fix-step9-test.mjs
       - .github/workflows/refactor-step9.yml
 
 permissions:
@@ -32,7 +33,9 @@ jobs:
         run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Apply STEP 9 refactor
-        run: node scripts/refactor-step9.mjs
+        run: |
+          node scripts/refactor-step9.mjs
+          node scripts/fix-step9-test.mjs
 
       - name: Verify tutorial no longer queries live DOM structure
         run: |
