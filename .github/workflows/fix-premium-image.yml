@@ -2,7 +2,8 @@ name: Fix Premium illustration
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
     paths:
       - .github/workflows/fix-premium-image.yml
 
@@ -11,7 +12,6 @@ permissions:
 
 jobs:
   fix:
-    if: github.event.head_commit.message == 'chore: fix broken Premium illustration'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,8 +28,9 @@ jobs:
           text = p.read_text()
           old = 'src="/premium/care-gauge-notice.webp"'
           new = 'src="/premium/care-gauge-notice-v2.webp"'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one image reference, found {text.count(old)}')
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'expected one image reference, found {count}')
           p.write_text(text.replace(old, new, 1))
           PY
 
