@@ -18,6 +18,8 @@ jobs:
         with:
           ref: feature/smarter-care-sleep-reminders
       - run: python scripts/apply-smarter-reminders.py
+      - run: npm ci
+        working-directory: functions
       - run: npm test
         working-directory: functions
       - run: |
