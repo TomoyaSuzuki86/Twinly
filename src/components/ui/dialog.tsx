@@ -4,6 +4,7 @@ import { Baby, X } from "lucide-react"
 
 import { detectHorizontalSwipe, type SwipePoint } from "@/lib/horizontal-swipe"
 import { cn } from "@/lib/utils"
+import { useBrowserBackDismiss } from "@/lib/use-browser-back-dismiss"
 
 const Dialog = DialogPrimitive.Root
 
@@ -244,6 +245,11 @@ const DialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, onTouchStart, onTouchEnd, onTouchCancel, ...props }, ref) => {
   const swipeStartRef = React.useRef<SwipePoint | null>(null)
+  const browserBackCloseRef = React.useRef<HTMLButtonElement>(null)
+
+  useBrowserBackDismiss(true, () => {
+    browserBackCloseRef.current?.click()
+  })
 
   React.useEffect(() => {
     const timerId = window.setTimeout(preloadHistoryModals, 0)
@@ -298,7 +304,7 @@ const DialogContent = React.forwardRef<
       >
         <DialogOpeningSkeleton />
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+        <DialogPrimitive.Close ref={browserBackCloseRef} className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>

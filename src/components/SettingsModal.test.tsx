@@ -33,17 +33,22 @@ const renderSettings = (app = createInitialAppState(new Date("2026-04-18T09:00:0
 describe("SettingsModal", () => {
   afterEach(cleanup);
 
-  it("organizes settings into profile, notifications, data, design and pricing tabs", () => {
+  it("hides the notifications tab for Free users", () => {
     renderSettings();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "プロフィール",
-      "通知",
       "データ管理",
       "デザイン",
       "料金とプラン",
     ]);
+    expect(screen.queryByRole("tab", { name: "通知" })).toBeNull();
     expect(screen.queryByText("Pixel Watch連携")).toBeNull();
     expect(screen.queryByRole("tab", { name: /Google Calendar/i })).toBeNull();
+  });
+
+  it("shows the notifications tab for Premium users", () => {
+    renderSettings(undefined, true);
+    expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
   });
 
   it("allows activity limits to be overridden and restored to the age default", () => {

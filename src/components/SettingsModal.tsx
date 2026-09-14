@@ -175,7 +175,9 @@ export function SettingsModal({
           <DialogComponents.DialogHeader>
             <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
             <DialogComponents.DialogDescription>
-              プロフィール、通知、データ、デザイン、料金とプランをまとめて管理できます。
+              {premiumGaugesEnabled
+                ? "プロフィール、通知、データ、デザイン、料金とプランをまとめて管理できます。"
+                : "プロフィール、データ、デザイン、料金とプランをまとめて管理できます。"}
             </DialogComponents.DialogDescription>
           </DialogComponents.DialogHeader>
           {onReplayTutorial && <Button variant="outline" className="w-full" onClick={onReplayTutorial}>使い方をもう一度見る</Button>}
@@ -183,7 +185,7 @@ export function SettingsModal({
           <Tabs defaultValue="profile" className="py-4">
             <TabsList className="flex flex-wrap justify-between">
               <TabsTrigger value="profile">プロフィール</TabsTrigger>
-              <TabsTrigger value="notifications">通知</TabsTrigger>
+              {premiumGaugesEnabled ? <TabsTrigger value="notifications">通知</TabsTrigger> : null}
               <TabsTrigger value="data">データ管理</TabsTrigger>
               <TabsTrigger value="design">デザイン</TabsTrigger>
               <TabsTrigger value="premium">料金とプラン</TabsTrigger>
@@ -441,61 +443,63 @@ export function SettingsModal({
               </div>
             </TabsContent>
 
-            <TabsContent value="notifications" className="mt-4 space-y-4">
-              <div className="space-y-4 rounded-lg border p-4">
-                <div>
-                  <h3 className="font-semibold">プッシュ通知</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    この端末への育児リマインド通知を管理します。
-                  </p>
-                </div>
-
-                {user ? (
-                  !webPushConfigured ? (
-                    <p className="text-sm text-muted-foreground">
-                      通知用の公開鍵が未設定のため、この端末ではまだ通知を有効化できません。
+            {premiumGaugesEnabled ? (
+              <TabsContent value="notifications" className="mt-4 space-y-4">
+                <div className="space-y-4 rounded-lg border p-4">
+                  <div>
+                    <h3 className="font-semibold">プッシュ通知</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      この端末への育児リマインド通知を管理します。
                     </p>
-                  ) : pushPermission === "unsupported" ? (
-                    <p className="text-sm text-muted-foreground">
-                      この端末・ブラウザでは PWA のプッシュ通知に対応していません。
-                    </p>
+                  </div>
+  
+                  {user ? (
+                    !webPushConfigured ? (
+                      <p className="text-sm text-muted-foreground">
+                        通知用の公開鍵が未設定のため、この端末ではまだ通知を有効化できません。
+                      </p>
+                    ) : pushPermission === "unsupported" ? (
+                      <p className="text-sm text-muted-foreground">
+                        この端末・ブラウザでは PWA のプッシュ通知に対応していません。
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          ミルク・おむつのゲージが空になると通知します。通知時刻が15分以内ならまとめて1通にします。
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          状態:{" "}
+                          {pushSubscribed && pushPermission === "granted"
+                            ? "有効"
+                            : pushPermission === "denied"
+                            ? "ブラウザで拒否されています"
+                            : "未設定"}
+                        </p>
+                        <div className="flex gap-3">
+                          <Button
+                            onClick={onEnablePushNotifications}
+                            disabled={shouldDisablePushEnable(pushBusy, pushSubscribed, webPushConfigured)}
+                          >
+                            通知を有効化
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={onDisablePushNotifications}
+                            disabled={pushBusy || !pushSubscribed}
+                          >
+                            通知を解除
+                          </Button>
+                        </div>
+                      </>
+                    )
                   ) : (
-                    <>
-                      <p className="text-sm text-muted-foreground">
-                        ミルク・おむつのゲージが空になると通知します。通知時刻が15分以内ならまとめて1通にします。
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        状態:{" "}
-                        {pushSubscribed && pushPermission === "granted"
-                          ? "有効"
-                          : pushPermission === "denied"
-                          ? "ブラウザで拒否されています"
-                          : "未設定"}
-                      </p>
-                      <div className="flex gap-3">
-                        <Button
-                          onClick={onEnablePushNotifications}
-                          disabled={shouldDisablePushEnable(pushBusy, pushSubscribed, webPushConfigured)}
-                        >
-                          通知を有効化
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={onDisablePushNotifications}
-                          disabled={pushBusy || !pushSubscribed}
-                        >
-                          通知を解除
-                        </Button>
-                      </div>
-                    </>
-                  )
-                ) : (
-                  <Button onClick={onSignIn}>ログイン画面を開く</Button>
-                )}
-              </div>
-
-              {user ? <DailySummaryEmailSettings /> : null}
-            </TabsContent>
+                    <Button onClick={onSignIn}>ログイン画面を開く</Button>
+                  )}
+                </div>
+  
+                {user ? <DailySummaryEmailSettings /> : null}
+              </TabsContent>
+            ) : null}
 
             <TabsContent value="data" className="mt-4 space-y-4">
               <section className="space-y-4 rounded-lg border p-4">

@@ -1,7 +1,7 @@
 // Pure policy shared by the callable handlers and their tests. Billing can later
 // write plan independently of the private-family preview override.
 const FEATURES = Object.fromEntries(
-  ['aiReview','aiChat','dailySummaryEmail','themes','gauges','stockForecast','stockNotifications','familySharing','music']
+  ['aiReview','aiChat','dailySummaryEmail','themes','gauges','careNotifications','stockForecast','stockNotifications','familySharing','music']
     .map(key => [key, ['premium']])
 );
 const DAY = 86400000;
