@@ -10,6 +10,7 @@ import type { BabyId, LogEvent } from "@/types";
 import { EMPTY_TUTORIAL_ANCHORS, resolveTutorialTargetKeys, type TutorialAnchorRegistry } from "@/lib/tutorial-anchors";
 import type { VoiceCommand } from "@/lib/voice-command";
 import { finishTutorial, shouldShowTutorial, type TutorialOutcome } from "@/lib/tutorial-progress";
+import { useBrowserBackDismiss } from "@/lib/use-browser-back-dismiss";
 import "./intro-tutorial.css";
 
 type Props = {
@@ -227,6 +228,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     window.scrollTo({ top: 0, behavior: "instant" });
     after?.();
   };
+
+  useBrowserBackDismiss(open, () => finish("skipped"), { dismissOnAnyPopState: true });
 
   const beginSleepLongPress = () => {
     clearSleepLongPress();

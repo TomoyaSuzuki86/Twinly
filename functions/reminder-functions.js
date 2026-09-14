@@ -111,6 +111,16 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
       ]);
   
       if (devicesSnap.empty) continue;
+      if (!familyId) continue;
+
+      let access;
+      try {
+        access = await familyAccess(familyId);
+      } catch (error) {
+        logger.warn("Reminder access unavailable", { uid, familyId, message: error.message });
+        continue;
+      }
+      if (!access.features.careNotifications) continue;
   
       const settings = settingsSnap.exists ? settingsSnap.data() : {};
       const milkReminder = settings?.milkReminder ?? {};
@@ -122,7 +132,7 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
       catch (error) { logger.warn("Reminder family unavailable", { uid, message: error.message }); continue; }
       if (!appState) continue;
   
-      if (familyId && (await familyAccess(familyId)).features.stockNotifications) {
+      if (access.features.stockNotifications) {
         const day = new Date(nowMs + 9*3600000).toISOString().slice(0,10);
         const alerts = stockAlerts(appState, nowMs).filter(a => settings.stockLastSent?.[a.size] !== day);
         const stockDevices = devicesSnap.docs.map(d => ({id:d.id,...d.data()})).filter(d => d.subscription?.endpoint && d.subscription?.keys?.auth && d.subscription?.keys?.p256dh);
