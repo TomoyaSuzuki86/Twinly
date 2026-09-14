@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "./ui/button";
 import type { StoreStatus } from "@/data/app-store";
@@ -79,7 +79,7 @@ export function ManualSyncButton({ status, onSync }: Props) {
 
   const automaticSyncing = shouldShowAutomaticSyncSpinner(toSignals(status), !status.ready);
   const syncing = manualState === "syncing" || (manualState === "idle" && automaticSyncing);
-  const stopHeaderGesture = (event: React.SyntheticEvent) => event.stopPropagation();
+  const stopHeaderGesture = (event: SyntheticEvent) => event.stopPropagation();
 
   return (
     <Button
