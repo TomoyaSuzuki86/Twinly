@@ -9,6 +9,7 @@ import { EditModal } from "./EditModal";
 import type { LogEvent } from "@/types";
 import type { VoiceCommand } from "@/lib/voice-command";
 import { finishTutorial, shouldShowTutorial, type TutorialOutcome } from "@/lib/tutorial-progress";
+import { useBrowserBackDismiss } from "@/lib/use-browser-back-dismiss";
 import "./intro-tutorial.css";
 
 type Props = {
@@ -239,6 +240,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     window.scrollTo({ top: 0, behavior: "instant" });
     after?.();
   };
+
+  useBrowserBackDismiss(open, () => finish("skipped"), { dismissOnAnyPopState: true });
 
   const beginSleepLongPress = () => {
     clearSleepLongPress();
