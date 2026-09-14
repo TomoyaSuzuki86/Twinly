@@ -216,7 +216,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
           </p>
           <figure className="my-4 overflow-hidden rounded-xl bg-white">
             <img
-              src="/premium/care-gauge-notice.webp"
+              src="/premium/care-gauge-notice-v2.webp"
               alt="Twinlyのお世話ゲージを見て、そろそろミルクの時間だと気づく様子"
               width={600}
               height={800}
