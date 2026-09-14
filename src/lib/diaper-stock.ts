@@ -12,8 +12,10 @@ export type DiaperStockEstimate = {
   level: DiaperStockAlertLevel;
 };
 
+type BabyProfiles = Record<BabyId, BabyProfile>;
+
 type EstimateDiaperStockBySizeParams = {
-  profiles: Record<BabyId, BabyProfile>;
+  profiles: BabyProfiles;
   events: LogEvent[];
   size: string;
   now: Date;
@@ -36,6 +38,46 @@ const resolveAlertLevel = (daysRemaining: number): DiaperStockAlertLevel => {
   return "none";
 };
 
+const getStoredStock = (profiles: BabyProfiles, size: string) =>
+  Object.values(profiles).find((profile) => Object.prototype.hasOwnProperty.call(profile.diaperStockBySize, size))
+    ?.diaperStockBySize[size] ?? 0;
+
+const getBabyIdsUsingSize = (profiles: BabyProfiles, size: string) =>
+  new Set(
+    (Object.entries(profiles) as [BabyId, BabyProfile][])
+      .filter(([, profile]) => profile.diaperSize === size)
+      .map(([babyId]) => babyId)
+  );
+
+const countRecentDiaperEvents = (
+  events: LogEvent[],
+  babyIds: Set<BabyId>,
+  rangeStart: number,
+  rangeEnd: number
+) => {
+  let count = 0;
+  for (const event of events) {
+    if (
+      event.type === "diaper" &&
+      babyIds.has(event.babyId) &&
+      event.timestamp >= rangeStart &&
+      event.timestamp <= rangeEnd
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+const createUnknownEstimate = (size: string, remaining: number, dailyAverage = 0): DiaperStockEstimate => ({
+  size,
+  remaining,
+  dailyAverage,
+  daysRemaining: null,
+  estimatedRunOutDate: null,
+  level: "unknown",
+});
+
 export const estimateDiaperStockBySize = ({
   profiles,
   events,
@@ -44,9 +86,7 @@ export const estimateDiaperStockBySize = ({
   lookbackDays = 7,
   minimumEvents = 3,
 }: EstimateDiaperStockBySizeParams): DiaperStockEstimate => {
-  const remaining =
-    Object.values(profiles).find((profile) => Object.prototype.hasOwnProperty.call(profile.diaperStockBySize, size))
-      ?.diaperStockBySize[size] ?? 0;
+  const remaining = getStoredStock(profiles, size);
 
   if (remaining <= 0) {
     return {
@@ -59,43 +99,18 @@ export const estimateDiaperStockBySize = ({
     };
   }
 
-  const babyIdsUsingSize = new Set(
-    (Object.entries(profiles) as [BabyId, BabyProfile][])
-      .filter(([, profile]) => profile.diaperSize === size)
-      .map(([babyId]) => babyId)
-  );
+  const rangeEnd = now.getTime();
+  const rangeStart = rangeEnd - lookbackDays * MS_PER_DAY;
+  const babyIdsUsingSize = getBabyIdsUsingSize(profiles, size);
+  const diaperEventCount = countRecentDiaperEvents(events, babyIdsUsingSize, rangeStart, rangeEnd);
 
-  const rangeStart = now.getTime() - lookbackDays * MS_PER_DAY;
-  const diaperEvents = events.filter(
-    (event) =>
-      event.type === "diaper" &&
-      babyIdsUsingSize.has(event.babyId) &&
-      event.timestamp >= rangeStart &&
-      event.timestamp <= now.getTime()
-  );
-
-  if (diaperEvents.length < minimumEvents) {
-    return {
-      size,
-      remaining,
-      dailyAverage: 0,
-      daysRemaining: null,
-      estimatedRunOutDate: null,
-      level: "unknown",
-    };
+  if (diaperEventCount < minimumEvents) {
+    return createUnknownEstimate(size, remaining);
   }
 
-  const dailyAverage = diaperEvents.length / lookbackDays;
-
+  const dailyAverage = diaperEventCount / lookbackDays;
   if (dailyAverage <= 0) {
-    return {
-      size,
-      remaining,
-      dailyAverage,
-      daysRemaining: null,
-      estimatedRunOutDate: null,
-      level: "unknown",
-    };
+    return createUnknownEstimate(size, remaining, dailyAverage);
   }
 
   const daysRemaining = remaining / dailyAverage;
