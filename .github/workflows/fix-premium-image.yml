@@ -1,0 +1,48 @@
+name: Fix Premium illustration
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/fix-premium-image.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message == 'chore: fix broken Premium illustration'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create cache-busted image asset and update reference
+        shell: bash
+        run: |
+          cp public/premium/care-gauge-notice.webp public/premium/care-gauge-notice-v2.webp
+          python <<'PY'
+          from pathlib import Path
+          p = Path('src/components/AiTools.tsx')
+          text = p.read_text()
+          old = 'src="/premium/care-gauge-notice.webp"'
+          new = 'src="/premium/care-gauge-notice-v2.webp"'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one image reference, found {text.count(old)}')
+          p.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Validate image
+        run: |
+          test -s public/premium/care-gauge-notice-v2.webp
+          file public/premium/care-gauge-notice-v2.webp | grep -q 'Web/P image'
+
+      - name: Commit fix and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-premium-image.yml
+          git add public/premium/care-gauge-notice-v2.webp src/components/AiTools.tsx
+          git commit -m "fix: restore Premium illustration loading"
+          git push origin HEAD:master
