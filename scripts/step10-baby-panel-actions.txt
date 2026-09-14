@@ -1,0 +1,25 @@
+        <div className="grid grid-cols-2 gap-4">
+          {renderMilkAction(primaryActionRef(milkButtonRef, "milk"))}
+          {renderDiaperAction(primaryActionRef(diaperButtonRef, "diaper"))}
+        </div>
+
+        {sleepManagementEnabled ? renderSleepAction(primaryActionRef(sleepButtonRef, "sleep")) : null}
+
+        {primaryActionMorph ? (
+          <PrimaryActionMorph
+            selected={primaryActionMorph.selected}
+            primaryInSplit={primaryActionMorph.primaryInSplit}
+            layoutMode={primaryActionMorph.layoutMode}
+            stickyRef={primaryActionMorph.stickyRef}
+            boundsRef={primaryActionBoundsRef}
+            foodSourceRef={milkButtonRef}
+            diaperSourceRef={diaperButtonRef}
+            sleepSourceRef={sleepButtonRef}
+            hasSleep={sleepManagementEnabled}
+            refreshKey={primaryActionMorphRefreshKey}
+            renderFood={(ref) => renderMilkAction(ref, true)}
+            renderDiaper={(ref) => renderDiaperAction(ref, true)}
+            renderSleep={(ref) => renderSleepAction(ref, true)}
+          />
+        ) : null}
+
