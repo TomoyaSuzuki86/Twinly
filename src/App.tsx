@@ -1315,21 +1315,6 @@ export default function App() {
                   </button>
                 </div>
               </header>
-              {(syncStatus.pending > 0 || syncStatus.error) && <div className="flex flex-wrap items-center justify-between gap-2 rounded border px-3 py-2 text-sm" role="status">
-                <span>{syncStatus.error ? `未同期 ${syncStatus.pending}件：${syncStatus.error}` : `端末に保存済み・同期待ち ${syncStatus.pending}件`}</span>
-                {syncStatus.error && <Button size="sm" variant="outline" onClick={() => syncStatus.pending ? void store.current?.flush() : window.location.reload()}>再試行</Button>}
-                {syncStatus.error && syncStatus.pending > 0 && <>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    const url = URL.createObjectURL(new Blob([JSON.stringify(store.current?.exportPending(), null, 2)], { type: "application/json" }));
-                    const link = document.createElement("a"); link.href = url; link.download = "twinly-unsynced-backup.json"; link.click(); URL.revokeObjectURL(url);
-                  }}>未同期を書き出す</Button>
-                  <Button size="sm" variant="ghost" onClick={() => {
-                    if (!confirm("未同期の変更をすべて取り消しますか？必要な内容は先に書き出してください。")) return;
-                    try { store.current?.discardPending(); } catch (error) { alert(error instanceof Error ? error.message : "取り消せませんでした。"); }
-                  }}>未同期を取り消す</Button>
-                </>}
-              </div>}
-
               <p
                 className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
                 data-twinly-voice-hint="true"
