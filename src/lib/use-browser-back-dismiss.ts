@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+// Keep browser/PWA Back inside Twinly while an overlay is open.
 const OVERLAY_STACK_KEY = "__twinlyOverlayStack";
 const suppressedPopStates = new WeakSet<Event>();
 
