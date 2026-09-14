@@ -35,6 +35,7 @@ import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
+import { ManualSyncButton } from "./components/ManualSyncButton";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
 import { AiTools } from "./components/AiTools";
@@ -62,16 +63,20 @@ import { buildMilkProgressComparison } from "./lib/milk-progress";
 import { buildCareGauges } from "./lib/care-gauges";
 import { useAppStore } from "./data/use-app-store";
 import { appendEvents, removeEvents } from "./lib/event-mutations";
+import { buildRecordedEvents, type EventDraft } from "./lib/event-recording";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
-import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
+import {
+  createVoiceCommandBabyNames,
+  expandVoiceCommandTargets,
+  toVoiceLogPayload,
+  VoiceCommand,
+} from "./lib/voice-command";
 import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
 import {
   analyzeSleepEvents,
-  AutoWakeActivityType,
   buildActivityGauge,
-  getAutoWakeTimestampForActivity,
   getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
   isBabySleeping,
@@ -109,11 +114,7 @@ const AUTO_REFRESH_MS = 60 * 1000;
 const EMAIL_FOR_SIGN_IN_KEY = "twinly-email-for-sign-in";
 const FAMILY_INVITE_KEY = "twinly-family-invite";
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
-const autoWakeActivityLabels: Record<AutoWakeActivityType, string> = {
-  milk: "ミルク",
-  solidFood: "離乳食",
-  diaper: "おむつ",
-};
+const isCareEventType = (type: EventType) => type === "milk" || type === "solidFood" || type === "diaper";
 
 const readFamilyInvite = () => {
   const url = new URL(window.location.href);
@@ -199,7 +200,13 @@ export default function App() {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
-  const { store, status: syncStatus } = useAppStore(authUser?.uid, sharedAccessBlocked ? undefined : family?.id, allHistory, setApp, setAppLoading);
+  const { store, status: syncStatus, requestSync } = useAppStore(
+    authUser?.uid,
+    sharedAccessBlocked ? undefined : family?.id,
+    allHistory,
+    setApp,
+    setAppLoading
+  );
 
   const handleBabyTabTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches.item(0);
@@ -464,23 +471,21 @@ export default function App() {
     voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
   };
 
-  const createEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>): LogEvent => {
-    const payloadTimestamp = payload?.timestamp;
-    const timestamp =
-      typeof payloadTimestamp === "number" && Number.isFinite(payloadTimestamp) ? payloadTimestamp : Date.now();
-
-    const recordedAt = Date.now();
-    return {
-      id: uid(),
-      babyId,
-      type,
-      ...payload,
-      createdByUid: authUser?.uid,
-      updatedByUid: authUser?.uid,
-      createdAt: recordedAt,
-      updatedAt: recordedAt,
-      timestamp,
-    };
+  const recordEventDrafts = (
+    drafts: EventDraft[],
+    undoOptions?: { transcript?: string; retryVoice?: boolean }
+  ) => {
+    if (!authUser || !db || !drafts.length) return false;
+    const events = buildRecordedEvents({
+      existingEvents: app.events,
+      drafts,
+      actorUid: authUser.uid,
+      idFactory: uid,
+    });
+    if (!events.length) return false;
+    if (!updateApp((prevApp) => appendEvents(prevApp, events))) return false;
+    scheduleUndo(events, undoOptions);
+    return true;
   };
 
   const addEvent = (
@@ -488,27 +493,14 @@ export default function App() {
     type: EventType,
     payload?: Partial<LogEvent>,
     options: { autoWake?: boolean } = {}
-  ) => {
-    if (!authUser || !db) return;
-    const event = createEvent(babyId, type, payload);
-    const createdEvents = [event];
-
-    if (options.autoWake !== false && (type === "milk" || type === "solidFood" || type === "diaper")) {
-      const autoWakeTimestamp = getAutoWakeTimestampForActivity(app.events, babyId, event.timestamp, type);
-      if (autoWakeTimestamp !== null) {
-        createdEvents.push(
-          createEvent(babyId, "wake", {
-            timestamp: autoWakeTimestamp,
-            note: `${autoWakeActivityLabels[type]}記録により自動起床`,
-          })
-        );
-      }
-    }
-
-    if (!updateApp((prevApp) => appendEvents(prevApp, createdEvents))) return false;
-    scheduleUndo(createdEvents);
-    return true;
-  };
+  ) => recordEventDrafts([
+    {
+      babyId,
+      type,
+      payload,
+      autoWake: isCareEventType(type) && options.autoWake !== false,
+    },
+  ]);
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
     if (!modal || modal.kind !== "milk") return;
@@ -537,143 +529,18 @@ export default function App() {
   };
 
   const handleVoiceCommand = (command: VoiceCommand) => {
-    if (!authUser || !db) return;
-
-    const createdEvents: LogEvent[] = [];
-
-    if (
-      command.type === "milk" ||
-      command.type === "solidFood" ||
-      command.type === "diaper" ||
-      command.type === "sleepStart" ||
-      command.type === "wake"
-    ) {
-      const targetedCommands = expandVoiceCommandTargets(command);
-
-      targetedCommands.forEach((targetedCommand) => {
-        if (targetedCommand.type === "milk") {
-          const milkMl = targetedCommand.milkMlByBaby?.[targetedCommand.babyId] ?? targetedCommand.milkMl;
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "milk", {
-              timestamp: targetedCommand.timestamp,
-              milkMl,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "solidFood") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "solidFood", {
-              timestamp: targetedCommand.timestamp,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "diaper") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "diaper", {
-              timestamp: targetedCommand.timestamp,
-              diaperKind: targetedCommand.diaperKind,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "sleepStart" || targetedCommand.type === "wake") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, targetedCommand.type, {
-              timestamp: targetedCommand.timestamp,
-              note: targetedCommand.note,
-            })
-          );
-        }
-      });
-    }
-
-    if (command.type === "daily") {
-      if (command.babyId === "both") {
-        const sharedDailyId = uid();
-        (["A", "B"] as BabyId[]).forEach((babyId) => {
-          createdEvents.push(
-            createEvent(babyId, "daily", {
-              timestamp: command.timestamp,
-              note: command.dailyNote,
-              sharedDailyId,
-            })
-          );
-        });
-      } else {
-        createdEvents.push(
-          createEvent(command.babyId, "daily", {
-            timestamp: command.timestamp,
-            note: command.dailyNote,
-          })
-        );
-      }
-    }
-
-    if (command.type === "temperature") {
-      createdEvents.push(
-        createEvent(command.babyId, "temperature", {
-          timestamp: command.timestamp,
-          temperature: command.temperature,
-          note: command.note,
-        })
-      );
-    }
-
-    if (command.type === "weight") {
-      createdEvents.push(
-        createEvent(command.babyId, "weight", {
-          timestamp: command.timestamp,
-          weight: command.weight,
-          note: command.note,
-        })
-      );
-    }
-
-    if (command.type === "height") {
-      createdEvents.push(
-        createEvent(command.babyId, "height", {
-          timestamp: command.timestamp,
-          height: command.height,
-          note: command.note,
-        })
-      );
-    }
-
-    if (!createdEvents.length) return;
-
-    const eventsWithAutoWake: LogEvent[] = [];
-    createdEvents.forEach((event) => {
-      if (event.type === "milk" || event.type === "solidFood" || event.type === "diaper") {
-        const autoWakeTimestamp = getAutoWakeTimestampForActivity(
-          [...eventsWithAutoWake, ...app.events],
-          event.babyId,
-          event.timestamp,
-          event.type
-        );
-        if (autoWakeTimestamp !== null) {
-          eventsWithAutoWake.push(
-            createEvent(event.babyId, "wake", {
-              timestamp: autoWakeTimestamp,
-              note: `${autoWakeActivityLabels[event.type]}記録により自動起床`,
-            })
-          );
-        }
-      }
-      eventsWithAutoWake.push(event);
+    const sharedDailyId = command.type === "daily" && command.babyId === "both" ? uid() : undefined;
+    const drafts: EventDraft[] = expandVoiceCommandTargets(command).map((targetedCommand) => {
+      const { babyId, type, ...payload } = toVoiceLogPayload(targetedCommand);
+      return {
+        babyId,
+        type,
+        payload: sharedDailyId ? { ...payload, sharedDailyId } : payload,
+        autoWake: isCareEventType(type),
+      };
     });
-
-    if (!updateApp((prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
-
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
-    scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
+    recordEventDrafts(drafts, { transcript, retryVoice: true });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -1281,6 +1148,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-1">
+                  <ManualSyncButton status={syncStatus} onSync={requestSync} />
                   <ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/>
                   <VoiceCommandButton
                     ref={voiceButtonRef}
@@ -1306,7 +1174,7 @@ export default function App() {
                   </Button>
                   <button
                     type="button"
-                    className="grid h-8 w-8 place-items-center rounded-full bg-violet-500/20 text-sm font-bold text-violet-200 transition-colors hover:bg-violet-500/30"
+                    className="twinly-account-avatar grid h-8 w-8 place-items-center rounded-full text-sm font-bold transition-colors"
                     onClick={() => setAccountModalOpen(true)}
                     aria-label="アカウントと家族を開く"
                     title={familyMember.nickname}
@@ -1583,9 +1451,18 @@ export default function App() {
         }
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;
-          const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
-          if (!updateApp(prev => appendEvents(prev, events))) return false;
-          scheduleUndo(events); return true;
+          const eventDrafts: EventDraft[] = drafts.map((draft) => ({
+            babyId: draft.babyId,
+            type: draft.type,
+            payload: {
+              timestamp: draft.timestamp!,
+              ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}),
+              ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}),
+              note: "AI音声・文章解析（確認済み）",
+            },
+            autoWake: false,
+          }));
+          return recordEventDrafts(eventDrafts);
         }} />}
       />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
