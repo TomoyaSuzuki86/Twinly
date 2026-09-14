@@ -58,11 +58,15 @@ export const buildRecordedEvents = ({
   idFactory,
   now = Date.now,
 }: BuildRecordedEventsOptions): LogEvent[] => {
+  // Voice input historically materialized all requested events before deriving
+  // auto-wake records. Preserve that audit/id ordering while centralizing the rule.
+  const baseEvents = drafts.map((draft) =>
+    createRecordedEvent(draft, actorUid, idFactory, now)
+  );
   const recorded: LogEvent[] = [];
 
-  for (const draft of drafts) {
-    const event = createRecordedEvent(draft, actorUid, idFactory, now);
-
+  baseEvents.forEach((event, index) => {
+    const draft = drafts[index];
     if (draft.autoWake && isAutoWakeActivity(event.type)) {
       const autoWakeTimestamp = getAutoWakeTimestampForActivity(
         [...recorded, ...existingEvents],
@@ -90,7 +94,7 @@ export const buildRecordedEvents = ({
     }
 
     recorded.push(event);
-  }
+  });
 
   return recorded;
 };
