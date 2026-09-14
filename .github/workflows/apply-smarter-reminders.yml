@@ -1,0 +1,113 @@
+name: Apply smarter care and sleep reminders
+
+on:
+  push:
+    branches:
+      - feature/smarter-care-sleep-reminders
+    paths:
+      - .github/workflows/apply-smarter-reminders.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/smarter-care-sleep-reminders
+
+      - name: Integrate reminder helpers
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('functions/index.js')
+          text = path.read_text()
+
+          require_anchor = 'const { stockAlerts } = require("./stock-alerts");\n'
+          require_line = 'const { buildCareNotificationPayload, buildSleepReminderCandidate } = require("./care-reminders");\n'
+          if require_line not in text:
+              if require_anchor not in text:
+                  raise SystemExit('require anchor not found')
+              text = text.replace(require_anchor, require_anchor + require_line, 1)
+
+          payload_start = text.find('const buildNotificationPayload = (group) => {')
+          send_start = text.find('const sendPushToDevices = async (uid, devices, payload) => {', payload_start)
+          if payload_start == -1 or send_start == -1:
+              raise SystemExit('legacy notification payload block not found')
+          text = text[:payload_start] + text[send_start:]
+
+          old_candidates = '''    const candidates = ["A", "B"].flatMap((babyId) =>
+      ["milk", "diaper"]
+        .map((kind) =>
+          buildLatestCareCandidate({
+            appState,
+            babyId,
+            kind,
+            lastSentByKey,
+            legacyLastSentByBaby,
+            nowMs,
+          })
+        )
+        .filter(Boolean)
+    );'''
+          new_candidates = '''    const candidates = ["A", "B"].flatMap((babyId) => {
+      const careCandidates = ["milk", "diaper"]
+        .map((kind) =>
+          buildLatestCareCandidate({
+            appState,
+            babyId,
+            kind,
+            lastSentByKey,
+            legacyLastSentByBaby,
+            nowMs,
+          })
+        )
+        .filter(Boolean);
+      const sleepCandidate = buildSleepReminderCandidate({
+        appState,
+        babyId,
+        lastSentByKey,
+        nowMs,
+      });
+      return sleepCandidate ? [...careCandidates, sleepCandidate] : careCandidates;
+    });'''
+          if old_candidates not in text:
+              raise SystemExit('candidate block not found')
+          text = text.replace(old_candidates, new_candidates, 1)
+
+          old_payload = '    const payload = buildNotificationPayload(notificationGroup);'
+          new_payload = '    const payload = buildCareNotificationPayload(notificationGroup, nowMs);'
+          if old_payload not in text:
+              raise SystemExit('payload call not found')
+          text = text.replace(old_payload, new_payload, 1)
+
+          forbidden = [
+              'ゲージが空になりました',
+              'ケアゲージが空になりました',
+              'buildNotificationPayload(notificationGroup)',
+          ]
+          for value in forbidden:
+              if value in text:
+                  raise SystemExit(f'legacy notification copy still remains: {value}')
+
+          path.write_text(text)
+          PY
+
+      - name: Run Functions tests
+        working-directory: functions
+        run: npm test
+
+      - name: Remove helper workflow and commit
+        shell: bash
+        run: |
+          rm .github/workflows/apply-smarter-reminders.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/index.js functions/care-reminders.js functions/test/care-reminders.test.js .github/workflows/apply-smarter-reminders.yml
+          git commit -m "feat: improve care notifications and add sleep reminders"
+          git push origin HEAD:feature/smarter-care-sleep-reminders
