@@ -1,0 +1,72 @@
+name: Validate STEP 8 functions modularization
+
+on:
+  push:
+    branches:
+      - refactor/step-8-functions-modules
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.event.head_commit.message != 'refactor: split Cloud Functions by responsibility'
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Tokyo
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Install functions dependencies
+        run: npm --prefix functions ci --prefer-offline --no-audit --fund=false
+
+      - name: Snapshot public Functions exports
+        run: node -e "console.log(JSON.stringify(Object.keys(require('./functions/index')).sort()))" > /tmp/functions-exports-before.json
+
+      - name: Apply STEP 8 refactor
+        run: node scripts/refactor-step8.mjs
+
+      - name: Verify public Functions exports are unchanged
+        run: |
+          node -e "console.log(JSON.stringify(Object.keys(require('./functions/index')).sort()))" > /tmp/functions-exports-after.json
+          diff -u /tmp/functions-exports-before.json /tmp/functions-exports-after.json
+
+      - name: Syntax check generated modules
+        run: |
+          node --check functions/index.js
+          node --check functions/runtime-context.js
+          node --check functions/family-functions.js
+          node --check functions/reminder-functions.js
+          node --check functions/wear-functions.js
+
+      - name: Test functions
+        run: npm --prefix functions test
+
+      - name: Typecheck app
+        run: npm run typecheck
+
+      - name: Test app
+        run: npm test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/index.js functions/runtime-context.js functions/family-functions.js functions/reminder-functions.js functions/wear-functions.js
+          git commit -m "refactor: split Cloud Functions by responsibility"
+          git push origin HEAD:refactor/step-8-functions-modules
