@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
 import { HelpCircle, MoreVertical, Music, Pause, Settings, Sparkles } from "lucide-react";
 import type { FamilyAccess } from "@/lib/ai";
 import { Button } from "./ui/button";
@@ -14,6 +14,7 @@ type HeaderOverflowMenuProps = {
   access: FamilyAccess | null;
   onOpenHelp: () => void;
   onOpenSettings: () => void;
+  tutorialAnchorRef?: Ref<HTMLButtonElement>;
 };
 
 const stopHeaderGesture = (event: React.SyntheticEvent) => event.stopPropagation();
@@ -45,7 +46,7 @@ export function useComfortHeaderState() {
   return state;
 }
 
-export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings }: HeaderOverflowMenuProps) {
+export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, tutorialAnchorRef }: HeaderOverflowMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,6 +82,7 @@ export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings }: Heade
       onContextMenu={stopHeaderGesture}
     >
       <Button
+        ref={tutorialAnchorRef}
         variant="ghost"
         size="icon"
         type="button"

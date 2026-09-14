@@ -71,6 +71,7 @@ import { ensureNotificationSettingsDocument } from "./lib/notification-settings"
 import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/use-authentication";
 import { usePushNotifications } from "./lib/use-push-notifications";
 import { useWearPairing } from "./lib/use-wear-pairing";
+import { useTutorialAnchors } from "./lib/tutorial-anchors";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 60 * 1000;
@@ -212,6 +213,7 @@ export default function App() {
   const pushNotifications = usePushNotifications(authUser);
   const wearPairing = useWearPairing(authUser);
   const comfortHeaderState = useComfortHeaderState();
+  const tutorialAnchors = useTutorialAnchors();
 
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
@@ -746,7 +748,7 @@ export default function App() {
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
             <div className="sticky top-0 z-40 space-y-1 bg-background">
               <header
-                data-tutorial="header"
+                ref={tutorialAnchors.ref("header")}
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
                 onPointerDown={() => beginVoiceLongPress()}
@@ -773,6 +775,7 @@ export default function App() {
                     onMessage={showVoiceMessage}
                   />
                   <HeaderOverflowMenu
+                    tutorialAnchorRef={tutorialAnchors.ref("settings")}
                     access={familyAccess}
                     onOpenHelp={() => setHelpModalOpen(true)}
                     onOpenSettings={() => handleOpenModal("settings")}
@@ -799,7 +802,7 @@ export default function App() {
               </p>
 
               <TabsList
-                data-tutorial="babies"
+                ref={tutorialAnchors.ref("baby-tabs")}
                 className={`twinly-baby-tabs-list grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
@@ -808,7 +811,7 @@ export default function App() {
               >
                 <TabsTrigger
                   value="A"
-                  data-tutorial="baby-A"
+                  ref={tutorialAnchors.ref("baby-tab:A")}
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("A")}
                   onPointerDown={() => beginVoiceLongPress("A")}
@@ -827,6 +830,7 @@ export default function App() {
                 />
                 </TabsTrigger>
                 <TabsTrigger
+                  ref={tutorialAnchors.ref("baby-tab:B")}
                   value="B"
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("B")}
@@ -857,6 +861,7 @@ export default function App() {
             >
             <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
+                tutorialAnchorRef={tutorialAnchors.ref}
                 profile={app.profiles.A}
                 events={dashboard.A.currentEvents}
                 latestEvents={dashboard.A.latestEvents}
@@ -890,6 +895,7 @@ export default function App() {
             </TabsContent>
             <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
+                tutorialAnchorRef={tutorialAnchors.ref}
                 profile={app.profiles.B}
                 events={dashboard.B.currentEvents}
                 latestEvents={dashboard.B.latestEvents}
@@ -984,6 +990,9 @@ export default function App() {
         blocked={Boolean(modal) || helpModalOpen || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
         replay={tutorialReplay}
         names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+        anchors={tutorialAnchors}
+        activeBabyId={selectedBabyTab}
+        onOpenSettings={() => handleOpenModal("settings")}
       />
       <HelpModal
         open={helpModalOpen}

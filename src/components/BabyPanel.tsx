@@ -25,6 +25,7 @@ import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
+import type { TutorialAnchorRefFactory } from "@/lib/tutorial-anchors";
 import {
   adjustNumber,
   formatDiaperEstimateSummary,
@@ -80,6 +81,7 @@ type BabyPanelProps = {
   lastHeight: number | null;
   themeDimmedBgColor: string;
   memberNameByUid?: Record<string, string>;
+  tutorialAnchorRef?: TutorialAnchorRefFactory;
 };
 
 export function BabyPanel({
@@ -109,6 +111,7 @@ export function BabyPanel({
   lastHeight,
   themeDimmedBgColor,
   memberNameByUid = {},
+  tutorialAnchorRef,
 }: BabyPanelProps) {
   const babyId = profile.babyId;
   const [temperature, setTemperature] = useState("36.0");
@@ -272,7 +275,7 @@ export function BabyPanel({
       <CardContent className="p-4">
         <div className="grid grid-cols-2 gap-4">
           <Button
-            data-tutorial="primary-action"
+            ref={tutorialAnchorRef?.(`primary:${babyId}:milk`)}
             size="lg"
             className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-milk-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-milk-text))] hover:[background:hsl(var(--gauge-milk-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("milk", { babyId })}
@@ -304,7 +307,7 @@ export function BabyPanel({
             </div>
           </Button>
           <Button
-            data-tutorial="primary-action"
+            ref={tutorialAnchorRef?.(`primary:${babyId}:diaper`)}
             size="lg"
             className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-diaper-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-diaper-text))] hover:[background:hsl(var(--gauge-diaper-track))] [-webkit-touch-callout:none]"
             onClick={() => onOpenModal("diaper", { babyId })}
@@ -336,7 +339,7 @@ export function BabyPanel({
 
         {sleepManagementEnabled ? (
         <Button
-          data-tutorial="primary-action"
+          ref={tutorialAnchorRef?.(`primary:${babyId}:sleep`)}
           disabled={sleepTransition !== null}
           data-transition={sleepTransition || undefined}
           role="switch"
@@ -566,8 +569,9 @@ export function BabyPanel({
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
         <div className="flex w-full items-center justify-between gap-3">
-          <h3 data-tutorial="logs" className="text-sm font-semibold text-muted-foreground">ログ</h3>
+          <h3 ref={tutorialAnchorRef?.(`logs:${babyId}`)} className="text-sm font-semibold text-muted-foreground">ログ</h3>
           <Button
+            ref={tutorialAnchorRef?.(`timeline:${babyId}`)}
             variant="outline"
             size="sm"
             className="h-8"
@@ -581,7 +585,7 @@ export function BabyPanel({
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
         <div
-          data-tutorial="log-summary"
+          ref={tutorialAnchorRef?.(`log-summary:${babyId}`)}
           className="-mx-1 overflow-x-auto px-1 pb-2"
           data-horizontal-scroll="true"
           onTouchStart={(event) => event.stopPropagation()}
