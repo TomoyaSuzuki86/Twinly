@@ -144,6 +144,7 @@ export default function App() {
   const voiceLongPressTimerRef = useRef<number | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
+  const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
@@ -746,7 +747,7 @@ export default function App() {
       <div className="mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
         <main>
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
-            <div className="sticky top-0 z-40 space-y-1 bg-background">
+            <div ref={primaryActionStickyRef} className="sticky top-0 z-40 space-y-1 bg-background">
               <header
                 ref={tutorialAnchors.ref("header")}
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
@@ -862,6 +863,12 @@ export default function App() {
             <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
+                primaryActionMorph={{
+                  stickyRef: primaryActionStickyRef,
+                  layoutMode,
+                  selected: selectedBabyTab === "A",
+                  primaryInSplit: true,
+                }}
                 profile={app.profiles.A}
                 events={dashboard.A.currentEvents}
                 latestEvents={dashboard.A.latestEvents}
@@ -896,6 +903,12 @@ export default function App() {
             <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
+                primaryActionMorph={{
+                  stickyRef: primaryActionStickyRef,
+                  layoutMode,
+                  selected: selectedBabyTab === "B",
+                  primaryInSplit: false,
+                }}
                 profile={app.profiles.B}
                 events={dashboard.B.currentEvents}
                 latestEvents={dashboard.B.latestEvents}
