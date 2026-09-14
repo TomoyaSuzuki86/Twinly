@@ -16,7 +16,7 @@ import {
   Moon,
   Sun,
 } from "lucide-react";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, type Ref, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "./ui/input";
@@ -25,6 +25,9 @@ import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
 import { buildCareGauges } from "@/lib/care-gauges";
 import { fmtTime, minutesSince } from "@/lib/utils";
+import type { TutorialAnchorRefFactory } from "@/lib/tutorial-anchors";
+import type { LayoutMode } from "@/lib/appearance-preferences";
+import { PrimaryActionMorph } from "./PrimaryActionMorph";
 import {
   adjustNumber,
   formatDiaperEstimateSummary,
@@ -80,6 +83,13 @@ type BabyPanelProps = {
   lastHeight: number | null;
   themeDimmedBgColor: string;
   memberNameByUid?: Record<string, string>;
+  tutorialAnchorRef?: TutorialAnchorRefFactory;
+  primaryActionMorph?: {
+    stickyRef: { current: HTMLElement | null };
+    layoutMode: LayoutMode;
+    selected: boolean;
+    primaryInSplit: boolean;
+  };
 };
 
 export function BabyPanel({
@@ -109,6 +119,8 @@ export function BabyPanel({
   lastHeight,
   themeDimmedBgColor,
   memberNameByUid = {},
+  tutorialAnchorRef,
+  primaryActionMorph,
 }: BabyPanelProps) {
   const babyId = profile.babyId;
   const [temperature, setTemperature] = useState("36.0");
@@ -263,155 +275,270 @@ export function BabyPanel({
 
   useEffect(() => () => clearSleepLongPressTimer(), []);
 
+  const primaryActionBoundsRef = useRef<HTMLDivElement | null>(null);
+  const milkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const diaperButtonRef = useRef<HTMLButtonElement | null>(null);
+  const sleepButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const primaryActionRef = (
+    localRef: { current: HTMLButtonElement | null },
+    action: "milk" | "diaper" | "sleep"
+  ): Ref<HTMLButtonElement> => (node) => {
+    localRef.current = node;
+    tutorialAnchorRef?.(`primary:${babyId}:${action}`)(node);
+  };
+
+  const renderMilkAction = (ref: Ref<HTMLButtonElement>, morph = false) => (
+    <Button
+      ref={ref}
+      size="lg"
+      className={`relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-milk-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-milk-text))] hover:[background:hsl(var(--gauge-milk-track))] [-webkit-touch-callout:none] ${
+        morph ? "twinly-primary-action-morph-button" : ""
+      }`}
+      data-morph-action={morph ? "food" : undefined}
+      tabIndex={morph ? -1 : undefined}
+      onClick={() => onOpenModal("milk", { babyId })}
+      onContextMenu={(event) => event.preventDefault()}
+      aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-milk-fill))] transition-[width] duration-500"
+        data-testid={morph ? undefined : "milk-gauge-fill"}
+        style={{ width: morph && !gaugesEnabled ? "100%" : gaugesEnabled ? `${milkGaugePercent}%` : 0 }}
+      />
+      <div
+        className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5"
+        data-morph-role={morph ? "care-content" : undefined}
+      >
+        <div className="flex items-center [color:hsl(var(--gauge-milk-text))]">
+          <Utensils className="mr-3 h-7 w-7" />
+          食事
+        </div>
+        {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
+          <span
+            className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
+            data-morph-secondary={morph ? "true" : undefined}
+          >
+            あと {milkNeededMl} ml
+            <span className="ml-1 font-semibold">/ {milkTargetMl} ml</span>
+          </span>
+        ) : (
+          <span
+            className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
+            data-morph-secondary={morph ? "true" : undefined}
+          >
+            必要量を計算中
+          </span>
+        )}
+        <span
+          className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
+          data-morph-secondary={morph ? "true" : undefined}
+        >
+          前回 {lastMilkTime} / {lastMilkElapsed}
+        </span>
+      </div>
+      {morph && gaugesEnabled ? <span className="twinly-primary-action-morph-percent">{milkGaugePercent}%</span> : null}
+    </Button>
+  );
+
+  const renderDiaperAction = (ref: Ref<HTMLButtonElement>, morph = false) => (
+    <Button
+      ref={ref}
+      size="lg"
+      className={`relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-diaper-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-diaper-text))] hover:[background:hsl(var(--gauge-diaper-track))] [-webkit-touch-callout:none] ${
+        morph ? "twinly-primary-action-morph-button" : ""
+      }`}
+      data-morph-action={morph ? "diaper" : undefined}
+      tabIndex={morph ? -1 : undefined}
+      onClick={() => onOpenModal("diaper", { babyId })}
+      onContextMenu={(event) => event.preventDefault()}
+      aria-label={!gaugesEnabled ? "おむつを記録" : `おむつを記録・交換必要度${diaperGaugePercent}%`}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-diaper-fill))] transition-[width] duration-500"
+        data-testid={morph ? undefined : "diaper-gauge-fill"}
+        style={{ width: morph && !gaugesEnabled ? "100%" : gaugesEnabled ? `${diaperGaugePercent}%` : 0 }}
+      />
+      <div
+        className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5"
+        data-morph-role={morph ? "care-content" : undefined}
+      >
+        <div className="flex items-center [color:hsl(var(--gauge-diaper-text))]">
+          <Droplets className="mr-3 h-7 w-7" />
+          おむつ
+        </div>
+        {diaperStockManagementEnabled ? (
+          <span
+            className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]"
+            data-morph-secondary={morph ? "true" : undefined}
+          >
+            {profile.diaperSize}・残り {remainingDiapers}
+          </span>
+        ) : null}
+        <span
+          className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]"
+          data-morph-secondary={morph ? "true" : undefined}
+        >
+          前回 {lastDiaperTime} / {lastDiaperElapsed}
+        </span>
+      </div>
+      {morph && gaugesEnabled ? <span className="twinly-primary-action-morph-percent">{diaperGaugePercent}%</span> : null}
+    </Button>
+  );
+
+  const renderSleepAction = (ref: Ref<HTMLButtonElement>, morph = false) => (
+    <Button
+      ref={ref}
+      disabled={sleepTransition !== null}
+      data-transition={sleepTransition || undefined}
+      data-morph-action={morph ? "sleep" : undefined}
+      tabIndex={morph ? -1 : undefined}
+      role="switch"
+      aria-checked={sleeping}
+      className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 shadow-sm [-webkit-touch-callout:none] ${
+        sleeping
+          ? "border-violet-500/60 [background:hsl(var(--gauge-sleep-track))] hover:[background:hsl(var(--gauge-sleep-track))]"
+          : "border-emerald-500/60 [background:hsl(var(--gauge-wake-track))] hover:[background:hsl(var(--gauge-wake-track))]"
+      } ${morph ? "twinly-primary-action-morph-button" : ""}`}
+      onPointerDown={startSleepLongPress}
+      onPointerUp={clearSleepLongPressTimer}
+      onPointerLeave={clearSleepLongPressTimer}
+      onPointerCancel={clearSleepLongPressTimer}
+      onContextMenu={(event) => event.preventDefault()}
+      onClick={() => {
+        if (Date.now() < sleepTransitionUntil.current) return;
+        if (sleepLongPressTriggeredRef.current) {
+          sleepLongPressTriggeredRef.current = false;
+          return;
+        }
+        const next = sleeping ? "wake" : "sleepStart";
+        sleepTransitionUntil.current = Date.now() + 2000;
+        setSleepTransition(next);
+        sleepTransitionTimer.current = setTimeout(() => {
+          sleepTransitionUntil.current = 0;
+          setSleepTransition(null);
+        }, 2000);
+        const saved = onAddEvent({
+          babyId,
+          type: next,
+          note: sleeping ? "手動: 起床" : "手動: 入眠",
+        });
+        if (saved === false) {
+          clearTimeout(sleepTransitionTimer.current);
+          sleepTransitionUntil.current = 0;
+          setSleepTransition(null);
+        }
+      }}
+      aria-label={!gaugesEnabled ? (sleeping ? "起床を記録・長押しで時刻指定" : "入眠を記録・長押しで時刻指定") : `${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
+        sleeping
+          ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
+          : `活動時間経過${activityGauge.elapsedPercent}%`
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
+          sleeping ? "[background:hsl(var(--gauge-sleep-fill))]" : "[background:hsl(var(--gauge-wake-fill))]"
+        }`}
+        data-testid={morph ? undefined : "sleep-gauge-fill"}
+        data-percent={sleepButtonGaugePercent}
+        style={{ width: morph && !gaugesEnabled ? "100%" : gaugesEnabled ? `${sleepButtonGaugePercent}%` : 0 }}
+      />
+      {sleepTransition && (
+        <span role="status" className="sleep-transition-message absolute inset-0 z-20 grid place-items-center whitespace-normal px-3 text-center text-sm font-bold text-white">
+          {sleepTransition === "sleepStart" ? "入眠を記録しました · おやすみなさい" : "起床を記録しました · おはよう"}
+        </span>
+      )}
+      <span className="relative z-10 flex h-full w-full items-stretch">
+        <span
+          className={`flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 ${
+            sleeping ? "[color:hsl(var(--gauge-sleep-on))]" : "[color:hsl(var(--gauge-wake-on))]"
+          }`}
+          data-testid={morph ? undefined : "sleep-state-label"}
+          data-morph-role={morph ? "sleep-state" : undefined}
+        >
+          <span className="flex items-center gap-1.5 text-lg font-bold">
+            {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
+            <span>{sleeping ? "睡眠中" : "起床中"}</span>
+          </span>
+          <span
+            className="mt-0.5 text-xs font-semibold opacity-80"
+            data-morph-secondary={morph ? "true" : undefined}
+          >
+            長押しで時刻変更
+          </span>
+        </span>
+        <span
+          className={`flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-[15px] font-bold leading-tight ${
+            sleeping ? "[color:hsl(var(--gauge-sleep-muted))]" : "[color:hsl(var(--gauge-wake-muted))]"
+          }`}
+          data-testid={morph ? undefined : "sleep-detail"}
+          data-morph-secondary={morph ? "true" : undefined}
+        >
+          <span className="block">
+            {sleeping ? `睡眠時間 ${currentSleepDuration ?? "0分"}` : activityElapsed}
+          </span>
+          <span className="block">前回睡眠 {previousSleepDuration}</span>
+        </span>
+      </span>
+      {morph && gaugesEnabled ? <span className="twinly-primary-action-morph-percent">{sleepButtonGaugePercent}%</span> : null}
+    </Button>
+  );
+
+  const primaryActionMorphRefreshKey = [
+    gaugesEnabled,
+    diaperStockManagementEnabled,
+    sleepManagementEnabled,
+    sleeping,
+    milkGaugePercent,
+    milkNeededMl ?? "",
+    milkTargetMl ?? "",
+    diaperGaugePercent,
+    remainingDiapers,
+    lastMilkTime,
+    lastMilkElapsed,
+    lastDiaperTime,
+    lastDiaperElapsed,
+    sleepButtonGaugePercent,
+    currentSleepDuration ?? "",
+    activityElapsed,
+    previousSleepDuration,
+    sleepTransition ?? "",
+  ].join("|");
+
   return (
     <Card
+      ref={primaryActionBoundsRef}
       className={`twinly-baby-panel flex flex-col border-border/60 ${themeDimmedBgColor} ${
         sleeping ? "ring-1 ring-indigo-400/60" : ""
       }`}
     >
       <CardContent className="p-4">
         <div className="grid grid-cols-2 gap-4">
-          <Button
-            data-tutorial="primary-action"
-            size="lg"
-            className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-milk-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-milk-text))] hover:[background:hsl(var(--gauge-milk-track))] [-webkit-touch-callout:none]"
-            onClick={() => onOpenModal("milk", { babyId })}
-            onContextMenu={(event) => event.preventDefault()}
-            aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
-          >
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-milk-fill))] transition-[width] duration-500"
-              data-testid="milk-gauge-fill"
-              style={{ width: gaugesEnabled ? `${milkGaugePercent}%` : 0 }}
-            />
-            <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center [color:hsl(var(--gauge-milk-text))]">
-                <Utensils className="mr-3 h-7 w-7" />
-                食事
-              </div>
-              {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
-                <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">
-                  あと {milkNeededMl} ml
-                  <span className="ml-1 font-semibold">/ {milkTargetMl} ml</span>
-                </span>
-              ) : (
-                <span className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">必要量を計算中</span>
-              )}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]">
-                前回 {lastMilkTime} / {lastMilkElapsed}
-              </span>
-            </div>
-          </Button>
-          <Button
-            data-tutorial="primary-action"
-            size="lg"
-            className="relative h-28 select-none overflow-hidden [background:hsl(var(--gauge-diaper-track))] p-0 text-2xl font-bold [color:hsl(var(--gauge-diaper-text))] hover:[background:hsl(var(--gauge-diaper-track))] [-webkit-touch-callout:none]"
-            onClick={() => onOpenModal("diaper", { babyId })}
-            onContextMenu={(event) => event.preventDefault()}
-            aria-label={!gaugesEnabled ? "おむつを記録" : `おむつを記録・交換必要度${diaperGaugePercent}%`}
-          >
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 [background:hsl(var(--gauge-diaper-fill))] transition-[width] duration-500"
-              data-testid="diaper-gauge-fill"
-              style={{ width: gaugesEnabled ? `${diaperGaugePercent}%` : 0 }}
-            />
-            <div className="relative z-10 flex h-full w-full flex-col items-center justify-start pt-5">
-              <div className="flex items-center [color:hsl(var(--gauge-diaper-text))]">
-                <Droplets className="mr-3 h-7 w-7" />
-                おむつ
-              </div>
-              {diaperStockManagementEnabled ? (
-              <span className="mt-0.5 text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]">
-                {profile.diaperSize}・残り {remainingDiapers}
-              </span>
-              ) : null}
-              <span className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-diaper-muted))]">
-                前回 {lastDiaperTime} / {lastDiaperElapsed}
-              </span>
-            </div>
-          </Button>
+          {renderMilkAction(primaryActionRef(milkButtonRef, "milk"))}
+          {renderDiaperAction(primaryActionRef(diaperButtonRef, "diaper"))}
         </div>
 
-        {sleepManagementEnabled ? (
-        <Button
-          data-tutorial="primary-action"
-          disabled={sleepTransition !== null}
-          data-transition={sleepTransition || undefined}
-          role="switch"
-          aria-checked={sleeping}
-          className={`relative mt-3 h-20 w-full select-none overflow-hidden rounded-md p-0 shadow-sm [-webkit-touch-callout:none] ${
-            sleeping
-              ? "border-violet-500/60 [background:hsl(var(--gauge-sleep-track))] hover:[background:hsl(var(--gauge-sleep-track))]"
-              : "border-emerald-500/60 [background:hsl(var(--gauge-wake-track))] hover:[background:hsl(var(--gauge-wake-track))]"
-          }`}
-          onPointerDown={startSleepLongPress}
-          onPointerUp={clearSleepLongPressTimer}
-          onPointerLeave={clearSleepLongPressTimer}
-          onPointerCancel={clearSleepLongPressTimer}
-          onContextMenu={(event) => event.preventDefault()}
-          onClick={() => {
-            if (Date.now() < sleepTransitionUntil.current) return;
-            if (sleepLongPressTriggeredRef.current) {
-              sleepLongPressTriggeredRef.current = false;
-              return;
-            }
-            const next = sleeping ? "wake" : "sleepStart";
-            sleepTransitionUntil.current = Date.now() + 2000;
-            setSleepTransition(next);
-            sleepTransitionTimer.current = setTimeout(() => { sleepTransitionUntil.current = 0; setSleepTransition(null); }, 2000);
-            const saved = onAddEvent({
-              babyId,
-              type: next,
-              note: sleeping ? "手動: 起床" : "手動: 入眠",
-            });
-            if (saved === false) { clearTimeout(sleepTransitionTimer.current); sleepTransitionUntil.current = 0; setSleepTransition(null); }
-          }}
-          aria-label={!gaugesEnabled ? (sleeping ? "起床を記録・長押しで時刻指定" : "入眠を記録・長押しで時刻指定") : `${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
-            sleeping
-              ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
-              : `活動時間経過${activityGauge.elapsedPercent}%`
-          }`}
-        >
-          <span
-            aria-hidden="true"
-            className={`absolute inset-y-0 left-0 transition-[width] duration-500 ${
-              sleeping ? "[background:hsl(var(--gauge-sleep-fill))]" : "[background:hsl(var(--gauge-wake-fill))]"
-            }`}
-            data-testid="sleep-gauge-fill"
-            data-percent={sleepButtonGaugePercent}
-            style={{ width: gaugesEnabled ? `${sleepButtonGaugePercent}%` : 0 }}
+        {sleepManagementEnabled ? renderSleepAction(primaryActionRef(sleepButtonRef, "sleep")) : null}
+
+        {primaryActionMorph ? (
+          <PrimaryActionMorph
+            selected={primaryActionMorph.selected}
+            primaryInSplit={primaryActionMorph.primaryInSplit}
+            layoutMode={primaryActionMorph.layoutMode}
+            stickyRef={primaryActionMorph.stickyRef}
+            boundsRef={primaryActionBoundsRef}
+            foodSourceRef={milkButtonRef}
+            diaperSourceRef={diaperButtonRef}
+            sleepSourceRef={sleepButtonRef}
+            hasSleep={sleepManagementEnabled}
+            refreshKey={primaryActionMorphRefreshKey}
+            renderFood={(ref) => renderMilkAction(ref, true)}
+            renderDiaper={(ref) => renderDiaperAction(ref, true)}
+            renderSleep={(ref) => renderSleepAction(ref, true)}
           />
-          {sleepTransition && <span role="status" className="sleep-transition-message absolute inset-0 z-20 grid place-items-center whitespace-normal px-3 text-center text-sm font-bold text-white">{sleepTransition === 'sleepStart' ? '入眠を記録しました · おやすみなさい' : '起床を記録しました · おはよう'}</span>}
-          <span className="relative z-10 flex h-full w-full items-stretch">
-            <span
-              className={`flex h-full w-[38%] shrink-0 flex-col items-center justify-center px-2 ${
-                sleeping ? "[color:hsl(var(--gauge-sleep-on))]" : "[color:hsl(var(--gauge-wake-on))]"
-              }`}
-              data-testid="sleep-state-label"
-            >
-              <span className="flex items-center gap-1.5 text-lg font-bold">
-                {sleeping ? <Moon className="h-5 w-5 shrink-0" /> : <Sun className="h-5 w-5 shrink-0" />}
-                <span>{sleeping ? "睡眠中" : "起床中"}</span>
-              </span>
-              <span className="mt-0.5 text-xs font-semibold opacity-80">
-                長押しで時刻変更
-              </span>
-            </span>
-            <span
-              className={`flex min-w-0 flex-1 flex-col items-end justify-center px-3 text-right text-[15px] font-bold leading-tight ${
-                sleeping ? "[color:hsl(var(--gauge-sleep-muted))]" : "[color:hsl(var(--gauge-wake-muted))]"
-              }`}
-              data-testid="sleep-detail"
-            >
-              <span className="block">
-                {sleeping ? `睡眠時間 ${currentSleepDuration ?? "0分"}` : activityElapsed}
-              </span>
-              <span className="block">前回睡眠 {previousSleepDuration}</span>
-            </span>
-          </span>
-        </Button>
         ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -566,8 +693,9 @@ export function BabyPanel({
 
       <CardFooter className="flex min-h-0 flex-1 flex-col items-start gap-3">
         <div className="flex w-full items-center justify-between gap-3">
-          <h3 data-tutorial="logs" className="text-sm font-semibold text-muted-foreground">ログ</h3>
+          <h3 ref={tutorialAnchorRef?.(`logs:${babyId}`)} className="text-sm font-semibold text-muted-foreground">ログ</h3>
           <Button
+            ref={tutorialAnchorRef?.(`timeline:${babyId}`)}
             variant="outline"
             size="sm"
             className="h-8"
@@ -581,7 +709,7 @@ export function BabyPanel({
         {logDateControls}
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
         <div
-          data-tutorial="log-summary"
+          ref={tutorialAnchorRef?.(`log-summary:${babyId}`)}
           className="-mx-1 overflow-x-auto px-1 pb-2"
           data-horizontal-scroll="true"
           onTouchStart={(event) => event.stopPropagation()}

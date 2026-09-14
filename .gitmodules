@@ -1,0 +1,4 @@
+[submodule ".agents/vendor/inspired-mino-design-skills"]
+	path = .agents/vendor/inspired-mino-design-skills
+	url = https://github.com/my-take-dev/inspired-mino-design-skills.git
+	branch = main

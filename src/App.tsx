@@ -1,20 +1,7 @@
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, ChevronLeft, ChevronRight, HelpCircle, Settings } from "lucide-react";
-import {
-  GoogleAuthProvider,
-  isSignInWithEmailLink,
-  onAuthStateChanged,
-  sendSignInLinkToEmail,
-  signInWithCredential,
-  signInWithEmailLink,
-  signInWithPopup,
-  signOut,
-  User,
-} from "firebase/auth";
-import { deleteDoc, doc, runTransaction, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, db, ensureAuthPersistence, isFirebaseConfigured, webPushPublicKey } from "./firebase";
+import { Baby, ChevronLeft, ChevronRight } from "lucide-react";
 import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
@@ -26,7 +13,7 @@ import {
   FamilyRelationship,
   LogEvent,
 } from "./types";
-import { endOfDayMs, fmtDate, startOfDayMs, uid } from "./lib/utils";
+import { fmtDate, uid } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
 import { DiaperModal } from "./components/DiaperModal";
 import { SleepRecordModal } from "./components/SleepRecordModal";
@@ -35,6 +22,8 @@ import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
+import { ManualSyncButton } from "./components/ManualSyncButton";
+import { ComfortMiniPlayer, HeaderOverflowMenu, useComfortHeaderState } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
 import { AiTools } from "./components/AiTools";
@@ -57,35 +46,18 @@ import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/Voice
 import { createInitialAppState } from "./lib/app-state";
 import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
-import { estimateDiaperStockBySize } from "./lib/diaper-stock";
-import { buildMilkProgressComparison } from "./lib/milk-progress";
-import { buildCareGauges } from "./lib/care-gauges";
 import { useAppStore } from "./data/use-app-store";
 import { appendEvents, removeEvents } from "./lib/event-mutations";
+import { buildRecordedEvents, type EventDraft } from "./lib/event-recording";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
-import { createVoiceCommandBabyNames, expandVoiceCommandTargets, VoiceCommand } from "./lib/voice-command";
-import { createWearPairingToken, hashWearPairingToken } from "./lib/wear-link";
+import {
+  createVoiceCommandBabyNames,
+  expandVoiceCommandTargets,
+  toVoiceLogPayload,
+  VoiceCommand,
+} from "./lib/voice-command";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
-import {
-  analyzeSleepEvents,
-  AutoWakeActivityType,
-  buildActivityGauge,
-  getAutoWakeTimestampForActivity,
-  getAverageActivityMinutes,
-  getDefaultActivityLimitMinutes,
-  isBabySleeping,
-} from "./lib/sleep";
-import {
-  getDeviceId,
-  getExistingPushSubscription,
-  getNotificationPermission,
-  isWebPushSupported,
-  requestNotificationPermission,
-  serializePushSubscription,
-  subscribeToPushNotifications,
-  unsubscribeFromPushNotifications,
-} from "./lib/web-push";
 import {
   completeFamilyOnboarding,
   createFamilyInvite,
@@ -94,26 +66,18 @@ import {
   subscribeFamilyMembers,
   updateMemberProfile,
 } from "./lib/family";
-
-declare global {
-  interface Window {
-    TwinlyAndroid?: {
-      saveWearToken?: (token: string) => void;
-      signInWithGoogle?: () => void;
-    };
-  }
-}
+import { buildDashboardSelectors } from "./lib/dashboard-selectors";
+import { ensureNotificationSettingsDocument } from "./lib/notification-settings";
+import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/use-authentication";
+import { usePushNotifications } from "./lib/use-push-notifications";
+import { useWearPairing } from "./lib/use-wear-pairing";
+import { useTutorialAnchors } from "./lib/tutorial-anchors";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const AUTO_REFRESH_MS = 60 * 1000;
-const EMAIL_FOR_SIGN_IN_KEY = "twinly-email-for-sign-in";
 const FAMILY_INVITE_KEY = "twinly-family-invite";
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
-const autoWakeActivityLabels: Record<AutoWakeActivityType, string> = {
-  milk: "ミルク",
-  solidFood: "離乳食",
-  diaper: "おむつ",
-};
+const isCareEventType = (type: EventType) => type === "milk" || type === "solidFood" || type === "diaper";
 
 const readFamilyInvite = () => {
   const url = new URL(window.location.href);
@@ -142,28 +106,12 @@ export default function App() {
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const [now, setNow] = useState(() => new Date());
-  const [authUser, setAuthUser] = useState<User | null>(null);
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
-  const {access: familyAccess, error: accessError} = useFamilyAccess(authUser?.uid, family?.id);
-  const { theme, layoutMode, selectTheme, selectLayoutMode } = useAppearancePreferences(
-    family?.id,
-    Boolean(familyAccess?.features.themes)
-  );
-  const sharedAccessBlocked = Boolean(familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
-  const [authReady, setAuthReady] = useState(false);
-  const [appLoading, setAppLoading] = useState(() => isFirebaseConfigured && Boolean(auth));
-  const firebaseEnabled = isFirebaseConfigured && Boolean(auth);
+  const [appLoading, setAppLoading] = useState(true);
   const todayDate = fmtDate(now);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported">(
-    getNotificationPermission()
-  );
-  const [pushSubscribed, setPushSubscribed] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [wearPairingToken, setWearPairingToken] = useState<string | null>(null);
-  const [wearPairingBusy, setWearPairingBusy] = useState(false);
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -196,10 +144,87 @@ export default function App() {
   const voiceLongPressTimerRef = useRef<number | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const lastKnownTodayRef = useRef(todayDate);
+  const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
+    setSessionError(null);
+    setFamily(null);
+    setFamilyMember(null);
+    setFamilyMembers([]);
+    setApp(createEmptyState());
+    setModal(null);
+    setHelpModalOpen(false);
+    setHistoryModal(null);
+    setUndo({ open: false });
+
+    if (user) {
+      setAppLoading(true);
+      try {
+        const session = await loadFamilySession(user);
+        if (!context.isCurrent()) return;
+        setFamily(session?.family ?? null);
+        setFamilyMember(session?.member ?? null);
+        if (session) {
+          if (session.member.profileCompleted === false) setAccountModalOpen(true);
+          void ensureNotificationSettingsDocument(user).catch(console.error);
+        } else {
+          setFamilyMembers([]);
+          setAppLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to load family session", error);
+        if (!context.isCurrent()) return;
+        setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
+        setFamily(null);
+        setFamilyMember(null);
+        setFamilyMembers([]);
+        setAppLoading(false);
+      }
+      return;
+    }
+
+    const nextState = createEmptyState();
+    setFamily(null);
+    setFamilyMember(null);
+    setFamilyMembers([]);
+    setApp(nextState);
+    setActiveDate(nextState.ui.lastViewedDate);
+    setNow(new Date());
+    lastKnownTodayRef.current = nextState.ui.lastViewedDate;
+    setAppLoading(false);
+  };
+
+  const {
+    user: authUser,
+    ready: authReady,
+    enabled: firebaseEnabled,
+    signInGoogle: handleSignIn,
+    sendEmailLink: handleSendEmailLink,
+    signOutUser,
+  } = useAuthentication({ inviteToken: pendingInviteToken, onUserChanged: handleAuthUserChanged });
+  const { access: familyAccess, error: accessError } = useFamilyAccess(authUser?.uid, family?.id);
+  const { theme, layoutMode, selectTheme, selectLayoutMode } = useAppearancePreferences(
+    family?.id,
+    Boolean(familyAccess?.features.themes)
+  );
+  const sharedAccessBlocked = Boolean(
+    familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing
+  );
+  const pushNotifications = usePushNotifications(authUser);
+  const wearPairing = useWearPairing(authUser);
+  const comfortHeaderState = useComfortHeaderState();
+  const tutorialAnchors = useTutorialAnchors();
+
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
-  const { store, status: syncStatus } = useAppStore(authUser?.uid, sharedAccessBlocked ? undefined : family?.id, allHistory, setApp, setAppLoading);
+  const { store, status: syncStatus, requestSync } = useAppStore(
+    authUser?.uid,
+    sharedAccessBlocked ? undefined : family?.id,
+    allHistory,
+    setApp,
+    setAppLoading
+  );
 
   const handleBabyTabTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches.item(0);
@@ -231,49 +256,6 @@ export default function App() {
     }
   };
 
-  const ensureNotificationSettingsDocument = async (user: User) => {
-    if (!db) return;
-    const settingsRef = doc(db, "users", user.uid, "settings", "notifications");
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(settingsRef);
-      if (snapshot.exists()) return;
-      transaction.set(settingsRef, {
-        milkReminder: { enabled: true, intervalMinutes: 150, mergeWindowMinutes: 15 },
-        careReminder: { enabled: true, mergeWindowMinutes: 15, diaperGaugeWindowMinutes: 120 },
-        updatedAt: serverTimestamp(),
-      });
-    });
-  };
-
-  const syncPushSubscriptionToFirestore = async (user: User) => {
-    if (!db || !isWebPushSupported()) return false;
-    const subscription = await getExistingPushSubscription();
-    if (!subscription || Notification.permission !== "granted") return false;
-
-    const deviceId = getDeviceId();
-    const deviceRef = doc(db, "users", user.uid, "devices", deviceId);
-    await setDoc(
-      deviceRef,
-      {
-        deviceId,
-        platform: navigator.userAgent,
-        notificationsEnabled: true,
-        permission: Notification.permission,
-        subscription: serializePushSubscription(subscription),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    return true;
-  };
-
-  const removePushSubscriptionFromFirestore = async (user: User | null) => {
-    if (!db || !user) return;
-    const deviceId = getDeviceId();
-    await deleteDoc(doc(db, "users", user.uid, "devices", deviceId));
-  };
-
   useEffect(() => {
     const refreshNow = () => setNow(new Date());
     const handleVisibilityChange = () => {
@@ -301,96 +283,6 @@ export default function App() {
   }, [todayDate]);
 
   useEffect(() => {
-    if (!auth) {
-      setAuthReady(true);
-      return undefined;
-    }
-
-    const currentAuth = auth;
-    let unsub = () => {};
-    let cancelled = false;
-    let authGeneration = 0;
-
-    const init = async () => {
-      await ensureAuthPersistence();
-      if (cancelled) return;
-      if (isSignInWithEmailLink(currentAuth, window.location.href)) {
-        const email = window.localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) || window.prompt("ログイン用メールアドレスを入力してください");
-        if (email) {
-          try {
-            await signInWithEmailLink(currentAuth, email, window.location.href);
-            window.localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
-            window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
-          } catch (error) {
-            console.error("Email link sign-in failed", error);
-            alert("メールリンクでログインできませんでした。もう一度メールを送信してください。");
-          }
-        }
-      }
-      if (cancelled) return;
-      unsub = onAuthStateChanged(currentAuth, (user) => {
-        const generation = ++authGeneration;
-        setAuthReady(false);
-        setSessionError(null);
-        setFamily(null);
-        setFamilyMember(null);
-        setFamilyMembers([]);
-        setApp(createEmptyState());
-        setModal(null);
-        setHelpModalOpen(false);
-        setHistoryModal(null);
-        setUndo({ open: false });
-        setAuthUser(user);
-        if (user) {
-          setAppLoading(true);
-          void loadFamilySession(user)
-            .then((session) => {
-              if (cancelled || generation !== authGeneration) return;
-              setFamily(session?.family ?? null);
-              setFamilyMember(session?.member ?? null);
-              if (session) {
-                if (session.member.profileCompleted === false) setAccountModalOpen(true);
-                void ensureNotificationSettingsDocument(user).catch(console.error);
-              } else {
-                setFamilyMembers([]);
-                setAppLoading(false);
-              }
-              setAuthReady(true);
-            })
-            .catch((error) => {
-              console.error("Failed to load family session", error);
-              if (cancelled || generation !== authGeneration) return;
-              setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
-              setFamily(null);
-              setFamilyMember(null);
-              setFamilyMembers([]);
-              setAppLoading(false);
-              setAuthReady(true);
-            });
-        } else {
-          const nextState = createEmptyState();
-          setFamily(null);
-          setFamilyMember(null);
-          setFamilyMembers([]);
-          setApp(nextState);
-          setActiveDate(nextState.ui.lastViewedDate);
-          setNow(new Date());
-          lastKnownTodayRef.current = nextState.ui.lastViewedDate;
-          setAppLoading(false);
-          setAuthReady(true);
-        }
-      });
-    };
-
-    void init();
-
-    return () => {
-      cancelled = true;
-      unsub();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!family) return;
     return subscribeFamilyMembers(family.id, (members) => {
       setFamilyMembers(members);
@@ -402,25 +294,6 @@ export default function App() {
     }, () => setSessionError("家族情報を取得できませんでした。再読み込みしてください。"));
   }, [authUser, family]);
 
-  useEffect(() => {
-    if (!isWebPushSupported()) {
-      setPushPermission("unsupported");
-      setPushSubscribed(false);
-      return;
-    }
-
-    setPushPermission(Notification.permission);
-    void getExistingPushSubscription().then((subscription) => {
-      setPushSubscribed(Boolean(subscription));
-    });
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser || pushPermission !== "granted") return;
-    void syncPushSubscriptionToFirestore(authUser).then((synced) => {
-      if (synced) setPushSubscribed(true);
-    });
-  }, [authUser, pushPermission]);
 
   useEffect(() => {
     setApp((prev) => {
@@ -464,23 +337,21 @@ export default function App() {
     voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
   };
 
-  const createEvent = (babyId: BabyId, type: EventType, payload?: Partial<LogEvent>): LogEvent => {
-    const payloadTimestamp = payload?.timestamp;
-    const timestamp =
-      typeof payloadTimestamp === "number" && Number.isFinite(payloadTimestamp) ? payloadTimestamp : Date.now();
-
-    const recordedAt = Date.now();
-    return {
-      id: uid(),
-      babyId,
-      type,
-      ...payload,
-      createdByUid: authUser?.uid,
-      updatedByUid: authUser?.uid,
-      createdAt: recordedAt,
-      updatedAt: recordedAt,
-      timestamp,
-    };
+  const recordEventDrafts = (
+    drafts: EventDraft[],
+    undoOptions?: { transcript?: string; retryVoice?: boolean }
+  ) => {
+    if (!authUser || !drafts.length) return false;
+    const events = buildRecordedEvents({
+      existingEvents: app.events,
+      drafts,
+      actorUid: authUser.uid,
+      idFactory: uid,
+    });
+    if (!events.length) return false;
+    if (!updateApp((prevApp) => appendEvents(prevApp, events))) return false;
+    scheduleUndo(events, undoOptions);
+    return true;
   };
 
   const addEvent = (
@@ -488,27 +359,14 @@ export default function App() {
     type: EventType,
     payload?: Partial<LogEvent>,
     options: { autoWake?: boolean } = {}
-  ) => {
-    if (!authUser || !db) return;
-    const event = createEvent(babyId, type, payload);
-    const createdEvents = [event];
-
-    if (options.autoWake !== false && (type === "milk" || type === "solidFood" || type === "diaper")) {
-      const autoWakeTimestamp = getAutoWakeTimestampForActivity(app.events, babyId, event.timestamp, type);
-      if (autoWakeTimestamp !== null) {
-        createdEvents.push(
-          createEvent(babyId, "wake", {
-            timestamp: autoWakeTimestamp,
-            note: `${autoWakeActivityLabels[type]}記録により自動起床`,
-          })
-        );
-      }
-    }
-
-    if (!updateApp((prevApp) => appendEvents(prevApp, createdEvents))) return false;
-    scheduleUndo(createdEvents);
-    return true;
-  };
+  ) => recordEventDrafts([
+    {
+      babyId,
+      type,
+      payload,
+      autoWake: isCareEventType(type) && options.autoWake !== false,
+    },
+  ]);
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
     if (!modal || modal.kind !== "milk") return;
@@ -537,143 +395,18 @@ export default function App() {
   };
 
   const handleVoiceCommand = (command: VoiceCommand) => {
-    if (!authUser || !db) return;
-
-    const createdEvents: LogEvent[] = [];
-
-    if (
-      command.type === "milk" ||
-      command.type === "solidFood" ||
-      command.type === "diaper" ||
-      command.type === "sleepStart" ||
-      command.type === "wake"
-    ) {
-      const targetedCommands = expandVoiceCommandTargets(command);
-
-      targetedCommands.forEach((targetedCommand) => {
-        if (targetedCommand.type === "milk") {
-          const milkMl = targetedCommand.milkMlByBaby?.[targetedCommand.babyId] ?? targetedCommand.milkMl;
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "milk", {
-              timestamp: targetedCommand.timestamp,
-              milkMl,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "solidFood") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "solidFood", {
-              timestamp: targetedCommand.timestamp,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "diaper") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, "diaper", {
-              timestamp: targetedCommand.timestamp,
-              diaperKind: targetedCommand.diaperKind,
-              note: targetedCommand.note,
-            })
-          );
-          return;
-        }
-
-        if (targetedCommand.type === "sleepStart" || targetedCommand.type === "wake") {
-          createdEvents.push(
-            createEvent(targetedCommand.babyId, targetedCommand.type, {
-              timestamp: targetedCommand.timestamp,
-              note: targetedCommand.note,
-            })
-          );
-        }
-      });
-    }
-
-    if (command.type === "daily") {
-      if (command.babyId === "both") {
-        const sharedDailyId = uid();
-        (["A", "B"] as BabyId[]).forEach((babyId) => {
-          createdEvents.push(
-            createEvent(babyId, "daily", {
-              timestamp: command.timestamp,
-              note: command.dailyNote,
-              sharedDailyId,
-            })
-          );
-        });
-      } else {
-        createdEvents.push(
-          createEvent(command.babyId, "daily", {
-            timestamp: command.timestamp,
-            note: command.dailyNote,
-          })
-        );
-      }
-    }
-
-    if (command.type === "temperature") {
-      createdEvents.push(
-        createEvent(command.babyId, "temperature", {
-          timestamp: command.timestamp,
-          temperature: command.temperature,
-          note: command.note,
-        })
-      );
-    }
-
-    if (command.type === "weight") {
-      createdEvents.push(
-        createEvent(command.babyId, "weight", {
-          timestamp: command.timestamp,
-          weight: command.weight,
-          note: command.note,
-        })
-      );
-    }
-
-    if (command.type === "height") {
-      createdEvents.push(
-        createEvent(command.babyId, "height", {
-          timestamp: command.timestamp,
-          height: command.height,
-          note: command.note,
-        })
-      );
-    }
-
-    if (!createdEvents.length) return;
-
-    const eventsWithAutoWake: LogEvent[] = [];
-    createdEvents.forEach((event) => {
-      if (event.type === "milk" || event.type === "solidFood" || event.type === "diaper") {
-        const autoWakeTimestamp = getAutoWakeTimestampForActivity(
-          [...eventsWithAutoWake, ...app.events],
-          event.babyId,
-          event.timestamp,
-          event.type
-        );
-        if (autoWakeTimestamp !== null) {
-          eventsWithAutoWake.push(
-            createEvent(event.babyId, "wake", {
-              timestamp: autoWakeTimestamp,
-              note: `${autoWakeActivityLabels[event.type]}記録により自動起床`,
-            })
-          );
-        }
-      }
-      eventsWithAutoWake.push(event);
+    const sharedDailyId = command.type === "daily" && command.babyId === "both" ? uid() : undefined;
+    const drafts: EventDraft[] = expandVoiceCommandTargets(command).map((targetedCommand) => {
+      const { babyId, type, ...payload } = toVoiceLogPayload(targetedCommand);
+      return {
+        babyId,
+        type,
+        payload: sharedDailyId ? { ...payload, sharedDailyId } : payload,
+        autoWake: isCareEventType(type),
+      };
     });
-
-    if (!updateApp((prevApp) => appendEvents(prevApp, eventsWithAutoWake))) return;
-
     const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
-    scheduleUndo(eventsWithAutoWake, { transcript, retryVoice: true });
+    recordEventDrafts(drafts, { transcript, retryVoice: true });
   };
 
   const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
@@ -708,7 +441,7 @@ export default function App() {
   };
 
   const removeEvent = (eventId: string) => {
-    if (!authUser || !db) return;
+    if (!authUser) return;
     updateApp((prevApp) => {
       const target = prevApp.events.find((event) => event.id === eventId);
       const ids = target?.sharedDailyId
@@ -719,7 +452,7 @@ export default function App() {
   };
 
   const undoLast = () => {
-    if (!authUser || !db || !undo.events?.length) return;
+    if (!authUser || !undo.events?.length) return;
 
     const undoIds = new Set(undo.events.map((event) => event.id));
     if (!updateApp((prevApp) => removeEvents(prevApp, undoIds))) return;
@@ -774,7 +507,7 @@ export default function App() {
   }, [modal, app.events]);
 
   const resetAll = () => {
-    if (!authUser || !db) return;
+    if (!authUser) return;
     if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから削除してください。"); return; }
     if (!confirm("すべてのデータを削除しますか？")) return;
     const nextState = createEmptyState();
@@ -809,32 +542,6 @@ export default function App() {
 
       return { ...prevApp, profiles: nextProfiles };
     });
-  };
-
-  const handleSignIn = async () => {
-    if (!auth) return;
-    if (window.TwinlyAndroid?.signInWithGoogle) {
-      window.TwinlyAndroid.signInWithGoogle();
-      return;
-    }
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error(error);
-      alert("サインインに失敗しました");
-    }
-  };
-
-  const handleSendEmailLink = async (email: string) => {
-    if (!auth) return;
-    const continueUrl = new URL(window.location.origin);
-    if (pendingInviteToken) continueUrl.searchParams.set("invite", pendingInviteToken);
-    await sendSignInLinkToEmail(auth, email, {
-      url: continueUrl.toString(),
-      handleCodeInApp: true,
-    });
-    window.localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, email);
   };
 
   const handleProfileSetup = async (profile: {
@@ -877,94 +584,10 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    if (!auth) return;
     setAccountModalOpen(false);
     setHelpModalOpen(false);
-    await removePushSubscriptionFromFirestore(authUser);
-    await signOut(auth);
-  };
-
-  const handleEnablePushNotifications = async () => {
-    if (!authUser || !webPushPublicKey) return;
-    setPushBusy(true);
-    try {
-      const permission = await requestNotificationPermission();
-      setPushPermission(permission);
-      if (permission !== "granted") {
-        setPushSubscribed(false);
-        return;
-      }
-
-      await subscribeToPushNotifications(webPushPublicKey);
-      const synced = await syncPushSubscriptionToFirestore(authUser);
-      setPushSubscribed(synced);
-    } catch (error) {
-      console.error("Failed to enable push notifications", error);
-    } finally {
-      setPushBusy(false);
-    }
-  };
-
-  const handleDisablePushNotifications = async () => {
-    setPushBusy(true);
-    try {
-      await unsubscribeFromPushNotifications();
-      await removePushSubscriptionFromFirestore(authUser);
-      setPushSubscribed(false);
-    } catch (error) {
-      console.error("Failed to disable push notifications", error);
-    } finally {
-      setPushBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    const handleAndroidGoogleToken = async (event: Event) => {
-      if (!auth) return;
-      const idToken = (event as CustomEvent<{ idToken?: string }>).detail?.idToken;
-      if (!idToken) return;
-      try {
-        const credential = GoogleAuthProvider.credential(idToken);
-        await signInWithCredential(auth, credential);
-      } catch (error) {
-        console.error(error);
-        alert("Googleログインに失敗しました");
-      }
-    };
-
-    window.addEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
-    return () => window.removeEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
-  }, []);
-
-  const handleCreateWearPairingToken = async () => {
-    if (!authUser || !db) return;
-    setWearPairingBusy(true);
-    try {
-      const token = createWearPairingToken();
-      const tokenHash = await hashWearPairingToken(token);
-      await Promise.all([
-        setDoc(doc(db, "wearPairingTokens", tokenHash), {
-          uid: authUser.uid,
-          active: true,
-          createdAt: serverTimestamp(),
-        }),
-        setDoc(
-          doc(db, "users", authUser.uid, "settings", "wear"),
-          {
-            tokenHash,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        ),
-      ]);
-      window.TwinlyAndroid?.saveWearToken?.(token);
-      setWearPairingToken(token);
-    } catch (error) {
-      console.error("Failed to create Wear OS pairing token", error);
-      alert("Watch連携キーの作成に失敗しました");
-    } finally {
-      setWearPairingBusy(false);
-    }
+    await pushNotifications.removeCurrentDevice();
+    await signOutUser();
   };
 
   const handleExport = async () => {
@@ -1002,148 +625,10 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  const selectedLogDayRange = useMemo(() => {
-    const date = new Date(`${activeDate}T00:00:00`);
-    return { from: startOfDayMs(date), to: endOfDayMs(date) };
-  }, [activeDate]);
-
-  const currentDayRange = useMemo(() => {
-    const date = new Date(`${todayDate}T00:00:00`);
-    return { from: startOfDayMs(date), to: endOfDayMs(date) };
-  }, [todayDate]);
-
-  const selectedLogEvents = useMemo(
-    () =>
-      app.events
-        .filter((event) => event.timestamp >= selectedLogDayRange.from && event.timestamp <= selectedLogDayRange.to)
-        .sort((a, b) => b.timestamp - a.timestamp),
-    [app.events, selectedLogDayRange]
+  const dashboard = useMemo(
+    () => buildDashboardSelectors(app, activeDate, todayDate, now),
+    [activeDate, app, now, todayDate]
   );
-
-  const currentDayEvents = useMemo(
-    () =>
-      app.events
-        .filter((event) => event.timestamp >= currentDayRange.from && event.timestamp <= currentDayRange.to)
-        .sort((a, b) => b.timestamp - a.timestamp),
-    [app.events, currentDayRange]
-  );
-
-  const currentEventsByBaby = useMemo(() => {
-    const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
-    for (const event of currentDayEvents) grouped[event.babyId].push(event);
-    return grouped;
-  }, [currentDayEvents]);
-
-  const logEventsByBaby = useMemo(() => {
-    const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
-    for (const event of selectedLogEvents) grouped[event.babyId].push(event);
-    return grouped;
-  }, [selectedLogEvents]);
-
-  const latestEventsByBaby = useMemo(() => {
-    const grouped: Record<BabyId, LogEvent[]> = { A: [], B: [] };
-    const sortedEvents = app.events;
-    for (const event of sortedEvents) grouped[event.babyId].push(event);
-    return grouped;
-  }, [app.events]);
-
-  const lastWeights = useMemo(() => {
-    const result: Record<BabyId, number | null> = { A: null, B: null };
-    const sortedEvents = app.events;
-    const lastWeightA = sortedEvents.find((event) => event.babyId === "A" && event.type === "weight" && event.weight !== undefined);
-    const lastWeightB = sortedEvents.find((event) => event.babyId === "B" && event.type === "weight" && event.weight !== undefined);
-    if (lastWeightA?.weight !== undefined) result.A = lastWeightA.weight;
-    if (lastWeightB?.weight !== undefined) result.B = lastWeightB.weight;
-    return result;
-  }, [app.events]);
-
-  const lastHeights = useMemo(() => {
-    const result: Record<BabyId, number | null> = { A: null, B: null };
-    const sortedEvents = app.events;
-    const lastHeightA = sortedEvents.find((event) => event.babyId === "A" && event.type === "height" && event.height !== undefined);
-    const lastHeightB = sortedEvents.find((event) => event.babyId === "B" && event.type === "height" && event.height !== undefined);
-    if (lastHeightA?.height !== undefined) result.A = lastHeightA.height;
-    if (lastHeightB?.height !== undefined) result.B = lastHeightB.height;
-    return result;
-  }, [app.events]);
-
-  const lowStock = useMemo(() => {
-    const result: Record<BabyId, { size: string; remaining: number } | null> = { A: null, B: null };
-    if (!app.diaperStockManagementEnabled) return result;
-    (Object.keys(app.profiles) as BabyId[]).forEach((babyId) => {
-      const profile = app.profiles[babyId];
-      const remaining = profile.diaperStockBySize[profile.diaperSize] ?? 0;
-      if (remaining <= 10) {
-        result[babyId] = { size: profile.diaperSize, remaining };
-      }
-    });
-    return result;
-  }, [app.diaperStockManagementEnabled, app.profiles]);
-
-  const diaperEstimates = useMemo(() => {
-    const result: Record<BabyId, ReturnType<typeof estimateDiaperStockBySize> | null> = { A: null, B: null };
-    if (!app.diaperStockManagementEnabled) return result;
-    (Object.keys(app.profiles) as BabyId[]).forEach((babyId) => {
-      const size = app.profiles[babyId].diaperSize;
-      result[babyId] = estimateDiaperStockBySize({
-        profiles: app.profiles,
-        events: app.events,
-        size,
-        now,
-      });
-    });
-    return result;
-  }, [app.diaperStockManagementEnabled, app.profiles, app.events, now]);
-
-  const milkProgressByBaby = useMemo(() => {
-    const result: Record<BabyId, ReturnType<typeof buildMilkProgressComparison>> = {
-      A: buildMilkProgressComparison({ events: app.events, babyId: "A", targetDate: activeDate, now }),
-      B: buildMilkProgressComparison({ events: app.events, babyId: "B", targetDate: activeDate, now }),
-    };
-    return result;
-  }, [activeDate, app.events, now]);
-
-  const sleepingByBaby = useMemo(
-    () => ({
-      A: isBabySleeping(app.events, "A"),
-      B: isBabySleeping(app.events, "B"),
-    }),
-    [app.events]
-  );
-
-  const tabGaugePercents = useMemo(() => {
-    const result: Record<BabyId, { milk: number; diaper: number; activity: number }> = {
-      A: { milk: 0, diaper: 0, activity: 0 },
-      B: { milk: 0, diaper: 0, activity: 0 },
-    };
-
-    (["A", "B"] as BabyId[]).forEach((babyId) => {
-      const latestEvents = latestEventsByBaby[babyId];
-      const profile = app.profiles[babyId];
-      const gauges = buildCareGauges({
-        events: latestEvents,
-        babyId,
-        now,
-        milkWindowHours: profile.milkGaugeWindowHours ?? 3,
-        milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-      });
-      const hasDiaperRecord = latestEvents.some((event) => event.type === "diaper");
-      const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
-      const activityLimitMinutes =
-        profile.activityLimitMinutesOverride ??
-        getAverageActivityMinutes(sleepAnalysis, now) ??
-        getDefaultActivityLimitMinutes(profile.birthDate, now);
-      result[babyId] = {
-        milk: Math.round((1 - (gauges.milk?.level ?? 0)) * 100),
-        diaper: Math.round((1 - (gauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100),
-        activity: sleepAnalysis.currentSleepStart
-          ? 0
-          : buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
-      };
-    });
-
-    return result;
-  }, [app.profiles, latestEventsByBaby, now]);
 
   const voiceCommandBabyNames = useMemo(() => createVoiceCommandBabyNames(app.profiles), [app.profiles]);
   const memberNameByUid = useMemo(
@@ -1262,9 +747,9 @@ export default function App() {
       <div className="mx-auto max-w-7xl px-2 pb-2 sm:px-4 sm:pb-4">
         <main>
           <Tabs value={selectedBabyTab} onValueChange={(value) => setSelectedBabyTab(value as BabyId)} className="twinly-baby-tabs w-full">
-            <div className="sticky top-0 z-40 space-y-1 bg-background">
+            <div ref={primaryActionStickyRef} className="sticky top-0 z-40 space-y-1 bg-background">
               <header
-                data-tutorial="header"
+                ref={tutorialAnchors.ref("header")}
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
                 onDoubleClick={() => voiceButtonRef.current?.startListening()}
                 onPointerDown={() => beginVoiceLongPress()}
@@ -1281,7 +766,8 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/>
+                  <ManualSyncButton status={syncStatus} onSync={requestSync} />
+                  <div className="hidden" aria-hidden="true"><ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/></div>
                   <VoiceCommandButton
                     ref={voiceButtonRef}
                     babyNames={voiceCommandBabyNames}
@@ -1289,24 +775,15 @@ export default function App() {
                     onCommand={handleVoiceCommand}
                     onMessage={showVoiceMessage}
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(event) => { event.stopPropagation(); setHelpModalOpen(true); }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onPointerUp={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                    aria-label="help"
-                    title="使い方・ヘルプ"
-                  >
-                    <HelpCircle className="h-5 w-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleOpenModal("settings")} aria-label="settings">
-                    <Settings className="h-5 w-5" />
-                  </Button>
+                  <HeaderOverflowMenu
+                    tutorialAnchorRef={tutorialAnchors.ref("settings")}
+                    access={familyAccess}
+                    onOpenHelp={() => setHelpModalOpen(true)}
+                    onOpenSettings={() => handleOpenModal("settings")}
+                  />
                   <button
                     type="button"
-                    className="grid h-8 w-8 place-items-center rounded-full bg-violet-500/20 text-sm font-bold text-violet-200 transition-colors hover:bg-violet-500/30"
+                    className="twinly-account-avatar grid h-8 w-8 place-items-center rounded-full text-sm font-bold transition-colors"
                     onClick={() => setAccountModalOpen(true)}
                     aria-label="アカウントと家族を開く"
                     title={familyMember.nickname}
@@ -1315,16 +792,18 @@ export default function App() {
                   </button>
                 </div>
               </header>
+              <ComfortMiniPlayer state={comfortHeaderState} />
               <p
                 className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
                 data-twinly-voice-hint="true"
+                hidden={comfortHeaderState.active && !comfortHeaderState.paused}
               >
                 <span className="hidden min-[480px]:inline">ダブルクリック／長押しで音声入力｜ヘッダー＝2人同時・タブ＝個別</span>
                 <span className="min-[480px]:hidden">ダブルクリック／長押しで音声入力</span>
               </p>
 
               <TabsList
-                data-tutorial="babies"
+                ref={tutorialAnchors.ref("baby-tabs")}
                 className={`twinly-baby-tabs-list grid h-auto w-full gap-1 p-1 min-[430px]:grid-cols-2 ${
                   selectedBabyTab === "A"
                     ? "grid-cols-[minmax(140px,0.85fr)_minmax(180px,1.15fr)]"
@@ -1333,7 +812,7 @@ export default function App() {
               >
                 <TabsTrigger
                   value="A"
-                  data-tutorial="baby-A"
+                  ref={tutorialAnchors.ref("baby-tab:A")}
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("A")}
                   onPointerDown={() => beginVoiceLongPress("A")}
@@ -1345,13 +824,14 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.A}
                   gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={tabGaugePercents.A}
+                  gaugePercents={dashboard.A.tabGaugePercents}
                   activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && sleepingByBaby.A}
+                  sleeping={app.sleepManagementEnabled && dashboard.A.sleeping}
                   selected={selectedBabyTab === "A"}
                 />
                 </TabsTrigger>
                 <TabsTrigger
+                  ref={tutorialAnchors.ref("baby-tab:B")}
                   value="B"
                   className="h-auto px-1 py-0.5"
                   onDoubleClick={() => startVoiceInputForBabyTab("B")}
@@ -1364,9 +844,9 @@ export default function App() {
                 <BabyTabTrigger
                   profile={app.profiles.B}
                   gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={tabGaugePercents.B}
+                  gaugePercents={dashboard.B.tabGaugePercents}
                   activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && sleepingByBaby.B}
+                  sleeping={app.sleepManagementEnabled && dashboard.B.sleeping}
                   selected={selectedBabyTab === "B"}
                 />
                 </TabsTrigger>
@@ -1382,20 +862,27 @@ export default function App() {
             >
             <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
+                tutorialAnchorRef={tutorialAnchors.ref}
+                primaryActionMorph={{
+                  stickyRef: primaryActionStickyRef,
+                  layoutMode,
+                  selected: selectedBabyTab === "A",
+                  primaryInSplit: true,
+                }}
                 profile={app.profiles.A}
-                events={currentEventsByBaby.A}
-                latestEvents={latestEventsByBaby.A}
-                logEvents={logEventsByBaby.A}
+                events={dashboard.A.currentEvents}
+                latestEvents={dashboard.A.latestEvents}
+                logEvents={dashboard.A.logEvents}
                 logDateControls={renderLogDateControls()}
                 logDate={activeDate}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
-                lowStock={lowStock.A}
+                lowStock={dashboard.A.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
-                diaperEstimate={diaperEstimates.A}
-                milkProgress={milkProgressByBaby.A}
+                diaperEstimate={dashboard.A.diaperEstimate}
+                milkProgress={dashboard.A.milkProgress}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onAddEvent={handleAddEvent}
@@ -1404,8 +891,8 @@ export default function App() {
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("A"); setTimelineModalOpen(true); }}
                 onVoiceMessage={showVoiceMessage}
-                lastWeight={lastWeights.A}
-                lastHeight={lastHeights.A}
+                lastWeight={dashboard.A.lastWeight}
+                lastHeight={dashboard.A.lastHeight}
                 themeDimmedBgColor={
                   iconGradients.find((gradient) => gradient.value === app.profiles.A.iconGradient)?.dimmedBgColor ??
                   "bg-background"
@@ -1415,20 +902,27 @@ export default function App() {
             </TabsContent>
             <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
               <BabyPanel
+                tutorialAnchorRef={tutorialAnchors.ref}
+                primaryActionMorph={{
+                  stickyRef: primaryActionStickyRef,
+                  layoutMode,
+                  selected: selectedBabyTab === "B",
+                  primaryInSplit: false,
+                }}
                 profile={app.profiles.B}
-                events={currentEventsByBaby.B}
-                latestEvents={latestEventsByBaby.B}
-                logEvents={logEventsByBaby.B}
+                events={dashboard.B.currentEvents}
+                latestEvents={dashboard.B.latestEvents}
+                logEvents={dashboard.B.logEvents}
                 logDateControls={renderLogDateControls()}
                 logDate={activeDate}
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
-                lowStock={lowStock.B}
+                lowStock={dashboard.B.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
-                diaperEstimate={diaperEstimates.B}
-                milkProgress={milkProgressByBaby.B}
+                diaperEstimate={dashboard.B.diaperEstimate}
+                milkProgress={dashboard.B.milkProgress}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
                 onOpenModal={handleOpenModal}
                 onAddEvent={handleAddEvent}
@@ -1437,8 +931,8 @@ export default function App() {
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("B"); setTimelineModalOpen(true); }}
                 onVoiceMessage={showVoiceMessage}
-                lastWeight={lastWeights.B}
-                lastHeight={lastHeights.B}
+                lastWeight={dashboard.B.lastWeight}
+                lastHeight={dashboard.B.lastHeight}
                 themeDimmedBgColor={
                   iconGradients.find((gradient) => gradient.value === app.profiles.B.iconGradient)?.dimmedBgColor ??
                   "bg-background"
@@ -1476,7 +970,7 @@ export default function App() {
         open={modal?.kind === "milk"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "milk" ? app.profiles[modal.babyId].displayName : ""}
-        isSleeping={modal?.kind === "milk" ? sleepingByBaby[modal.babyId] : false}
+        isSleeping={modal?.kind === "milk" ? dashboard[modal.babyId].sleeping : false}
         initialDraft={milkDraft}
         onSave={onSaveMilk}
         onSaveSolidFood={onSaveSolidFood}
@@ -1485,7 +979,7 @@ export default function App() {
         open={modal?.kind === "diaper"}
         onOpenChange={(open) => !open && setModal(null)}
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
-        isSleeping={modal?.kind === "diaper" ? sleepingByBaby[modal.babyId] : false}
+        isSleeping={modal?.kind === "diaper" ? dashboard[modal.babyId].sleeping : false}
         initialDraft={diaperDraft}
         onSave={onSaveDiaper}
         diaperStockManagementEnabled={app.diaperStockManagementEnabled}
@@ -1509,6 +1003,9 @@ export default function App() {
         blocked={Boolean(modal) || helpModalOpen || accountModalOpen || timelineModalOpen || chartModalOpen || dailyReportModalOpen || Boolean(historyModal)}
         replay={tutorialReplay}
         names={[app.profiles.A.displayName, app.profiles.B.displayName]}
+        anchors={tutorialAnchors}
+        activeBabyId={selectedBabyTab}
+        onOpenSettings={() => handleOpenModal("settings")}
       />
       <HelpModal
         open={helpModalOpen}
@@ -1533,15 +1030,15 @@ export default function App() {
         user={authUser}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
-        pushPermission={pushPermission}
-        pushSubscribed={pushSubscribed}
-        pushBusy={pushBusy}
-        webPushConfigured={Boolean(webPushPublicKey)}
-        onEnablePushNotifications={handleEnablePushNotifications}
-        onDisablePushNotifications={handleDisablePushNotifications}
-        wearPairingToken={wearPairingToken}
-        wearPairingBusy={wearPairingBusy}
-        onCreateWearPairingToken={handleCreateWearPairingToken}
+        pushPermission={pushNotifications.permission}
+        pushSubscribed={pushNotifications.subscribed}
+        pushBusy={pushNotifications.busy}
+        webPushConfigured={pushNotifications.configured}
+        onEnablePushNotifications={pushNotifications.enable}
+        onDisablePushNotifications={pushNotifications.disable}
+        wearPairingToken={wearPairing.token}
+        wearPairingBusy={wearPairing.busy}
+        onCreateWearPairingToken={wearPairing.createPairingToken}
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}
@@ -1583,9 +1080,18 @@ export default function App() {
         }
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;
-          const events = drafts.map(draft => createEvent(draft.babyId, draft.type, { timestamp: draft.timestamp!, ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}), ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}), note: "AI音声・文章解析（確認済み）" }));
-          if (!updateApp(prev => appendEvents(prev, events))) return false;
-          scheduleUndo(events); return true;
+          const eventDrafts: EventDraft[] = drafts.map((draft) => ({
+            babyId: draft.babyId,
+            type: draft.type,
+            payload: {
+              timestamp: draft.timestamp!,
+              ...(draft.type === "milk" ? { milkMl: draft.milkMl } : {}),
+              ...(draft.type === "diaper" ? { diaperKind: draft.diaperKind } : {}),
+              note: "AI音声・文章解析（確認済み）",
+            },
+            autoWake: false,
+          }));
+          return recordEventDrafts(eventDrafts);
         }} />}
       />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}

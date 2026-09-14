@@ -367,5 +367,11 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
       window.removeEventListener("beforeunload", beforeUnload);
     };
   }, [userId, familyId, identity, effectiveAllHistory, setApp, setLoading]);
-  return { store, status };
+
+  const requestSync = () => {
+    store.current?.recheck("pageshow");
+    void store.current?.flush();
+  };
+
+  return { store, status, requestSync };
 }

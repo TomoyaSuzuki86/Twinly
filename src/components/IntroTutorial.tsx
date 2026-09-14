@@ -6,7 +6,8 @@ import { SleepRecordModal } from "./SleepRecordModal";
 import { VoiceCommandButton, type VoiceCommandButtonHandle } from "./VoiceCommandButton";
 import { EventCard } from "./EventCard";
 import { EditModal } from "./EditModal";
-import type { LogEvent } from "@/types";
+import type { BabyId, LogEvent } from "@/types";
+import { EMPTY_TUTORIAL_ANCHORS, resolveTutorialTargetKeys, type TutorialAnchorRegistry } from "@/lib/tutorial-anchors";
 import type { VoiceCommand } from "@/lib/voice-command";
 import { finishTutorial, shouldShowTutorial, type TutorialOutcome } from "@/lib/tutorial-progress";
 import { useBrowserBackDismiss } from "@/lib/use-browser-back-dismiss";
@@ -18,28 +19,13 @@ type Props = {
   blocked: boolean;
   replay: number;
   names: [string, string];
+  anchors?: TutorialAnchorRegistry;
+  activeBabyId?: BabyId;
+  onOpenSettings?: () => void;
 };
 
 type Rect = { top: number; left: number; width: number; height: number };
 type SleepType = "sleepStart" | "wake";
-
-const activePanel = () =>
-  document.querySelector<HTMLElement>('.twinly-baby-tabs-content[data-state="active"]');
-
-const targetResolvers: Array<() => HTMLElement | null> = [
-  () => document.querySelector<HTMLElement>('[data-tutorial="babies"]'),
-  () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="primary-action"]') ?? null,
-  () => null,
-  () => null,
-  () => document.querySelector<HTMLElement>('[data-tutorial="baby-A"]'),
-  () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
-  () => document.querySelector<HTMLElement>('[data-tutorial="header"]'),
-  () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="logs"]') ?? null,
-  () => activePanel()?.querySelector<HTMLElement>('[data-tutorial="log-summary"]') ?? null,
-  () => activePanel()?.querySelector<HTMLElement>('[aria-label="週間タイムラインを開く"]') ?? null,
-  () => null,
-  () => document.querySelector<HTMLElement>('[aria-label="settings"]'),
-];
 
 const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 8, 10, 11];
 const TOTAL_STEPS = tutorialSteps.length;
@@ -60,7 +46,7 @@ const formatClock = (timestamp: number) =>
     hour12: false,
   }).format(new Date(timestamp));
 
-export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
+export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EMPTY_TUTORIAL_ANCHORS, activeBabyId = "A", onOpenSettings }: Props) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [practiced, setPracticed] = useState(false);
@@ -160,7 +146,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
     if (!open || sleepModalOpen || fakeEditOpen) return;
 
     const measure = () => {
-      const target = targetResolvers[step]?.();
+      const targetKeys = resolveTutorialTargetKeys(step, activeBabyId);
+      const target = targetKeys.length ? anchors.get(targetKeys[0]) : null;
       if (scrollTargetIntoView.has(step)) {
         target?.scrollIntoView?.({ block: "center", behavior: "instant" });
       } else if (step !== 2 && step !== 3) {
@@ -186,12 +173,13 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       };
 
       setRect(toRect(box));
-      if (step === 1) {
-        const actionTargets = Array.from(activePanel()?.querySelectorAll<HTMLElement>('[data-tutorial="primary-action"]') ?? []);
-        setExtraRects(actionTargets.slice(1).map((action) => toRect(action.getBoundingClientRect())));
-      } else {
-        setExtraRects([]);
-      }
+      setExtraRects(
+        targetKeys
+          .slice(1)
+          .map((key) => anchors.get(key))
+          .filter((node): node is HTMLElement => Boolean(node))
+          .map((node) => toRect(node.getBoundingClientRect()))
+      );
     };
 
     measure();
@@ -203,7 +191,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
-  }, [open, step, sleepModalOpen, fakeEditOpen]);
+  }, [open, step, sleepModalOpen, fakeEditOpen, anchors, activeBabyId]);
 
   useEffect(() => {
     if (!open) return;
@@ -482,9 +470,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names }: Props) {
   };
 
   const completeAndOpenSettings = () => {
-    const settingsButton = targetResolvers[11]?.();
     finish("completed", () => {
-      window.setTimeout(() => settingsButton?.click(), 0);
+      window.setTimeout(() => onOpenSettings?.(), 0);
     });
   };
 
