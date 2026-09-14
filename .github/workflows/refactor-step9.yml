@@ -1,0 +1,63 @@
+name: Validate STEP 9 tutorial anchors
+
+on:
+  push:
+    branches:
+      - refactor/step-9-tutorial-anchors
+    paths:
+      - scripts/refactor-step9.mjs
+      - .github/workflows/refactor-step9.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Tokyo
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Apply STEP 9 refactor
+        run: node scripts/refactor-step9.mjs
+
+      - name: Verify tutorial no longer queries live DOM structure
+        run: |
+          if grep -q "querySelector" src/components/IntroTutorial.tsx; then
+            echo "IntroTutorial still contains querySelector" >&2
+            exit 1
+          fi
+          if grep -q 'data-tutorial=' src/App.tsx src/components/BabyPanel.tsx; then
+            echo "Legacy tutorial data attributes still exist in production targets" >&2
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test app
+        run: npm test
+
+      - name: Build app
+        run: npm run build
+
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/components/IntroTutorial.tsx src/components/HeaderOverflowMenu.tsx src/components/BabyPanel.tsx src/lib/tutorial-anchors.ts src/lib/tutorial-anchors.test.tsx
+          git commit -m "refactor: use explicit tutorial anchors"
+          git push origin HEAD:refactor/step-9-tutorial-anchors
