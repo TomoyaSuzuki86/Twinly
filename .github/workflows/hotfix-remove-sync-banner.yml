@@ -1,0 +1,57 @@
+name: Remove sync status banner
+
+on:
+  push:
+    branches:
+      - hotfix/remove-sync-banner
+    paths:
+      - .github/workflows/hotfix-remove-sync-banner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: hotfix/remove-sync-banner
+
+      - name: Remove user-facing sync banner
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text()
+
+          start_marker = '              {(syncStatus.pending > 0 || syncStatus.error) && <div'
+          end_marker = '              <p\n                className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"'
+
+          start = text.find(start_marker)
+          if start == -1:
+              raise SystemExit('sync status banner start marker not found')
+          end = text.find(end_marker, start)
+          if end == -1:
+              raise SystemExit('sync status banner end marker not found')
+
+          updated = text[:start] + text[end:]
+          for forbidden in ('端末に保存済み・同期待ち', '未同期を書き出す', '未同期を取り消す'):
+              if forbidden in updated:
+                  raise SystemExit(f'user-facing sync banner text still remains: {forbidden}')
+
+          path.write_text(updated)
+          PY
+
+      - name: Commit hotfix and remove helper workflow
+        shell: bash
+        run: |
+          rm .github/workflows/hotfix-remove-sync-banner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx .github/workflows/hotfix-remove-sync-banner.yml
+          git commit -m "fix: remove sync status banner from home"
+          git push origin HEAD:hotfix/remove-sync-banner
