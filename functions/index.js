@@ -2,6 +2,7 @@ const admin = require("firebase-admin");
 const crypto = require("crypto");
 const { accessFor } = require("./ai-policy");
 const { stockAlerts } = require("./stock-alerts");
+const { buildCareNotificationPayload, buildSleepReminderCandidate } = require("./care-reminders");
 const familyAccess = async (familyId) => {
   const snap = await db.collection("families").doc(familyId).collection("services").doc("access").get();
   // previewPlan is written only after verifying the active family owner.
@@ -740,36 +741,6 @@ const groupCandidatesForNotification = (candidates, nowMs) => {
   return grouped.length ? grouped : [primary];
 };
 
-const buildNotificationPayload = (group) => {
-  if (group.length === 1) {
-    const candidate = group[0];
-    const time = formatReminderTime(candidate.occurredAt);
-    const label = candidate.kind === "milk" ? "ミルク" : "おむつ";
-
-    return {
-      title: `${candidate.displayName}の${label}ゲージが空になりました`,
-      body: `前回の${label}${candidate.kind === "diaper" ? "交換" : ""}は ${time} です`,
-      tag: `care-reminder-${candidate.babyId}-${candidate.kind}-${candidate.eventId}`,
-      url: "/",
-    };
-  }
-
-  const body = group
-    .map((candidate) => {
-      const time = formatReminderTime(candidate.occurredAt);
-      const label = candidate.kind === "milk" ? "ミルク" : "おむつ";
-      return `${candidate.displayName}: ${label}（前回 ${time}）`;
-    })
-    .join("\n");
-
-  return {
-    title: "ケアゲージが空になりました",
-    body,
-    tag: `care-reminder-${group.map((candidate) => `${candidate.babyId}-${candidate.kind}`).join("-")}`,
-    url: "/",
-  };
-};
-
 const sendPushToDevices = async (uid, devices, payload) => {
   const tasks = devices.map(async (device) => {
     try {
@@ -831,8 +802,8 @@ exports.sendMilkReminderNotifications = onSchedule(
     }
     const lastSentByKey = careReminder.lastSentByKey ?? {};
     const legacyLastSentByBaby = milkReminder.lastSentByBaby ?? {};
-    const candidates = ["A", "B"].flatMap((babyId) =>
-      ["milk", "diaper"]
+    const candidates = ["A", "B"].flatMap((babyId) => {
+      const careCandidates = ["milk", "diaper"]
         .map((kind) =>
           buildLatestCareCandidate({
             appState,
@@ -843,8 +814,15 @@ exports.sendMilkReminderNotifications = onSchedule(
             nowMs,
           })
         )
-        .filter(Boolean)
-    );
+        .filter(Boolean);
+      const sleepCandidate = buildSleepReminderCandidate({
+        appState,
+        babyId,
+        lastSentByKey,
+        nowMs,
+      });
+      return sleepCandidate ? [...careCandidates, sleepCandidate] : careCandidates;
+    });
 
     const notificationGroup = groupCandidatesForNotification(candidates, nowMs);
     if (!notificationGroup) continue;
@@ -855,7 +833,7 @@ exports.sendMilkReminderNotifications = onSchedule(
 
     if (!devices.length) continue;
 
-    const payload = buildNotificationPayload(notificationGroup);
+    const payload = buildCareNotificationPayload(notificationGroup, nowMs);
     const sent = await sendPushToDevices(uid, devices, payload);
 
     if (!sent) continue;
