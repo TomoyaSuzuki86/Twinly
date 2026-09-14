@@ -1,0 +1,136 @@
+.twinly-primary-action-morph-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+}
+
+.twinly-primary-action-morph-button {
+  position: absolute !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  transform: none !important;
+  transform-origin: center !important;
+  transition: none !important;
+  overflow: hidden !important;
+  will-change: left, top, width, height, border-radius, box-shadow;
+  -webkit-touch-callout: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] {
+  border-radius: 10px !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  box-shadow: 0 7px 18px rgb(0 0 0 / 0.13) !important;
+}
+
+.twinly-primary-action-morph-button [data-morph-secondary="true"] {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-secondary="true"] {
+  position: absolute !important;
+  opacity: 0 !important;
+  transform: translateY(4px) !important;
+  pointer-events: none !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="care-content"] {
+  display: flex !important;
+  height: 100% !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4px !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="care-content"] > :first-child {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="care-content"] svg,
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="sleep-state"] svg {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] > span.relative.z-10 {
+  display: flex !important;
+  height: 100% !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="sleep-state"] {
+  display: flex !important;
+  height: 100% !important;
+  width: 100% !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 4px !important;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="sleep-state"] > :first-child {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.twinly-primary-action-morph-percent {
+  position: absolute;
+  z-index: 15;
+  right: 5px;
+  bottom: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.twinly-primary-action-morph-button[data-morph-compact="true"] .twinly-primary-action-morph-percent {
+  opacity: 0.72;
+}
+
+@media (min-width: 1180px) {
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] {
+    font-size: 12px !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="care-content"] > :first-child,
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] [data-morph-role="sleep-state"] > :first-child {
+    font-size: 12px !important;
+    gap: 3px !important;
+  }
+
+  html[data-twinly-layout="split"] .twinly-primary-action-morph-button[data-morph-compact="true"] svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .twinly-primary-action-morph-button [data-morph-secondary="true"],
+  .twinly-primary-action-morph-percent {
+    transition: none !important;
+  }
+}
