@@ -20,9 +20,9 @@ const SUCCESS_HOLD_MS = 850;
 const SETTLE_TIMEOUT_MS = 16_000;
 
 const toSignals = (status: StoreStatus): ManualSyncSignals => ({
-  checking: Boolean(status.checking),
-  routineStatus: status.pending > 0,
-  syncMessage: status.error ?? undefined,
+  checking: Boolean(status.ready && status.checking && !status.error && status.pending === 0),
+  routineStatus: false,
+  syncMessage: status.ready && status.error ? status.error : undefined,
 });
 
 export function ManualSyncButton({ status, onSync }: Props) {
@@ -79,17 +79,20 @@ export function ManualSyncButton({ status, onSync }: Props) {
 
   const automaticSyncing = shouldShowAutomaticSyncSpinner(toSignals(status), !status.ready);
   const syncing = manualState === "syncing" || (manualState === "idle" && automaticSyncing);
+  const visualState: ManualState = syncing ? "syncing" : manualState;
   const stopHeaderGesture = (event: SyntheticEvent) => event.stopPropagation();
 
   return (
     <Button
+      id="twinly-manual-sync-button"
+      data-state={visualState}
       variant="ghost"
       size="icon"
       type="button"
       aria-label="同期"
       aria-busy={syncing}
       title="同期"
-      disabled={manualState === "syncing"}
+      disabled={syncing}
       onClick={(event) => {
         event.stopPropagation();
         startManualSync();
@@ -99,9 +102,8 @@ export function ManualSyncButton({ status, onSync }: Props) {
       onPointerCancel={stopHeaderGesture}
       onDoubleClick={stopHeaderGesture}
       onContextMenu={stopHeaderGesture}
-      className={manualState === "success" ? "rounded-full bg-green-500 text-white hover:bg-green-500 hover:text-white" : undefined}
     >
-      <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+      <RefreshCw className="h-4 w-4" />
     </Button>
   );
 }
