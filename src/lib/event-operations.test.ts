@@ -80,4 +80,26 @@ describe("voice event draft conversion", () => {
     expect(drafts.every((draft) => draft.payload?.sharedDailyId === "shared-voice")).toBe(true);
     expect(drafts.every((draft) => draft.autoWake === false)).toBe(true);
   });
+
+  it("keeps a split-tab voice command scoped to the requested baby only", () => {
+    const drafts = createVoiceEventDrafts(
+      {
+        kind: "event",
+        babyId: "B",
+        type: "milk",
+        milkMl: 180,
+        timestamp: 1234,
+        note: "voice: ミルク180",
+      },
+      () => "unexpected-extra-id"
+    );
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      babyId: "B",
+      type: "milk",
+      payload: expect.objectContaining({ milkMl: 180 }),
+    });
+    expect(drafts.some((draft) => draft.babyId === "A")).toBe(false);
+  });
 });

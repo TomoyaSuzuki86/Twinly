@@ -203,10 +203,14 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
   };
 
   const startListening = (forcedBabyId: VoiceCommandTarget = "both") => {
+    // A single user gesture can occasionally surface through more than one handler on
+    // slower devices. Never let a duplicate start abort an active baby-specific session
+    // and silently retarget the replacement session to the default "both" target.
+    if (keepListeningRef.current || recognitionRef.current) return;
+
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
     clearTimers();
-    recognitionRef.current?.abort();
     latestTranscriptsRef.current = [];
     forcedBabyIdRef.current = forcedBabyId;
     keepListeningRef.current = true;
