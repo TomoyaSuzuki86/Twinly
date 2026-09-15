@@ -8,6 +8,7 @@ import {
   subscribeFamilyAccessBootstrap,
 } from "@/lib/family-access-bootstrap";
 import { AppStore, type StoreStatus } from "./app-store";
+import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
 import { applyAppStorePresentation } from "./app-store-presentation";
 import { createFirestoreAppRepository } from "./firestore-app-repository";
 
@@ -107,39 +108,18 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
       setLoading(false);
     }
 
-    const recheck = (reason: "online" | "visibility" | "pageshow") => {
-      store.current?.recheck(reason);
-      void store.current?.flush();
-    };
-    const onOnline = () => recheck("online");
-    const onVisible = () => { if (document.visibilityState === "visible") recheck("visibility"); };
-    const onPageShow = () => recheck("pageshow");
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (store.current?.hasPending) { event.preventDefault(); event.returnValue = ""; }
-    };
-    const scopeKey = `twinly-outbox:${userId}:${familyId}`;
-    const outboxPrefix = `${scopeKey}:`;
-    const confirmedPrefix = `${scopeKey}.confirmed:`;
-    const conflictPrefix = `${scopeKey}.conflict:`;
-    const refresh = (event: StorageEvent) => {
-      if (event.key === null || event.key.startsWith(outboxPrefix) || event.key.startsWith(confirmedPrefix) ||
-        event.key.startsWith(conflictPrefix)) store.current?.refresh();
-    };
-    window.addEventListener("storage", refresh);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("pageshow", onPageShow);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("beforeunload", beforeUnload);
+    const stopLifecycle = subscribeAppStoreLifecycle({
+      userId,
+      familyId,
+      getStore: () => store.current,
+    });
+
     return () => {
       stopped = true;
       stop();
       stopAccessBootstrap();
       store.current = null;
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("pageshow", onPageShow);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("beforeunload", beforeUnload);
+      stopLifecycle();
     };
   }, [userId, familyId, identity, effectiveAllHistory, setApp, setLoading]);
 
