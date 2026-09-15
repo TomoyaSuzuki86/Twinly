@@ -4,6 +4,18 @@ const MIN_ACTIVITY_LIMIT_MINUTES = 30;
 const MAX_ACTIVITY_LIMIT_MINUTES = 12 * 60;
 const DEFAULT_ACTIVITY_LIMIT_MINUTES = 180;
 
+const ACTIVITY_LIMIT_BY_AGE = [
+  { beforeMonths: 1, minutes: 60 },
+  { beforeMonths: 2, minutes: 90 },
+  { beforeMonths: 3, minutes: 120 },
+  { beforeMonths: 5, minutes: 150 },
+  { beforeMonths: 6, minutes: 180 },
+  { beforeMonths: 9, minutes: 240 },
+  { beforeMonths: 10, minutes: 270 },
+  { beforeMonths: 15, minutes: 300 },
+  { beforeMonths: Number.POSITIVE_INFINITY, minutes: 360 },
+];
+
 const tokyoDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Tokyo",
   year: "numeric",
@@ -39,15 +51,10 @@ const getDefaultActivityLimitMinutes = (birthDate, nowMs) => {
   if (now.day < birthDay) completedMonths -= 1;
   if (completedMonths < 0) return DEFAULT_ACTIVITY_LIMIT_MINUTES;
 
-  if (completedMonths < 1) return 60;
-  if (completedMonths < 2) return 90;
-  if (completedMonths < 3) return 120;
-  if (completedMonths < 5) return 150;
-  if (completedMonths < 6) return 180;
-  if (completedMonths < 9) return 240;
-  if (completedMonths < 10) return 270;
-  if (completedMonths < 15) return 300;
-  return 360;
+  return (
+    ACTIVITY_LIMIT_BY_AGE.find(({ beforeMonths }) => completedMonths < beforeMonths)?.minutes ??
+    DEFAULT_ACTIVITY_LIMIT_MINUTES
+  );
 };
 
 const buildActivityPercentAt = (analysis, atMs, limitMinutes) => {
@@ -87,6 +94,7 @@ const buildActivityPercentAt = (analysis, atMs, limitMinutes) => {
 };
 
 module.exports = {
+  ACTIVITY_LIMIT_BY_AGE,
   DEFAULT_ACTIVITY_LIMIT_MINUTES,
   FULL_ACTIVITY_RECOVERY_MINUTES,
   MAX_ACTIVITY_LIMIT_MINUTES,
