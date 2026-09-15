@@ -18,8 +18,8 @@ jobs:
           ref: refactor/app-event-operations
           fetch-depth: 0
       - name: Apply focused App.tsx refactor
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('src/App.tsx')
@@ -58,67 +58,67 @@ jobs:
 
           replace_once(
               '''  const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
-  const [undo, setUndo] = useState<{
-    open: boolean;
-    events?: LogEvent[];
-    transcript?: string;
-    retryVoice?: boolean;
-  }>({ open: false });
-  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
-  const undoTimerRef = useRef<number | null>(null);
-  const voiceTimerRef = useRef<number | null>(null);
-  const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
-  const voiceLongPressTimerRef = useRef<number | null>(null);
-''',
+          const [undo, setUndo] = useState<{
+            open: boolean;
+            events?: LogEvent[];
+            transcript?: string;
+            retryVoice?: boolean;
+          }>({ open: false });
+          const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+          const undoTimerRef = useRef<number | null>(null);
+          const voiceTimerRef = useRef<number | null>(null);
+          const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
+          const voiceLongPressTimerRef = useRef<number | null>(null);
+          '''.replace('          ', ''),
               '''  const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
-  const {
-    voiceMessage,
-    voiceButtonRef,
-    showVoiceMessage,
-    startVoiceInput,
-    startVoiceInputForBabyTab,
-    beginVoiceLongPress,
-    clearVoiceLongPress,
-  } = useVoiceInteraction(setSelectedBabyTab);
-'''
+          const {
+            voiceMessage,
+            voiceButtonRef,
+            showVoiceMessage,
+            startVoiceInput,
+            startVoiceInputForBabyTab,
+            beginVoiceLongPress,
+            clearVoiceLongPress,
+          } = useVoiceInteraction(setSelectedBabyTab);
+          '''.replace('          ', '')
           )
 
           replace_once('    setUndo({ open: false });\n\n    if (user) {', '    resetUndo();\n\n    if (user) {')
 
           start = text.index('  const scheduleUndo = (events:')
           end_marker = '''  const editTarget = useMemo(() => {
-    if (!modal || modal.kind !== "edit") return null;
-    return app.events.find((event) => event.id === modal.eventId) ?? null;
-  }, [modal, app.events]);
+            if (!modal || modal.kind !== "edit") return null;
+            return app.events.find((event) => event.id === modal.eventId) ?? null;
+          }, [modal, app.events]);
 
-'''
+          '''.replace('          ', '')
           end = text.index(end_marker, start) + len(end_marker)
           replacement = '''  const {
-    undo,
-    dismissUndo,
-    resetUndo,
-    recordEventDrafts,
-    handleAddEvent,
-    onSaveMilk,
-    onSaveSolidFood,
-    onSaveDiaper,
-    handleVoiceCommand,
-    onSaveEdit,
-    saveSleepEventAt,
-    removeEvent,
-    undoLast,
-    retryLastVoiceInput,
-    editTarget,
-  } = useEventOperations({
-    actorUid: authUser?.uid,
-    app,
-    modal,
-    idFactory: uid,
-    updateApp,
-    retryVoiceInput: startVoiceInput,
-  });
+            undo,
+            dismissUndo,
+            resetUndo,
+            recordEventDrafts,
+            handleAddEvent,
+            onSaveMilk,
+            onSaveSolidFood,
+            onSaveDiaper,
+            handleVoiceCommand,
+            onSaveEdit,
+            saveSleepEventAt,
+            removeEvent,
+            undoLast,
+            retryLastVoiceInput,
+            editTarget,
+          } = useEventOperations({
+            actorUid: authUser?.uid,
+            app,
+            modal,
+            idFactory: uid,
+            updateApp,
+            retryVoiceInput: startVoiceInput,
+          });
 
-'''
+          '''.replace('          ', '')
           text = text[:start] + replacement + text[end:]
 
           replace_once('    setUndo({ open: false });\n  };\n\n  const onUpdateDiaperStock', '    resetUndo();\n  };\n\n  const onUpdateDiaperStock')
@@ -126,13 +126,13 @@ jobs:
           stock_start = text.index('  const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {')
           stock_end_marker = '''  };
 
-  const handleProfileSetup'''
+          const handleProfileSetup'''.replace('          ', '')
           stock_end = text.index(stock_end_marker, stock_start) + len('  };\n\n')
           stock_replacement = '''  const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
-    updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
-  };
+            updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
+          };
 
-'''
+          '''.replace('          ', '')
           text = text[:stock_start] + stock_replacement + text[stock_end:]
 
           replace_once('                onDoubleClick={() => voiceButtonRef.current?.startListening()}\n', '                onDoubleClick={startVoiceInput}\n')
@@ -140,6 +140,7 @@ jobs:
           replace_once('        onClose={() => setUndo({ open: false })}\n', '        onClose={dismissUndo}\n')
 
           path.write_text(text)
+          PY
       - name: Commit refactor
         run: |
           git config user.name "github-actions[bot]"
