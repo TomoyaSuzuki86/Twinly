@@ -72,9 +72,9 @@ import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/
 import { usePushNotifications } from "./lib/use-push-notifications";
 import { useWearPairing } from "./lib/use-wear-pairing";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
+import { useAppClock } from "./lib/use-app-clock";
 
 const createEmptyState = () => createInitialAppState(new Date());
-const AUTO_REFRESH_MS = 60 * 1000;
 const FAMILY_INVITE_KEY = "twinly-family-invite";
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
 const isCareEventType = (type: EventType) => type === "milk" || type === "solidFood" || type === "diaper";
@@ -105,13 +105,12 @@ export default function App() {
   const [tutorialReplay, setTutorialReplay] = useState(0);
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
-  const [now, setNow] = useState(() => new Date());
+  const { now, todayDate, refreshNow, resetClock } = useAppClock(setActiveDate);
   const [family, setFamily] = useState<FamilyInfo | null>(null);
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [appLoading, setAppLoading] = useState(true);
-  const todayDate = fmtDate(now);
 
   const [modal, setModal] = useState<
     | { kind: "milk"; babyId: BabyId }
@@ -143,7 +142,6 @@ export default function App() {
   const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
   const voiceLongPressTimerRef = useRef<number | null>(null);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
-  const lastKnownTodayRef = useRef(todayDate);
   const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -190,8 +188,7 @@ export default function App() {
     setFamilyMembers([]);
     setApp(nextState);
     setActiveDate(nextState.ui.lastViewedDate);
-    setNow(new Date());
-    lastKnownTodayRef.current = nextState.ui.lastViewedDate;
+    resetClock(nextState.ui.lastViewedDate);
     setAppLoading(false);
   };
 
@@ -248,39 +245,13 @@ export default function App() {
     try {
       if (!store.current) throw new Error("記録を読み込んでいます。");
       store.current.update(updater, options);
-      setNow(new Date());
+      refreshNow();
       return true;
     } catch (error) {
       alert(error instanceof Error ? error.message : "端末に保存できませんでした。空き容量を確認してください。");
       return false;
     }
   };
-
-  useEffect(() => {
-    const refreshNow = () => setNow(new Date());
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") refreshNow();
-    };
-    const intervalId = window.setInterval(refreshNow, AUTO_REFRESH_MS);
-    window.addEventListener("focus", refreshNow);
-    window.addEventListener("pageshow", refreshNow);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshNow);
-      window.removeEventListener("pageshow", refreshNow);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const previousToday = lastKnownTodayRef.current;
-    if (todayDate !== previousToday) {
-      setActiveDate((current) => (current === previousToday ? todayDate : current));
-      lastKnownTodayRef.current = todayDate;
-    }
-  }, [todayDate]);
 
   useEffect(() => {
     if (!family) return;
