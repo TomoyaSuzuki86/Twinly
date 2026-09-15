@@ -39,10 +39,12 @@ const createRecordedEvent = (
   const recordedAt = now();
 
   return {
+    ...draft.payload,
+    // Routing and audit fields are authoritative. A stale or malformed payload must
+    // never redirect a record to the other baby (especially when both panels are mounted).
     id: idFactory(),
     babyId: draft.babyId,
     type: draft.type,
-    ...draft.payload,
     createdByUid: actorUid,
     updatedByUid: actorUid,
     createdAt: recordedAt,
