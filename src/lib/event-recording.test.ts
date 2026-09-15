@@ -35,6 +35,41 @@ describe("buildRecordedEvents", () => {
     ]);
   });
 
+  it("keeps routing fields authoritative even if a payload contains stale target data", () => {
+    let id = 0;
+    const events = buildRecordedEvents({
+      existingEvents: [],
+      drafts: [
+        {
+          babyId: "A",
+          type: "milk",
+          payload: {
+            id: "stale-id",
+            babyId: "B",
+            type: "wake",
+            timestamp: 1234,
+            milkMl: 180,
+            createdByUid: "stale-user",
+          },
+        },
+      ],
+      actorUid: "user-1",
+      idFactory: () => `event-${++id}`,
+      now: () => 9999,
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        id: "event-1",
+        babyId: "A",
+        type: "milk",
+        milkMl: 180,
+        createdByUid: "user-1",
+      })
+    );
+  });
+
   it("adds one automatic wake before a care event when requested", () => {
     let id = 0;
     const startedAt = Date.parse("2026-09-14T10:00:00+09:00");
