@@ -1,5 +1,6 @@
 const { stockAlerts } = require("./stock-alerts");
 const { buildCareNotificationPayload, buildSleepReminderCandidate } = require("./care-reminders");
+const { resolveMilkWindowHours } = require("./milk-window-policy");
 const { readApp } = require("./app-storage");
 const webpush = require("web-push");
 const { defineSecret } = require("firebase-functions/params");
@@ -7,19 +8,12 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
-const defaultMilkGaugeWindowHours = 3;
 const diaperGaugeWindowMinutes = 120;
 const webPushPrivateKey = defineSecret("TWINLY_WEB_PUSH_PRIVATE_KEY");
 const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
 const subject = "mailto:no-reply@twinly.local";
 
 module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
-  const clampMilkGaugeWindowHours = (value) => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return defaultMilkGaugeWindowHours;
-    return Math.max(0.5, Math.min(12, parsed));
-  };
-  
   const buildLatestCareCandidate = ({ appState, babyId, kind, lastSentByKey, legacyLastSentByBaby, nowMs }) => {
     const events = Array.isArray(appState?.events) ? appState.events : [];
     const profiles = appState?.profiles ?? {};
@@ -42,7 +36,7 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
   
     const intervalMs =
       kind === "milk"
-        ? clampMilkGaugeWindowHours(profiles[babyId]?.milkGaugeWindowHours) * 60 * 60 * 1000
+        ? resolveMilkWindowHours(profiles[babyId]?.milkGaugeWindowHours) * 60 * 60 * 1000
         : diaperGaugeWindowMinutes * 60 * 1000;
     const dueAt = latestEvent.timestamp + intervalMs;
   
