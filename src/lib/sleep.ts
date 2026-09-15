@@ -1,4 +1,7 @@
 import { BabyId, LogEvent } from "@/types";
+import { buildActivityPercentAt, clampActivityLimitMinutes } from "./activity-policy";
+
+export { getDefaultActivityLimitMinutes } from "./activity-policy";
 
 export type SleepInterval = {
   start: number;
@@ -49,25 +52,6 @@ const parseLocalDate = (value: string) => {
   if (!match) return null;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   return Number.isNaN(date.getTime()) ? null : date;
-};
-
-export const getDefaultActivityLimitMinutes = (birthDate: string, now: Date) => {
-  const birth = parseLocalDate(birthDate);
-  if (!birth || birth.getTime() > now.getTime()) return 180;
-
-  let completedMonths =
-    (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
-  if (now.getDate() < birth.getDate()) completedMonths -= 1;
-
-  if (completedMonths < 1) return 60;
-  if (completedMonths < 2) return 90;
-  if (completedMonths < 3) return 120;
-  if (completedMonths < 5) return 150;
-  if (completedMonths < 6) return 180;
-  if (completedMonths < 9) return 240;
-  if (completedMonths < 10) return 270;
-  if (completedMonths < 15) return 300;
-  return 360;
 };
 
 export const getDefaultSleepTargetHours = (birthDate: string, now: Date) => {
@@ -285,15 +269,12 @@ export const getAverageActivityMinutes = (
     : null;
 };
 
-const FULL_ACTIVITY_RECOVERY_MINUTES = 30;
-const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
-
 export const buildActivityGauge = (
   analysis: SleepAnalysis,
   now: Date,
   limitMinutes: number
 ): ActivityGauge => {
-  const normalizedLimitMinutes = Math.max(30, Math.min(12 * 60, limitMinutes));
+  const normalizedLimitMinutes = clampActivityLimitMinutes(limitMinutes);
   const nowMs = now.getTime();
   const completedIntervals = analysis.intervals
     .filter((interval) => interval.end > interval.start && interval.end <= nowMs)
@@ -318,47 +299,12 @@ export const buildActivityGauge = (
     };
   }
 
-  // Activity load grows while awake and recovers while asleep. Thirty minutes of
-  // sleep always restores 100% of the gauge, while awake growth remains tied to
-  // the baby's current activity limit. Clamp after every segment so sequence
-  // matters: 15m sleep -> 5m awake -> 15m sleep becomes 50% -> ~54% -> ~4%.
-  let activityPercent = 100;
-  let cursor = completedIntervals[0].start;
-
-  for (const interval of completedIntervals) {
-    if (interval.start > cursor) {
-      const awakeMinutes = (interval.start - cursor) / (60 * 1000);
-      activityPercent = clampPercent(
-        activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
-      );
-    }
-
-    const sleepMinutes = (interval.end - interval.start) / (60 * 1000);
-    activityPercent = clampPercent(
-      activityPercent - (sleepMinutes / FULL_ACTIVITY_RECOVERY_MINUTES) * 100
-    );
-    cursor = interval.end;
-  }
-
-  const currentSleepStart = analysis.currentSleepStart?.timestamp;
-  if (typeof currentSleepStart === "number" && currentSleepStart <= nowMs) {
-    if (currentSleepStart > cursor) {
-      const awakeMinutes = (currentSleepStart - cursor) / (60 * 1000);
-      activityPercent = clampPercent(
-        activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
-      );
-    }
-
-    const currentSleepMinutes = (nowMs - currentSleepStart) / (60 * 1000);
-    activityPercent = clampPercent(
-      activityPercent - (currentSleepMinutes / FULL_ACTIVITY_RECOVERY_MINUTES) * 100
-    );
-  } else if (nowMs > cursor) {
-    const awakeMinutes = (nowMs - cursor) / (60 * 1000);
-    activityPercent = clampPercent(
-      activityPercent + (awakeMinutes / normalizedLimitMinutes) * 100
-    );
-  }
+  const activityPercent = buildActivityPercentAt({
+    intervals: analysis.intervals,
+    currentSleepStartAt: analysis.currentSleepStart?.timestamp,
+    atMs: nowMs,
+    limitMinutes: normalizedLimitMinutes,
+  });
 
   return {
     limitMinutes: normalizedLimitMinutes,
