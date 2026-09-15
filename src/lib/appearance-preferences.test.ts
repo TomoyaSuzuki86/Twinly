@@ -27,10 +27,10 @@ describe("appearance preferences", () => {
     expect(resolveAppliedTheme("unknown", true)).toBe("dark");
   });
 
-  it("only restores the split layout when the stored value is exactly split", () => {
+  it("defaults an unset layout to split while preserving explicit user choices", () => {
     expect(parseStoredLayoutMode("split")).toBe("split");
     expect(parseStoredLayoutMode("single")).toBe("single");
-    expect(parseStoredLayoutMode(null)).toBe("single");
-    expect(parseStoredLayoutMode("unknown")).toBe("single");
+    expect(parseStoredLayoutMode(null)).toBe("split");
+    expect(parseStoredLayoutMode("unknown")).toBe("split");
   });
 });
