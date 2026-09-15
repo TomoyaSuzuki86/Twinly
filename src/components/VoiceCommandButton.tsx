@@ -211,7 +211,6 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     const sessionId = sessionIdRef.current + 1;
     sessionIdRef.current = sessionId;
     clearTimers();
-    recognitionRef.current?.abort();
     latestTranscriptsRef.current = [];
     forcedBabyIdRef.current = forcedBabyId;
     keepListeningRef.current = true;
