@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/firebase";
-import { callService, FamilyAccess } from "./ai";
+import {
+  canSubscribeFamilyAccessChanges,
+  getFamilyAccess,
+  subscribeFamilyAccessChanges,
+  type FamilyAccess,
+} from "./family-access";
 import {
   beginFamilyAccessBootstrap,
   completeFamilyAccessBootstrap,
@@ -26,7 +29,7 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
   const key = `${uid}:${familyId}`;
 
   useEffect(() => {
-    if (!uid || !familyId || !db) return;
+    if (!uid || !familyId || !canSubscribeFamilyAccessChanges()) return;
 
     let active = true;
     let revision = 0;
@@ -34,7 +37,7 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
 
     const refresh = () => {
       const currentRevision = ++revision;
-      callService<FamilyAccess>("getFamilyAccess")
+      getFamilyAccess()
         .then((access) => {
           if (!active || currentRevision !== revision) return;
           setState({ key, access, error: "" });
@@ -51,8 +54,8 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
         });
     };
 
-    const stop = onSnapshot(
-      doc(db, "families", familyId, "services", "access"),
+    const stop = subscribeFamilyAccessChanges(
+      familyId,
       refresh,
       () => {
         if (!active) return;
