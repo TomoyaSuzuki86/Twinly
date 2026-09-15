@@ -111,9 +111,9 @@ export const buildDashboardSelectors = (
           diaper: Math.round(
             (1 - (careGauges.diaper?.level ?? (hasDiaperRecord ? 1 : 0))) * 100
           ),
-          // buildActivityGauge already accounts for an active sleep interval, so the
-          // tab gauge should recover gradually instead of dropping to zero immediately.
-          activity: buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
+          activity: sleeping
+            ? 0
+            : buildActivityGauge(sleepAnalysis, now, activityLimitMinutes).elapsedPercent,
         },
       };
 

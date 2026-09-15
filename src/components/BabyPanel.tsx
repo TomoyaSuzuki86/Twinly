@@ -40,10 +40,12 @@ import { VoiceCommandButton } from "./VoiceCommandButton";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
+  buildSleepGauge,
   buildSleepLogSummary,
   formatSleepDuration,
   getAverageActivityMinutes,
   getDefaultActivityLimitMinutes,
+  getDefaultSleepTargetHours,
 } from "@/lib/sleep";
 
 type BabyPanelProps = {
@@ -194,7 +196,12 @@ export function BabyPanel({
     averageGaugeActivityMinutes ??
     getDefaultActivityLimitMinutes(profile.birthDate, now);
   const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
-  const sleepButtonGaugePercent = activityGauge.elapsedPercent;
+  const sleepTargetHours =
+    profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
+  const sleepGauge = buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours);
+  const sleepButtonGaugePercent = sleeping
+    ? sleepGauge.remainingPercent
+    : activityGauge.elapsedPercent;
   const latestCompletedSleep = sleepAnalysis.intervals.reduce(
     (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
     null as (typeof sleepAnalysis.intervals)[number] | null
@@ -426,7 +433,7 @@ export function BabyPanel({
       }}
       aria-label={!gaugesEnabled ? (sleeping ? "起床を記録・長押しで時刻指定" : "入眠を記録・長押しで時刻指定") : `${sleeping ? "起床を記録" : "入眠を記録"}・長押しで時刻指定・${
         sleeping
-          ? `活動負荷${activityGauge.elapsedPercent}%・睡眠で回復中`
+          ? `必要睡眠時間の残り${sleepGauge.remainingPercent}%`
           : `活動時間経過${activityGauge.elapsedPercent}%`
       }`}
     >
@@ -504,7 +511,6 @@ export function BabyPanel({
   return (
     <Card
       ref={primaryActionBoundsRef}
-      data-baby-id={babyId}
       className={`twinly-baby-panel flex flex-col border-border/60 ${themeDimmedBgColor} ${
         sleeping ? "ring-1 ring-indigo-400/60" : ""
       }`}
@@ -863,3 +869,4 @@ export function BabyPanel({
     </Card>
   );
 }
+
