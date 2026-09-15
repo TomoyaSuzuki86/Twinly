@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AppState, BabyId, DiaperKind, LogEvent } from "@/types";
+import type { AppState, DiaperKind, LogEvent } from "@/types";
 import type { AppModal } from "./use-app-modal-controller";
 import { createEventRecordingController, isCareEventType } from "./event-recording-controller";
 import { editEventGroup, removeEventGroup, removeEvents } from "./event-mutations";
@@ -66,11 +66,7 @@ export const useEventOperations = ({
   };
 
   const dismissUndo = () => setUndo({ open: false });
-
-  const resetUndo = () => {
-    clearUndoTimer();
-    setUndo({ open: false });
-  };
+  const resetUndo = () => setUndo({ open: false });
 
   const scheduleUndo = (
     events: LogEvent | LogEvent[],
@@ -81,7 +77,12 @@ export const useEventOperations = ({
     undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
   };
 
-  useEffect(() => () => clearUndoTimer(), []);
+  useEffect(
+    () => () => {
+      if (undoTimerRef.current !== null) window.clearTimeout(undoTimerRef.current);
+    },
+    []
+  );
 
   const {
     recordEventDrafts,
@@ -166,7 +167,8 @@ export const useEventOperations = ({
     const undoIds = new Set(undo.events.map((event) => event.id));
     if (!updateApp((previous) => removeEvents(previous, undoIds))) return false;
 
-    resetUndo();
+    setUndo({ open: false });
+    clearUndoTimer();
     return true;
   };
 
