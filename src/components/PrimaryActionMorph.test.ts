@@ -55,6 +55,34 @@ describe("PrimaryActionMorph geometry", () => {
     expect(frame.sleep?.interactive).toBe(true);
   });
 
+  it("keeps each split panel's compact actions inside its own bounds", () => {
+    const leftFrame = calculatePrimaryActionMorphFrame({
+      stickyBottom: 336,
+      bounds: { left: 0, width: 560 },
+      foodRect: rect(20, 200, 250, 112),
+      diaperRect: rect(286, 200, 250, 112),
+      sleepRect: rect(20, 324, 516, 80),
+      splitLayoutActive: true,
+    });
+    const rightFrame = calculatePrimaryActionMorphFrame({
+      stickyBottom: 336,
+      bounds: { left: 580, width: 560 },
+      foodRect: rect(600, 200, 250, 112),
+      diaperRect: rect(866, 200, 250, 112),
+      sleepRect: rect(600, 324, 516, 80),
+      splitLayoutActive: true,
+    });
+
+    expect(leftFrame.food.rect.left).toBe(4);
+    expect(rightFrame.food.rect.left).toBe(584);
+    expect(leftFrame.food.rect.width).toBeCloseTo(leftFrame.diaper.rect.width);
+    expect(leftFrame.food.rect.width).toBeCloseTo(leftFrame.sleep!.rect.width);
+    expect(rightFrame.food.rect.width).toBeCloseTo(rightFrame.diaper.rect.width);
+    expect(rightFrame.food.rect.width).toBeCloseTo(rightFrame.sleep!.rect.width);
+    expect(leftFrame.sleep!.rect.left + leftFrame.sleep!.rect.width).toBeCloseTo(556);
+    expect(rightFrame.sleep!.rect.left + rightFrame.sleep!.rect.width).toBeCloseTo(1136);
+  });
+
   it("keeps two equal slots when sleep management is disabled", () => {
     const frame = calculatePrimaryActionMorphFrame({
       stickyBottom: 336,
