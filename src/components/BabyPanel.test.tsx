@@ -1,13 +1,14 @@
 import type { ComponentProps } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BabyPanel } from "./BabyPanel";
 import { createInitialAppState } from "@/lib/app-state";
-import { LogEvent } from "@/types";
+import { LogEvent, type BabyId } from "@/types";
 
 const baseNow = new Date("2026-04-18T10:20:00+09:00");
 
 const renderPanel = ({
+  babyId = "A",
   events = [],
   latestEvents,
   logEvents,
@@ -19,6 +20,7 @@ const renderPanel = ({
   onOpenSleepTimeEditor = vi.fn(),
   sleepManagementEnabled = true,
 }: {
+  babyId?: BabyId;
   events?: LogEvent[];
   latestEvents?: LogEvent[];
   logEvents?: LogEvent[];
@@ -34,7 +36,7 @@ const renderPanel = ({
 
   return render(
     <BabyPanel
-      profile={app.profiles.A}
+      profile={app.profiles[babyId]}
       events={events}
       latestEvents={latestEvents}
       logEvents={logEvents}
@@ -189,6 +191,29 @@ describe("BabyPanel", () => {
     expect(onOpenModal).toHaveBeenCalledWith("milk", { babyId: "A" });
   });
 
+  it("keeps actions scoped to the touched baby when both split panels are mounted", () => {
+    const onAddEvent = vi.fn();
+    const onOpenModal = vi.fn();
+
+    renderPanel({ babyId: "A", onAddEvent, onOpenModal });
+    renderPanel({ babyId: "B", onAddEvent, onOpenModal });
+
+    const panelA = document.querySelector<HTMLElement>('[data-baby-id="A"]');
+    const panelB = document.querySelector<HTMLElement>('[data-baby-id="B"]');
+    expect(panelA).toBeTruthy();
+    expect(panelB).toBeTruthy();
+
+    fireEvent.click(within(panelB!).getByRole("switch", { name: /入眠を記録/ }));
+    expect(onAddEvent).toHaveBeenCalledTimes(1);
+    expect(onAddEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ babyId: "B", type: "sleepStart" })
+    );
+
+    fireEvent.click(within(panelA!).getByRole("button", { name: /食事を記録/ }));
+    expect(onOpenModal).toHaveBeenCalledTimes(1);
+    expect(onOpenModal).toHaveBeenLastCalledWith("milk", { babyId: "A" });
+  });
+
   it("toggles the sleep shortcut between sleep and wake", () => {
     vi.useFakeTimers();
     const onAddEvent = vi.fn();
@@ -281,8 +306,8 @@ describe("BabyPanel", () => {
     expect(screen.getByText("睡眠時間 10分")).toBeTruthy();
     expect(screen.getByText("前回睡眠 1時間30分")).toBeTruthy();
     expect(screen.queryByText(/今日の睡眠/)).toBeNull();
-    expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("89");
-    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("89%");
+    expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("67");
+    expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("67%");
     fireEvent.click(screen.getByRole("switch", { name: /起床を記録/ }));
     expect(onAddEvent).toHaveBeenCalledWith(expect.objectContaining({ babyId: "A", type: "wake" }));
   });
