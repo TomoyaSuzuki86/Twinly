@@ -29,7 +29,7 @@ describe("buildDashboardSelectors split-layout invariants", () => {
     expect(dashboard.B.latestEvents.every((event) => event.babyId === "B")).toBe(true);
   });
 
-  it("recovers the activity gauge gradually during an active sleep", () => {
+  it("hides the activity tab gauge while the baby is sleeping", () => {
     const now = new Date("2026-04-18T10:20:00+09:00");
     const app = createInitialAppState(now);
     app.profiles.A.activityLimitMinutesOverride = 120;
@@ -42,7 +42,7 @@ describe("buildDashboardSelectors split-layout invariants", () => {
     const dashboard = buildDashboardSelectors(app, "2026-04-18", "2026-04-18", now);
 
     expect(dashboard.A.sleeping).toBe(true);
-    expect(dashboard.A.tabGaugePercents.activity).toBe(50);
+    expect(dashboard.A.tabGaugePercents.activity).toBe(0);
     expect(dashboard.B.tabGaugePercents.activity).toBe(0);
   });
 });
