@@ -1,4 +1,4 @@
-import type { AppState, LogEvent } from "@/types";
+import type { AppState, BabyId, LogEvent } from "@/types";
 
 export function appendEvents(state: AppState, additions: LogEvent[]): AppState {
   const next = structuredClone(state);
@@ -32,4 +32,66 @@ export function removeEvents(state: AppState, ids: Set<string>): AppState {
   }
   next.events = next.events.filter((event) => !ids.has(event.id));
   return next;
+}
+
+export function editEventGroup(
+  state: AppState,
+  eventId: string,
+  payload: Partial<LogEvent>
+): AppState {
+  const originalEvent = state.events.find((event) => event.id === eventId);
+  if (!originalEvent) return state;
+
+  const sharedDailyId = originalEvent.sharedDailyId;
+  const nextEvents = state.events.map((event) => {
+    const sameRecord = event.id === eventId || Boolean(sharedDailyId && event.sharedDailyId === sharedDailyId);
+    return sameRecord ? { ...event, ...payload } : event;
+  });
+  return { ...state, events: nextEvents };
+}
+
+export function getEventGroupIds(events: LogEvent[], eventId: string): Set<string> {
+  const target = events.find((event) => event.id === eventId);
+  if (!target?.sharedDailyId) return new Set([eventId]);
+
+  return new Set(
+    events
+      .filter((event) => event.sharedDailyId === target.sharedDailyId)
+      .map((event) => event.id)
+  );
+}
+
+export function removeEventGroup(state: AppState, eventId: string): AppState {
+  return removeEvents(state, getEventGroupIds(state.events, eventId));
+}
+
+export function updateSharedDiaperStock(
+  state: AppState,
+  babyId: BabyId,
+  size: string,
+  stock: number
+): AppState {
+  const nextStock = Math.max(0, stock);
+  const nextProfiles = { ...state.profiles };
+
+  nextProfiles[babyId] = {
+    ...nextProfiles[babyId],
+    diaperStockBySize: {
+      ...nextProfiles[babyId].diaperStockBySize,
+      [size]: nextStock,
+    },
+  };
+
+  (Object.keys(nextProfiles) as BabyId[]).forEach((otherBabyId) => {
+    if (otherBabyId === babyId) return;
+    nextProfiles[otherBabyId] = {
+      ...nextProfiles[otherBabyId],
+      diaperStockBySize: {
+        ...nextProfiles[otherBabyId].diaperStockBySize,
+        [size]: nextStock,
+      },
+    };
+  });
+
+  return { ...state, profiles: nextProfiles };
 }
