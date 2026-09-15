@@ -7,7 +7,6 @@ import {
   AppState,
   BabyId,
   DiaperKind,
-  EventType,
   FamilyInfo,
   FamilyMember,
   FamilyRelationship,
@@ -47,8 +46,9 @@ import { createInitialAppState } from "./lib/app-state";
 import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
-import { appendEvents, removeEvents } from "./lib/event-mutations";
-import { buildRecordedEvents, type EventDraft } from "./lib/event-recording";
+import { removeEvents } from "./lib/event-mutations";
+import { type EventDraft } from "./lib/event-recording";
+import { createEventRecordingController, isCareEventType } from "./lib/event-recording-controller";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import {
@@ -78,7 +78,6 @@ import { useAppModalController } from "./lib/use-app-modal-controller";
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
 const clampDiaperStock = (stock: number) => Math.max(0, stock);
-const isCareEventType = (type: EventType) => type === "milk" || type === "solidFood" || type === "diaper";
 
 const readFamilyInvite = () => {
   const url = new URL(window.location.href);
@@ -274,6 +273,18 @@ export default function App() {
     undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
   };
 
+  const {
+    recordEventDrafts,
+    addEvent,
+    addEventFromPayload: handleAddEvent,
+  } = createEventRecordingController({
+    actorUid: authUser?.uid,
+    existingEvents: app.events,
+    idFactory: uid,
+    updateApp,
+    scheduleUndo,
+  });
+
   const showVoiceMessage = (message: string) => {
     if (voiceTimerRef.current) {
       window.clearTimeout(voiceTimerRef.current);
@@ -282,37 +293,6 @@ export default function App() {
     setVoiceMessage(message);
     voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
   };
-
-  const recordEventDrafts = (
-    drafts: EventDraft[],
-    undoOptions?: { transcript?: string; retryVoice?: boolean }
-  ) => {
-    if (!authUser || !drafts.length) return false;
-    const events = buildRecordedEvents({
-      existingEvents: app.events,
-      drafts,
-      actorUid: authUser.uid,
-      idFactory: uid,
-    });
-    if (!events.length) return false;
-    if (!updateApp((prevApp) => appendEvents(prevApp, events))) return false;
-    scheduleUndo(events, undoOptions);
-    return true;
-  };
-
-  const addEvent = (
-    babyId: BabyId,
-    type: EventType,
-    payload?: Partial<LogEvent>,
-    options: { autoWake?: boolean } = {}
-  ) => recordEventDrafts([
-    {
-      babyId,
-      type,
-      payload,
-      autoWake: isCareEventType(type) && options.autoWake !== false,
-    },
-  ]);
 
   const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
     if (!modal || modal.kind !== "milk") return;
@@ -369,13 +349,6 @@ export default function App() {
       });
       return { ...prevApp, events: nextEvents };
     });
-  };
-
-  const handleAddEvent = (
-    eventData: Omit<LogEvent, "id" | "timestamp" | "createdByUid" | "updatedByUid" | "createdAt" | "updatedAt">
-  ) => {
-    const { babyId, type, ...payload } = eventData;
-    return addEvent(babyId, type, payload);
   };
 
   const saveSleepEventAt = (timestamp: number) => {
