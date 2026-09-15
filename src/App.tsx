@@ -6,11 +6,9 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
-  DiaperKind,
   FamilyInfo,
   FamilyMember,
   FamilyRelationship,
-  LogEvent,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
@@ -41,22 +39,16 @@ const WeeklyTimelineModal = lazy(() => import("./components/WeeklyTimelineModal"
 import { LoginScreen } from "./components/LoginScreen";
 import { ProfileSetup } from "./components/ProfileSetup";
 import { AccountModal } from "./components/AccountModal";
-import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";
+import { VoiceCommandButton } from "./components/VoiceCommandButton";
 import { createInitialAppState } from "./lib/app-state";
 import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
-import { removeEvents } from "./lib/event-mutations";
+import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
-import { createEventRecordingController, isCareEventType } from "./lib/event-recording-controller";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
-import {
-  createVoiceCommandBabyNames,
-  expandVoiceCommandTargets,
-  toVoiceLogPayload,
-  VoiceCommand,
-} from "./lib/voice-command";
+import { createVoiceCommandBabyNames } from "./lib/voice-command";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
 import {
   completeFamilyOnboarding,
@@ -74,10 +66,11 @@ import { useWearPairing } from "./lib/use-wear-pairing";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
 import { useAppClock } from "./lib/use-app-clock";
 import { useAppModalController } from "./lib/use-app-modal-controller";
+import { useEventOperations } from "./lib/use-event-operations";
+import { useVoiceInteraction } from "./lib/use-voice-interaction";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
-const clampDiaperStock = (stock: number) => Math.max(0, stock);
 
 const readFamilyInvite = () => {
   const url = new URL(window.location.href);
@@ -122,17 +115,15 @@ export default function App() {
     type: "milk" | "diaper" | "sleep";
   } | null>(null);
   const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
-  const [undo, setUndo] = useState<{
-    open: boolean;
-    events?: LogEvent[];
-    transcript?: string;
-    retryVoice?: boolean;
-  }>({ open: false });
-  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
-  const undoTimerRef = useRef<number | null>(null);
-  const voiceTimerRef = useRef<number | null>(null);
-  const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
-  const voiceLongPressTimerRef = useRef<number | null>(null);
+  const {
+    voiceMessage,
+    voiceButtonRef,
+    showVoiceMessage,
+    startVoiceInput,
+    startVoiceInputForBabyTab,
+    beginVoiceLongPress,
+    clearVoiceLongPress,
+  } = useVoiceInteraction(setSelectedBabyTab);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -146,7 +137,7 @@ export default function App() {
     closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
-    setUndo({ open: false });
+    resetUndo();
 
     if (user) {
       setAppLoading(true);
@@ -245,6 +236,31 @@ export default function App() {
     }
   };
 
+  const {
+    undo,
+    dismissUndo,
+    resetUndo,
+    recordEventDrafts,
+    handleAddEvent,
+    onSaveMilk,
+    onSaveSolidFood,
+    onSaveDiaper,
+    handleVoiceCommand,
+    onSaveEdit,
+    saveSleepEventAt,
+    removeEvent,
+    undoLast,
+    retryLastVoiceInput,
+    editTarget,
+  } = useEventOperations({
+    actorUid: authUser?.uid,
+    app,
+    modal,
+    idFactory: uid,
+    updateApp,
+    retryVoiceInput: startVoiceInput,
+  });
+
   useEffect(() => {
     if (!family) return;
     return subscribeFamilyMembers(family.id, (members) => {
@@ -264,167 +280,6 @@ export default function App() {
     });
   }, [activeDate]);
 
-  const scheduleUndo = (events: LogEvent | LogEvent[], options?: { transcript?: string; retryVoice?: boolean }) => {
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-    setUndo({ open: true, events: Array.isArray(events) ? events : [events], ...options });
-    undoTimerRef.current = window.setTimeout(() => setUndo({ open: false }), 7000);
-  };
-
-  const {
-    recordEventDrafts,
-    addEvent,
-    addEventFromPayload: handleAddEvent,
-  } = createEventRecordingController({
-    actorUid: authUser?.uid,
-    existingEvents: app.events,
-    idFactory: uid,
-    updateApp,
-    scheduleUndo,
-  });
-
-  const showVoiceMessage = (message: string) => {
-    if (voiceTimerRef.current) {
-      window.clearTimeout(voiceTimerRef.current);
-      voiceTimerRef.current = null;
-    }
-    setVoiceMessage(message);
-    voiceTimerRef.current = window.setTimeout(() => setVoiceMessage(null), 4500);
-  };
-
-  const onSaveMilk = (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => {
-    if (!modal || modal.kind !== "milk") return;
-    const { autoWake, ...eventPayload } = payload;
-    addEvent(modal.babyId, "milk", eventPayload, { autoWake });
-  };
-
-  const onSaveSolidFood = (payload: { note: string; timestamp: number; autoWake: boolean }) => {
-    if (!modal || modal.kind !== "milk") return;
-    const { autoWake, ...eventPayload } = payload;
-    addEvent(modal.babyId, "solidFood", eventPayload, { autoWake });
-  };
-
-  const onSaveDiaper = (payload: {
-    diaperKind: DiaperKind;
-    note: string;
-    selectedDiaperSize: string;
-    timestamp: number;
-    autoWake: boolean;
-  }) => {
-    if (!modal || modal.kind !== "diaper") return;
-
-    const babyId = modal.babyId;
-    const { diaperKind, note, selectedDiaperSize, timestamp, autoWake } = payload;
-    addEvent(babyId, "diaper", { diaperKind, note, timestamp, diaperSizeUsed: selectedDiaperSize }, { autoWake });
-  };
-
-  const handleVoiceCommand = (command: VoiceCommand) => {
-    const sharedDailyId = command.type === "daily" && command.babyId === "both" ? uid() : undefined;
-    const drafts: EventDraft[] = expandVoiceCommandTargets(command).map((targetedCommand) => {
-      const { babyId, type, ...payload } = toVoiceLogPayload(targetedCommand);
-      return {
-        babyId,
-        type,
-        payload: sharedDailyId ? { ...payload, sharedDailyId } : payload,
-        autoWake: isCareEventType(type),
-      };
-    });
-    const transcript = command.note.startsWith("voice: ") ? command.note.slice("voice: ".length) : command.note;
-    recordEventDrafts(drafts, { transcript, retryVoice: true });
-  };
-
-  const onSaveEdit = (eventId: string, payload: Partial<LogEvent>) => {
-    const auditPayload = authUser
-      ? { ...payload, updatedByUid: authUser.uid, updatedAt: Date.now() }
-      : payload;
-    updateApp((prevApp) => {
-      const originalEvent = prevApp.events.find((event) => event.id === eventId);
-      if (!originalEvent) return prevApp;
-      const sharedDailyId = originalEvent.sharedDailyId;
-      const nextEvents = prevApp.events.map((event) => {
-        const sameRecord = event.id === eventId || (sharedDailyId && event.sharedDailyId === sharedDailyId);
-        return sameRecord ? { ...event, ...auditPayload } : event;
-      });
-      return { ...prevApp, events: nextEvents };
-    });
-  };
-
-  const saveSleepEventAt = (timestamp: number) => {
-    if (!modal || modal.kind !== "sleepTime") return;
-    addEvent(modal.babyId, modal.type, {
-      timestamp,
-      note: modal.type === "wake" ? "手動: 起床（時刻指定）" : "手動: 入眠（時刻指定）",
-    });
-  };
-
-  const removeEvent = (eventId: string) => {
-    if (!authUser) return;
-    updateApp((prevApp) => {
-      const target = prevApp.events.find((event) => event.id === eventId);
-      const ids = target?.sharedDailyId
-        ? prevApp.events.filter((event) => event.sharedDailyId === target.sharedDailyId).map((event) => event.id)
-        : [eventId];
-      return removeEvents(prevApp, new Set(ids));
-    });
-  };
-
-  const undoLast = () => {
-    if (!authUser || !undo.events?.length) return;
-
-    const undoIds = new Set(undo.events.map((event) => event.id));
-    if (!updateApp((prevApp) => removeEvents(prevApp, undoIds))) return;
-
-    setUndo({ open: false });
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-  };
-
-  const retryVoiceInput = () => {
-    undoLast();
-    window.setTimeout(() => voiceButtonRef.current?.startListening(), 0);
-  };
-
-  const startVoiceInputForBabyTab = (babyId: BabyId) => {
-    setSelectedBabyTab(babyId);
-    window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);
-  };
-
-  const clearVoiceLongPress = () => {
-    if (voiceLongPressTimerRef.current === null) return;
-    window.clearTimeout(voiceLongPressTimerRef.current);
-    voiceLongPressTimerRef.current = null;
-  };
-
-  const beginVoiceLongPress = (babyId?: BabyId) => {
-    clearVoiceLongPress();
-    voiceLongPressTimerRef.current = window.setTimeout(() => {
-      voiceLongPressTimerRef.current = null;
-      if (babyId) {
-        startVoiceInputForBabyTab(babyId);
-      } else {
-        voiceButtonRef.current?.startListening();
-      }
-    }, 550);
-  };
-
-  useEffect(
-    () => () => {
-      if (voiceLongPressTimerRef.current !== null) {
-        window.clearTimeout(voiceLongPressTimerRef.current);
-      }
-    },
-    []
-  );
-
-  const editTarget = useMemo(() => {
-    if (!modal || modal.kind !== "edit") return null;
-    return app.events.find((event) => event.id === modal.eventId) ?? null;
-  }, [modal, app.events]);
-
   const resetAll = () => {
     if (!authUser) return;
     if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから削除してください。"); return; }
@@ -433,34 +288,11 @@ export default function App() {
     if (!updateApp(() => nextState)) return;
     setActiveDate(nextState.ui.lastViewedDate);
     closeModal();
-    setUndo({ open: false });
+    resetUndo();
   };
 
   const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
-    updateApp((prevApp) => {
-      const nextStock = clampDiaperStock(stock);
-      const nextProfiles = { ...prevApp.profiles };
-      nextProfiles[babyId] = {
-        ...nextProfiles[babyId],
-        diaperStockBySize: {
-          ...nextProfiles[babyId].diaperStockBySize,
-          [size]: nextStock,
-        },
-      };
-
-      (Object.keys(nextProfiles) as BabyId[]).forEach((otherBabyId) => {
-        if (otherBabyId === babyId) return;
-        nextProfiles[otherBabyId] = {
-          ...nextProfiles[otherBabyId],
-          diaperStockBySize: {
-            ...nextProfiles[otherBabyId].diaperStockBySize,
-            [size]: nextStock,
-          },
-        };
-      });
-
-      return { ...prevApp, profiles: nextProfiles };
-    });
+    updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
   };
 
   const handleProfileSetup = async (profile: {
@@ -670,7 +502,7 @@ export default function App() {
               <header
                 ref={tutorialAnchors.ref("header")}
                 className="flex items-center justify-between rounded-lg border bg-card px-2.5 py-1.5 shadow-sm"
-                onDoubleClick={() => voiceButtonRef.current?.startListening()}
+                onDoubleClick={startVoiceInput}
                 onPointerDown={() => beginVoiceLongPress()}
                 onPointerUp={clearVoiceLongPress}
                 onPointerLeave={clearVoiceLongPress}
@@ -869,8 +701,8 @@ export default function App() {
         message="記録を保存しました"
         detail={undo.transcript}
         onUndo={undoLast}
-        onRetry={undo.retryVoice ? retryVoiceInput : undefined}
-        onClose={() => setUndo({ open: false })}
+        onRetry={undo.retryVoice ? retryLastVoiceInput : undefined}
+        onClose={dismissUndo}
       />
       <AnimatePresence>
         {voiceMessage ? (
