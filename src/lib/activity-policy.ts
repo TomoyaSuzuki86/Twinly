@@ -8,6 +8,18 @@ export const MAX_ACTIVITY_LIMIT_MINUTES = 12 * 60;
 export const DEFAULT_ACTIVITY_LIMIT_MINUTES = 180;
 export const FULL_ACTIVITY_RECOVERY_MINUTES = 30;
 
+export const ACTIVITY_LIMIT_BY_AGE = [
+  { beforeMonths: 1, minutes: 60 },
+  { beforeMonths: 2, minutes: 90 },
+  { beforeMonths: 3, minutes: 120 },
+  { beforeMonths: 5, minutes: 150 },
+  { beforeMonths: 6, minutes: 180 },
+  { beforeMonths: 9, minutes: 240 },
+  { beforeMonths: 10, minutes: 270 },
+  { beforeMonths: 15, minutes: 300 },
+  { beforeMonths: Number.POSITIVE_INFINITY, minutes: 360 },
+] as const;
+
 const parseLocalDate = (value: string) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -26,15 +38,10 @@ export const getDefaultActivityLimitMinutes = (birthDate: string, now: Date) => 
     (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
   if (now.getDate() < birth.getDate()) completedMonths -= 1;
 
-  if (completedMonths < 1) return 60;
-  if (completedMonths < 2) return 90;
-  if (completedMonths < 3) return 120;
-  if (completedMonths < 5) return 150;
-  if (completedMonths < 6) return 180;
-  if (completedMonths < 9) return 240;
-  if (completedMonths < 10) return 270;
-  if (completedMonths < 15) return 300;
-  return 360;
+  return (
+    ACTIVITY_LIMIT_BY_AGE.find(({ beforeMonths }) => completedMonths < beforeMonths)?.minutes ??
+    DEFAULT_ACTIVITY_LIMIT_MINUTES
+  );
 };
 
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
