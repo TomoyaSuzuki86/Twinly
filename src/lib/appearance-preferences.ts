@@ -19,5 +19,7 @@ export const resolveAppliedTheme = (theme: string, premiumThemesEnabled: boolean
   return "dark";
 };
 
-export const parseStoredLayoutMode = (savedLayoutMode: string | null): LayoutMode =>
-  savedLayoutMode === "split" ? "split" : "single";
+export const parseStoredLayoutMode = (savedLayoutMode: string | null): LayoutMode => {
+  if (savedLayoutMode === "single" || savedLayoutMode === "split") return savedLayoutMode;
+  return "split";
+};
