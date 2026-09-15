@@ -1,0 +1,150 @@
+name: Refactor App Event Operations
+
+on:
+  push:
+    branches:
+      - refactor/app-event-operations
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.event.head_commit.message != 'refactor: apply app event operations extraction'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/app-event-operations
+          fetch-depth: 0
+      - name: Apply focused App.tsx refactor
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/App.tsx')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:120]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once('  DiaperKind,\n', '')
+          replace_once('  LogEvent,\n', '')
+          replace_once(
+              'import { VoiceCommandButton, VoiceCommandButtonHandle } from "./components/VoiceCommandButton";\n',
+              'import { VoiceCommandButton } from "./components/VoiceCommandButton";\n'
+          )
+          replace_once(
+              'import { removeEvents } from "./lib/event-mutations";\n',
+              'import { updateSharedDiaperStock } from "./lib/event-mutations";\n'
+          )
+          replace_once(
+              'import { createEventRecordingController, isCareEventType } from "./lib/event-recording-controller";\n',
+              ''
+          )
+          replace_once(
+              'import {\n  createVoiceCommandBabyNames,\n  expandVoiceCommandTargets,\n  toVoiceLogPayload,\n  VoiceCommand,\n} from "./lib/voice-command";\n',
+              'import { createVoiceCommandBabyNames } from "./lib/voice-command";\n'
+          )
+          replace_once(
+              'import { useAppModalController } from "./lib/use-app-modal-controller";\n',
+              'import { useAppModalController } from "./lib/use-app-modal-controller";\nimport { useEventOperations } from "./lib/use-event-operations";\nimport { useVoiceInteraction } from "./lib/use-voice-interaction";\n'
+          )
+          replace_once('const clampDiaperStock = (stock: number) => Math.max(0, stock);\n', '')
+
+          replace_once(
+              '''  const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
+  const [undo, setUndo] = useState<{
+    open: boolean;
+    events?: LogEvent[];
+    transcript?: string;
+    retryVoice?: boolean;
+  }>({ open: false });
+  const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
+  const undoTimerRef = useRef<number | null>(null);
+  const voiceTimerRef = useRef<number | null>(null);
+  const voiceButtonRef = useRef<VoiceCommandButtonHandle | null>(null);
+  const voiceLongPressTimerRef = useRef<number | null>(null);
+''',
+              '''  const [selectedBabyTab, setSelectedBabyTab] = useState<BabyId>("A");
+  const {
+    voiceMessage,
+    voiceButtonRef,
+    showVoiceMessage,
+    startVoiceInput,
+    startVoiceInputForBabyTab,
+    beginVoiceLongPress,
+    clearVoiceLongPress,
+  } = useVoiceInteraction(setSelectedBabyTab);
+'''
+          )
+
+          replace_once('    setUndo({ open: false });\n\n    if (user) {', '    resetUndo();\n\n    if (user) {')
+
+          start = text.index('  const scheduleUndo = (events:')
+          end_marker = '''  const editTarget = useMemo(() => {
+    if (!modal || modal.kind !== "edit") return null;
+    return app.events.find((event) => event.id === modal.eventId) ?? null;
+  }, [modal, app.events]);
+
+'''
+          end = text.index(end_marker, start) + len(end_marker)
+          replacement = '''  const {
+    undo,
+    dismissUndo,
+    resetUndo,
+    recordEventDrafts,
+    handleAddEvent,
+    onSaveMilk,
+    onSaveSolidFood,
+    onSaveDiaper,
+    handleVoiceCommand,
+    onSaveEdit,
+    saveSleepEventAt,
+    removeEvent,
+    undoLast,
+    retryLastVoiceInput,
+    editTarget,
+  } = useEventOperations({
+    actorUid: authUser?.uid,
+    app,
+    modal,
+    idFactory: uid,
+    updateApp,
+    retryVoiceInput: startVoiceInput,
+  });
+
+'''
+          text = text[:start] + replacement + text[end:]
+
+          replace_once('    setUndo({ open: false });\n  };\n\n  const onUpdateDiaperStock', '    resetUndo();\n  };\n\n  const onUpdateDiaperStock')
+
+          stock_start = text.index('  const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {')
+          stock_end_marker = '''  };
+
+  const handleProfileSetup'''
+          stock_end = text.index(stock_end_marker, stock_start) + len('  };\n\n')
+          stock_replacement = '''  const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
+    updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
+  };
+
+'''
+          text = text[:stock_start] + stock_replacement + text[stock_end:]
+
+          replace_once('                onDoubleClick={() => voiceButtonRef.current?.startListening()}\n', '                onDoubleClick={startVoiceInput}\n')
+          replace_once('        onRetry={undo.retryVoice ? retryVoiceInput : undefined}\n', '        onRetry={undo.retryVoice ? retryLastVoiceInput : undefined}\n')
+          replace_once('        onClose={() => setUndo({ open: false })}\n', '        onClose={dismissUndo}\n')
+
+          path.write_text(text)
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor: apply app event operations extraction"
+          git push origin HEAD:refactor/app-event-operations
