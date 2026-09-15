@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { BellRing, Crown, Smartphone } from "lucide-react";
-import type { DailySummaryEmailSettings as SummarySettings, FamilyAccess } from "@/lib/ai";
+import type { DailySummaryEmailSettings as SummarySettings } from "@/lib/ai";
 import { callService } from "@/lib/ai";
+import { useCurrentFamilyAccess } from "@/lib/family-access-state";
 import { Button } from "./ui/button";
 
 const DEFAULT_SETTINGS: SummarySettings = {
@@ -12,29 +13,24 @@ const DEFAULT_SETTINGS: SummarySettings = {
 };
 
 export function DailySummaryEmailSettings() {
-  const [access, setAccess] = useState<FamilyAccess | null>(null);
+  const { access, error: accessError } = useCurrentFamilyAccess();
   const [settings, setSettings] = useState<SummarySettings>(DEFAULT_SETTINGS);
-  const [loading, setLoading] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const mounted = useRef(true);
 
   useEffect(() => {
     mounted.current = true;
-    Promise.all([
-      callService<FamilyAccess>("getFamilyAccess"),
-      callService<SummarySettings>("getDailySummaryEmailSettings"),
-    ])
-      .then(([nextAccess, nextSettings]) => {
-        if (!mounted.current) return;
-        setAccess(nextAccess);
-        setSettings(nextSettings);
+    callService<SummarySettings>("getDailySummaryEmailSettings")
+      .then((nextSettings) => {
+        if (mounted.current) setSettings(nextSettings);
       })
       .catch(() => {
         if (mounted.current) setMessage("今日のまとめ通知の設定を取得できませんでした。");
       })
       .finally(() => {
-        if (mounted.current) setLoading(false);
+        if (mounted.current) setSettingsLoading(false);
       });
     return () => {
       mounted.current = false;
@@ -63,7 +59,9 @@ export function DailySummaryEmailSettings() {
     }
   };
 
+  const loading = settingsLoading || (!access && !accessError);
   const premium = Boolean(access?.features.dailySummaryEmail);
+  const statusMessage = message || accessError;
 
   return (
     <section className="space-y-4 rounded-lg border p-4" aria-label="今日のまとめ通知設定">
@@ -140,7 +138,7 @@ export function DailySummaryEmailSettings() {
         </div>
       ) : null}
 
-      {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
+      {statusMessage ? <p role="status" className="text-sm text-muted-foreground">{statusMessage}</p> : null}
     </section>
   );
 }

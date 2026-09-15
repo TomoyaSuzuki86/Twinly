@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
 import {
   BarChart3,
   BellRing,
@@ -11,9 +10,11 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { db } from "@/firebase";
-import type { AiDraft, FamilyAccess } from "@/lib/ai";
-import { callService } from "@/lib/ai";
+import type { AiDraft } from "@/lib/ai";
+import {
+  changeCurrentFamilyPreviewPlan,
+  useCurrentFamilyAccess,
+} from "@/lib/family-access-state";
 import type { AppState } from "@/types";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -91,9 +92,9 @@ const comparisonRows = [
   ["Premium限定テーマ（さくら・ひだまり・森）", false, true],
 ] as const;
 
-export function AiTools({ familyId, embedded = false }: AiToolsProps) {
+export function AiTools({ embedded = false }: AiToolsProps) {
   const [open, setOpen] = useState(false);
-  const [access, setAccess] = useState<FamilyAccess | null>(null);
+  const { access, error: accessError } = useCurrentFamilyAccess();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const mounted = useRef(true);
@@ -106,40 +107,13 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const refresh = () => {
-      callService<FamilyAccess>("getFamilyAccess")
-        .then((value) => {
-          if (active) {
-            setAccess(value);
-            setError("");
-          }
-        })
-        .catch(() => {
-          if (active) setError("プラン情報を取得できませんでした。");
-        });
-    };
-    refresh();
-    const unsubscribe = db
-      ? onSnapshot(doc(db, "families", familyId, "services", "access"), refresh, () => {
-          if (active) setError("プラン情報の同期に失敗しました。");
-        })
-      : () => {};
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [familyId]);
-
   const changePreviewPlan = async (plan: "free" | "premium") => {
     if (inFlight.current || !access?.canPreview) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const next = await callService<FamilyAccess>("setFamilyPreviewPlan", { plan });
-      if (mounted.current) setAccess(next);
+      await changeCurrentFamilyPreviewPlan(plan);
     } catch (reason) {
       if (mounted.current) setError(reason instanceof Error ? reason.message : "プランを切り替えられませんでした。");
     } finally {
@@ -291,7 +265,7 @@ export function AiTools({ familyId, embedded = false }: AiToolsProps) {
         </div>
       ) : null}
 
-      {error ? <p role="alert" className="rounded-lg border p-3 text-sm">{error}</p> : null}
+      {error || accessError ? <p role="alert" className="rounded-lg border p-3 text-sm">{error || accessError}</p> : null}
     </div>
   );
 

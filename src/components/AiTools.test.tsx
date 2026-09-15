@@ -4,14 +4,22 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {AiTools} from './AiTools';
 import {DailySummaryEmailSettings} from './DailySummaryEmailSettings';
 import {createInitialAppState} from '@/lib/app-state';
+import {clearFamilyAccessState,publishFamilyAccessState} from '@/lib/family-access-state';
 
-const mock=vi.hoisted(()=>({call:vi.fn()}));
+const mock=vi.hoisted(()=>({call:vi.fn(),plan:vi.fn()}));
 vi.mock('@/firebase',()=>({db:null,functions:null}));
 vi.mock('@/lib/ai',async importOriginal=>({...await importOriginal<typeof import('@/lib/ai')>(),callService:mock.call}));
+vi.mock('@/lib/family-access',async importOriginal=>({
+  ...await importOriginal<typeof import('@/lib/family-access')>(),
+  setFamilyPreviewPlan:mock.plan,
+}));
 
-const free={plan:'free',canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
-const premium={plan:'premium',canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
+const free={plan:'free' as const,canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
+const premium={plan:'premium' as const,canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
 const summarySettings={enabled:false,hourJst:21,recipients:[],canEdit:true};
+
+const setAccess=(access:typeof free|typeof premium)=>
+  publishFamilyAccessState({key:'user:test',access,error:''});
 
 function renderTools(){
   render(<AiTools familyId="test" app={createInitialAppState()} onSave={()=>true}/>);
@@ -19,11 +27,10 @@ function renderTools(){
 }
 
 describe('pricing and plans',()=>{
-  afterEach(cleanup);
-  beforeEach(()=>mock.call.mockReset());
+  afterEach(()=>{cleanup();clearFamilyAccessState();});
+  beforeEach(()=>{mock.call.mockReset();mock.plan.mockReset();setAccess(free);});
 
   it('explains Premium benefits clearly without screenshot-style demos',async()=>{
-    mock.call.mockResolvedValue(free);
     renderTools();
     expect(await screen.findByText('Twinly Premium')).toBeInTheDocument();
     expect(screen.getByText('¥800')).toBeInTheDocument();
@@ -43,40 +50,38 @@ describe('pricing and plans',()=>{
     expect(screen.queryByRole('button',{name:'まとめ通知の設定を保存'})).not.toBeInTheDocument();
   });
 
-  it('uses the upgrade CTA as the preview transition instead of a plan toggle',async()=>{
-    mock.call.mockImplementation(async(name,data)=>{
-      if(name==='setFamilyPreviewPlan')return data.plan==='premium'?premium:free;
-      return free;
-    });
+  it('uses the shared access state for the preview transition instead of a local copy',async()=>{
+    mock.plan.mockImplementation(async(plan)=>plan==='premium'?premium:free);
     renderTools();
     const cta=(await screen.findAllByRole('button',{name:'7日間無料でPremiumを試す'}))[0];
     fireEvent.click(cta);
     await waitFor(()=>expect(screen.getByRole('button',{name:'Premiumを使用中'})).toBeDisabled());
-    expect(mock.call.mock.calls.some(([name,data])=>name==='setFamilyPreviewPlan'&&data.plan==='premium')).toBe(true);
+    expect(mock.plan).toHaveBeenCalledWith('premium');
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
   it('points Premium users to the feature-specific screens',async()=>{
-    mock.call.mockResolvedValue(premium);
+    setAccess(premium);
     renderTools();
     expect(await screen.findByRole('button',{name:'Premiumを使用中'})).toBeDisabled();
     expect(screen.getByText(/AIアドバイスはホームから、今日のまとめ通知は「通知」タブから設定できます/)).toBeInTheDocument();
     expect(screen.getByRole('button',{name:'開発確認用：無料版表示に戻す'})).toBeInTheDocument();
   });
 
-  it('keeps daily-summary notification controls in notifications',async()=>{
+  it('keeps daily-summary notification controls in notifications without refetching access',async()=>{
+    setAccess(premium);
     mock.call.mockImplementation(async(name,data)=>{
-      if(name==='getFamilyAccess')return premium;
       if(name==='getDailySummaryEmailSettings')return summarySettings;
       if(name==='setDailySummaryEmailSettings')return {...summarySettings,...data};
-      return premium;
+      throw new Error(`unexpected service call: ${name}`);
     });
     render(<DailySummaryEmailSettings/>);
     expect(await screen.findByText('今日のまとめ通知')).toBeInTheDocument();
-    expect(screen.getByText(/プッシュ通知を有効にしている端末/)).toBeInTheDocument();
+    expect(await screen.findByText(/プッシュ通知を有効にしている端末/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox',{name:'毎日まとめを通知する'}));
     fireEvent.change(screen.getByLabelText('今日のまとめ通知時刻'),{target:{value:'22'}});
     fireEvent.click(screen.getByRole('button',{name:'まとめ通知の設定を保存'}));
     await waitFor(()=>expect(mock.call.mock.calls.some(([name,data])=>name==='setDailySummaryEmailSettings'&&data.enabled===true&&data.hourJst===22)).toBe(true));
+    expect(mock.call.mock.calls.some(([name])=>name==='getFamilyAccess')).toBe(false);
   });
 });

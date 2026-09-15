@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { AiQuestionAnswer, AiReview, FamilyAccess } from "@/lib/ai";
+import type { AiQuestionAnswer, AiReview } from "@/lib/ai";
 import { callService } from "@/lib/ai";
+import { useCurrentFamilyAccess } from "@/lib/family-access-state";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { VoiceCommandButton } from "./VoiceCommandButton";
@@ -10,7 +11,7 @@ const JST = 9 * 60 * 60 * 1000;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
 export function AiAdviceLauncher() {
-  const [access, setAccess] = useState<FamilyAccess | null>(null);
+  const { access } = useCurrentFamilyAccess();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState("");
@@ -23,21 +24,6 @@ export function AiAdviceLauncher() {
   });
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
-
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const next = await callService<FamilyAccess>("getFamilyAccess");
-        if (active) setAccess(next);
-      } catch {
-        if (active) setAccess(null);
-      }
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 30000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
 
   useEffect(() => {
     const state = access === null ? "loading" : access.features.aiReview ? "enabled" : "premium-required";
@@ -119,7 +105,6 @@ export function AiAdviceLauncher() {
     setConsentChecked(true);
     void loadReview();
   };
-
 
   return (
     <>
