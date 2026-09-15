@@ -32,7 +32,8 @@ describe('AI advice menu integration',()=>{
     mock.service.mockImplementation(async(name,data)=>{
       if(name==='twinlyAi'&&data?.mode==='review')return {observations:'最近は安定しています',checks:'今日も睡眠を確認してください',generatedAt:Date.now()};
       if(name==='twinlyAi'&&data?.mode==='ask')return {answer:'直近の集計では大きな変化はありません。',source:'review',generatedAt:Date.now()};
-      throw new Error(`unexpected service call: ${name}`);
+      if(name==='getFamilyAccess')throw new Error('unexpected access refetch');
+      return premium;
     });
 
     render(<div><button aria-label="週間タイムラインを開く">timeline</button><AiAdviceLauncher/></div>);
