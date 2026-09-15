@@ -73,6 +73,7 @@ import { usePushNotifications } from "./lib/use-push-notifications";
 import { useWearPairing } from "./lib/use-wear-pairing";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
 import { useAppClock } from "./lib/use-app-clock";
+import { useAppModalController } from "./lib/use-app-modal-controller";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
@@ -111,15 +112,7 @@ export default function App() {
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [appLoading, setAppLoading] = useState(true);
-
-  const [modal, setModal] = useState<
-    | { kind: "milk"; babyId: BabyId }
-    | { kind: "diaper"; babyId: BabyId }
-    | { kind: "settings" }
-    | { kind: "edit"; eventId: string }
-    | { kind: "sleepTime"; babyId: BabyId; type: "sleepStart" | "wake" }
-    | null
-  >(null);
+  const { modal, openModal, openSleepTime, closeModal } = useAppModalController();
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const [dailyReportModalOpen, setDailyReportModalOpen] = useState(false);
   const [timelineModalOpen, setTimelineModalOpen] = useState(false);
@@ -151,7 +144,7 @@ export default function App() {
     setFamilyMember(null);
     setFamilyMembers([]);
     setApp(createEmptyState());
-    setModal(null);
+    closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
     setUndo({ open: false });
@@ -265,30 +258,12 @@ export default function App() {
     }, () => setSessionError("家族情報を取得できませんでした。再読み込みしてください。"));
   }, [authUser, family]);
 
-
   useEffect(() => {
     setApp((prev) => {
       if (prev.ui.lastViewedDate === activeDate) return prev;
       return { ...prev, ui: { ...prev.ui, lastViewedDate: activeDate } };
     });
   }, [activeDate]);
-
-  const handleOpenModal = (
-    kind: "milk" | "diaper" | "edit" | "settings",
-    payload?: { babyId: BabyId } | { eventId: string }
-  ) => {
-    if ((kind === "milk" || kind === "diaper") && payload && "babyId" in payload) {
-      setModal({ kind, babyId: payload.babyId });
-      return;
-    }
-    if (kind === "edit" && payload && "eventId" in payload) {
-      setModal({ kind, eventId: payload.eventId });
-      return;
-    }
-    if (kind === "settings") {
-      setModal({ kind });
-    }
-  };
 
   const scheduleUndo = (events: LogEvent | LogEvent[], options?: { transcript?: string; retryVoice?: boolean }) => {
     if (undoTimerRef.current) {
@@ -484,7 +459,7 @@ export default function App() {
     const nextState = createEmptyState();
     if (!updateApp(() => nextState)) return;
     setActiveDate(nextState.ui.lastViewedDate);
-    setModal(null);
+    closeModal();
     setUndo({ open: false });
   };
 
@@ -750,7 +725,7 @@ export default function App() {
                     tutorialAnchorRef={tutorialAnchors.ref("settings")}
                     access={familyAccess}
                     onOpenHelp={() => setHelpModalOpen(true)}
-                    onOpenSettings={() => handleOpenModal("settings")}
+                    onOpenSettings={() => openModal("settings")}
                   />
                   <button
                     type="button"
@@ -855,9 +830,9 @@ export default function App() {
                 diaperEstimate={dashboard.A.diaperEstimate}
                 milkProgress={dashboard.A.milkProgress}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
-                onOpenModal={handleOpenModal}
+                onOpenModal={openModal}
                 onAddEvent={handleAddEvent}
-                onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
+                onOpenSleepTimeEditor={openSleepTime}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("A"); setTimelineModalOpen(true); }}
@@ -895,9 +870,9 @@ export default function App() {
                 diaperEstimate={dashboard.B.diaperEstimate}
                 milkProgress={dashboard.B.milkProgress}
                 onOpenHistory={(type, babyId) => setHistoryModal({ type, babyId })}
-                onOpenModal={handleOpenModal}
+                onOpenModal={openModal}
                 onAddEvent={handleAddEvent}
-                onOpenSleepTimeEditor={({ babyId, type }) => setModal({ kind: "sleepTime", babyId, type })}
+                onOpenSleepTimeEditor={openSleepTime}
                 onOpenDailyReport={() => setDailyReportModalOpen(true)}
                 onOpenHealthChart={() => setChartModalOpen(true)}
                 onOpenTimeline={() => { setSelectedBabyTab("B"); setTimelineModalOpen(true); }}
@@ -939,7 +914,7 @@ export default function App() {
 
       <MilkModal
         open={modal?.kind === "milk"}
-        onOpenChange={(open) => !open && setModal(null)}
+        onOpenChange={(open) => !open && closeModal()}
         displayName={modal?.kind === "milk" ? app.profiles[modal.babyId].displayName : ""}
         isSleeping={modal?.kind === "milk" ? dashboard[modal.babyId].sleeping : false}
         initialDraft={milkDraft}
@@ -948,7 +923,7 @@ export default function App() {
       />
       <DiaperModal
         open={modal?.kind === "diaper"}
-        onOpenChange={(open) => !open && setModal(null)}
+        onOpenChange={(open) => !open && closeModal()}
         displayName={modal?.kind === "diaper" ? app.profiles[modal.babyId].displayName : ""}
         isSleeping={modal?.kind === "diaper" ? dashboard[modal.babyId].sleeping : false}
         initialDraft={diaperDraft}
@@ -962,7 +937,7 @@ export default function App() {
       />
       <SleepRecordModal
         open={modal?.kind === "sleepTime"}
-        onOpenChange={(open) => !open && setModal(null)}
+        onOpenChange={(open) => !open && closeModal()}
         displayName={modal?.kind === "sleepTime" ? app.profiles[modal.babyId].displayName : ""}
         type={modal?.kind === "sleepTime" ? modal.type : "sleepStart"}
         onSave={saveSleepEventAt}
@@ -976,7 +951,7 @@ export default function App() {
         names={[app.profiles.A.displayName, app.profiles.B.displayName]}
         anchors={tutorialAnchors}
         activeBabyId={selectedBabyTab}
-        onOpenSettings={() => handleOpenModal("settings")}
+        onOpenSettings={() => openModal("settings")}
       />
       <HelpModal
         open={helpModalOpen}
@@ -989,7 +964,7 @@ export default function App() {
       />
       <SettingsModal
         open={modal?.kind === "settings"}
-        onOpenChange={(open) => !open && setModal(null)}
+        onOpenChange={(open) => !open && closeModal()}
         app={app}
         premiumGaugesEnabled={Boolean(familyAccess?.features.gauges)}
         setApp={(updater) => {
@@ -1078,7 +1053,7 @@ export default function App() {
       />
       <EditModal
         open={modal?.kind === "edit"}
-        onOpenChange={(open) => !open && setModal(null)}
+        onOpenChange={(open) => !open && closeModal()}
         event={editTarget}
         memberNameByUid={memberNameByUid}
         onSave={onSaveEdit}
