@@ -9,21 +9,28 @@ export type AppModal =
   | { kind: "sleepTime"; babyId: BabyId; type: "sleepStart" | "wake" }
   | null;
 
-export type OpenAppModalKind = "milk" | "diaper" | "edit" | "settings";
-export type OpenAppModalPayload = { babyId: BabyId } | { eventId: string } | undefined;
+type AppModalRequest =
+  | { kind: "milk"; payload: { babyId: BabyId } }
+  | { kind: "diaper"; payload: { babyId: BabyId } }
+  | { kind: "edit"; payload: { eventId: string } }
+  | { kind: "settings"; payload?: undefined };
+
+export type OpenAppModalKind = AppModalRequest["kind"];
+export type OpenAppModalPayload = AppModalRequest["payload"];
 
 export const resolveAppModal = (
   kind: OpenAppModalKind,
   payload?: OpenAppModalPayload
 ): Exclude<AppModal, null> | null => {
-  if ((kind === "milk" || kind === "diaper") && payload && "babyId" in payload) {
-    return { kind, babyId: payload.babyId };
+  switch (kind) {
+    case "milk":
+    case "diaper":
+      return payload && "babyId" in payload ? { kind, babyId: payload.babyId } : null;
+    case "edit":
+      return payload && "eventId" in payload ? { kind, eventId: payload.eventId } : null;
+    case "settings":
+      return { kind };
   }
-  if (kind === "edit" && payload && "eventId" in payload) {
-    return { kind, eventId: payload.eventId };
-  }
-  if (kind === "settings") return { kind };
-  return null;
 };
 
 export const useAppModalController = () => {
