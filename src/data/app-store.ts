@@ -278,13 +278,27 @@ export class AppStore {
   }
 
   private pruneConfirmed(state: AppState) {
-    let changed = false;
-    for (const record of this.confirmed) {
-      if (!mutationReflected(state, record.mutation)) continue;
-      this.storage.removeItem(this.confirmedKey(record.id));
-      changed = true;
+    if (!this.confirmed.length) return;
+
+    const project = (records: ConfirmedRecord[]) =>
+      records.reduce((current, record) => applyMutation(current, record.mutation), state);
+    const projected = project(this.confirmed);
+    let pruneCount = 0;
+
+    // Server snapshots may jump over intermediate committed states. Only drop an ordered
+    // prefix when the remaining confirmed overlays still produce the exact same view. This
+    // prevents an older add/edit overlay from resurfacing after a later delete is observed.
+    for (let count = this.confirmed.length; count > 0; count -= 1) {
+      if (!sameValue(project(this.confirmed.slice(count)), projected)) continue;
+      pruneCount = count;
+      break;
     }
-    if (changed) this.confirmed = this.readConfirmedRecords();
+
+    if (!pruneCount) return;
+    for (const record of this.confirmed.slice(0, pruneCount)) {
+      this.storage.removeItem(this.confirmedKey(record.id));
+    }
+    this.confirmed = this.readConfirmedRecords();
   }
 
   private async recoverFromServer(generation: number) {

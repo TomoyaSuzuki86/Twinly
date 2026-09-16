@@ -7,6 +7,7 @@ import type { AppState, LogEvent } from "@/types";
 
 const milk170: LogEvent = { id: "kanata-170", babyId: "A", type: "milk", timestamp: 1000, milkMl: 170 };
 const milk150: LogEvent = { ...milk170, id: "kanata-150", timestamp: 2000, milkMl: 150 };
+const sleepStart: LogEvent = { id: "kanata-sleep", babyId: "A", type: "sleepStart", timestamp: 3000, note: "手動: 入眠" };
 const stops: Array<() => void> = [];
 afterEach(() => { stops.splice(0).forEach((stop) => stop()); vi.useRealTimers(); });
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
@@ -44,6 +45,8 @@ function harness() {
     repository, storage, values, makeStore,
     amounts: () => view.events.filter((event) => event.type === "milk").map((event) => event.milkMl),
     serverAmounts: () => server.events.filter((event) => event.type === "milk").map((event) => event.milkMl),
+    eventIds: () => view.events.map((event) => event.id),
+    serverEventIds: () => server.events.map((event) => event.id),
     status: () => status,
     cacheOnResume: () => { serveCache = true; },
     serverOnResume: () => { serveCache = false; },
@@ -95,6 +98,25 @@ describe("sync cache rollback regression", () => {
     expect(h.serverAmounts()).toEqual([]);
     h.pushCache();
     expect(h.amounts()).toEqual([]);
+  });
+
+  it("does not resurrect a sleep log deleted before its add is read-confirmed", async () => {
+    const h = harness();
+    const store = h.makeStore(); stops.push(store.start());
+
+    store.update((app) => appendEvents(app, [sleepStart])); await settle();
+    expect(h.eventIds()).toContain(sleepStart.id);
+    expect(h.serverEventIds()).toContain(sleepStart.id);
+    expect([...h.values.keys()].filter((key) => key.includes(".confirmed:")).length).toBe(1);
+
+    store.update((app) => removeEvents(app, new Set([sleepStart.id]))); await settle();
+    expect(h.eventIds()).not.toContain(sleepStart.id);
+    expect(h.serverEventIds()).not.toContain(sleepStart.id);
+    expect([...h.values.keys()].filter((key) => key.includes(".confirmed:")).length).toBe(2);
+
+    h.pushServer();
+    expect(h.eventIds()).not.toContain(sleepStart.id);
+    expect([...h.values.keys()].filter((key) => key.includes(".confirmed:")).length).toBe(0);
   });
 
   it("arms bounded server recovery if a healthy listener later falls back to cache", async () => {
