@@ -15,7 +15,15 @@ service cloud.firestore {
     function canUseFamilyData(familyId) {
       return isFamilyMember(familyId) && (isFamilyOwner(familyId)
         || (exists(/databases/$(database)/documents/families/$(familyId)/services/access)
-          && get(/databases/$(database)/documents/families/$(familyId)/services/access).data.get('features', {}).get('familySharing', false)));
+          && hasPremiumAccess(get(/databases/$(database)/documents/families/$(familyId)/services/access).data)));
+    }
+
+    function hasPremiumAccess(access) {
+      return access.get('billingVersion', 0) == 1
+        ? (access.get('trialEndsAt', 0) > request.time.toMillis()
+          || (access.get('subscriptionStatus', '') in ['active', 'past_due']
+            && access.get('paidUntil', 0) > request.time.toMillis()))
+        : access.get('features', {}).get('familySharing', false);
     }
 
     function isFamilyOwner(familyId) {

@@ -6,7 +6,8 @@ import {DailySummaryEmailSettings} from './DailySummaryEmailSettings';
 import {createInitialAppState} from '@/lib/app-state';
 import {clearFamilyAccessState,publishFamilyAccessState} from '@/lib/family-access-state';
 
-const mock=vi.hoisted(()=>({call:vi.fn(),plan:vi.fn()}));
+const mock=vi.hoisted(()=>({call:vi.fn(),plan:vi.fn(),billing:vi.fn()}));
+vi.mock('@/lib/billing',()=>({billingAction:mock.billing}));
 vi.mock('@/firebase',()=>({db:null,functions:null}));
 vi.mock('@/lib/ai',async importOriginal=>({...await importOriginal<typeof import('@/lib/ai')>(),callService:mock.call}));
 vi.mock('@/lib/family-access',async importOriginal=>({
@@ -68,6 +69,22 @@ describe('pricing and plans',()=>{
     expect(screen.getByRole('button',{name:'開発確認用：無料版表示に戻す'})).toBeInTheDocument();
   });
 
+  it('expired trials open real checkout rather than restarting preview',async()=>{
+    publishFamilyAccessState({key:'user:test',error:'',access:{...free,billing:{status:'expired',trialEndsAt:1,paidUntil:0,priceYen:800,canStartTrial:false,hasSubscription:false,cancelAtPeriodEnd:false}}});
+    renderTools();
+    fireEvent.click(screen.getAllByRole('button',{name:'支払いへ進む'})[0]);
+    await waitFor(()=>expect(mock.billing).toHaveBeenCalledWith('createFamilyCheckout'));
+    expect(mock.plan).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:'7日間無料でPremiumを試す'})).not.toBeInTheDocument();
+  });
+
+  it('subscribers can manage their existing subscription',async()=>{
+    publishFamilyAccessState({key:'user:test',error:'',access:{...premium,billing:{status:'active',trialEndsAt:1,paidUntil:Date.now()+10000,priceYen:800,canStartTrial:false,hasSubscription:true,cancelAtPeriodEnd:false}}});
+    renderTools();
+    fireEvent.click(screen.getByRole('button',{name:'契約・支払いを管理'}));
+    await waitFor(()=>expect(mock.billing).toHaveBeenCalledWith('createFamilyBillingPortal'));
+  });
+
   it('keeps daily-summary notification controls in notifications without refetching access',async()=>{
     setAccess(premium);
     mock.call.mockImplementation(async(name,data)=>{
@@ -85,3 +102,4 @@ describe('pricing and plans',()=>{
     expect(mock.call.mock.calls.some(([name])=>name==='getFamilyAccess')).toBe(false);
   });
 });
+

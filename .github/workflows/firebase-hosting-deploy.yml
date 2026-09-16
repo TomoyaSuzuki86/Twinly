@@ -129,6 +129,7 @@ jobs:
           node --test functions/test/ai-service.test.js
           node --test functions/test/stock-alerts.test.js
           node --test functions/test/care-reminders.test.js
+          node --test functions/test/billing*.test.js
 
       - name: Run full frontend test suite
         if: steps.scope.outputs.frontend == 'true'
@@ -155,6 +156,17 @@ jobs:
           TWINLY_AI_MODEL: ${{ vars.TWINLY_AI_MODEL }}
         run: node functions/scripts/configure-ai-ci.js
 
+      - name: Configure billing
+        id: billing_config
+        if: steps.scope.outputs.functions == 'true'
+        env:
+          TWINLY_BILLING_ENABLED: ${{ vars.TWINLY_BILLING_ENABLED }}
+          TWINLY_STRIPE_PRICE_ID: ${{ vars.TWINLY_STRIPE_PRICE_ID }}
+          TWINLY_APP_URL: ${{ vars.TWINLY_APP_URL }}
+          TWINLY_STRIPE_SECRET_KEY: ${{ secrets.TWINLY_STRIPE_SECRET_KEY }}
+          TWINLY_STRIPE_WEBHOOK_SECRET: ${{ secrets.TWINLY_STRIPE_WEBHOOK_SECRET }}
+        run: node functions/scripts/configure-billing-ci.js
+
       - name: Deploy changed Firebase Functions
         id: functions_deploy
         if: steps.scope.outputs.functions == 'true'
@@ -167,6 +179,9 @@ jobs:
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
             fi
+          fi
+          if [ "${{ steps.billing_config.outputs.billing_enabled }}" = "true" ]; then
+            selector="$selector,functions:startFamilyTrial,functions:createFamilyCheckout,functions:createFamilyBillingPortal,functions:refreshFamilyBilling,functions:stripeWebhook"
           fi
           npx --yes firebase-tools@latest deploy --only "$selector" --project twinly-prod --non-interactive
 
@@ -188,7 +203,7 @@ jobs:
           test "$status" = "401"
 
       - name: Deploy app to Firebase Hosting
-        if: success() && steps.scope.outputs.frontend == 'true'
+        if: success() && steps.scope.outputs.frontend == 'true' && steps.functions_deploy.outcome != 'failure' && steps.firestore_deploy.outcome != 'failure'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

@@ -30,6 +30,7 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
 
     let active = true;
     let revision = 0;
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
     publishFamilyAccessState({ key, access: null, error: "" });
     beginFamilyAccessBootstrap(uid, familyId);
 
@@ -40,6 +41,9 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
           if (!active || currentRevision !== revision) return;
           publishFamilyAccessState({ key, access, error: "" });
           completeFamilyAccessBootstrap(uid, familyId);
+          clearTimeout(expiryTimer);
+          const expires = access.billing?.status === "trialing" ? access.billing.trialEndsAt : access.billing?.paidUntil;
+          if (expires && expires > Date.now()) expiryTimer = setTimeout(refresh, Math.min(expires - Date.now() + 100, 2147483647));
         })
         .catch(() => {
           if (!active || currentRevision !== revision) return;
@@ -66,7 +70,13 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
       }
     );
 
+    const onFocus = () => { if (document.visibilityState !== "hidden") refresh(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
+      clearTimeout(expiryTimer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
       active = false;
       stop();
       clearFamilyAccessState(key);
@@ -76,3 +86,4 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
 
   return state.key === key ? state : EMPTY_ACCESS;
 }
+
