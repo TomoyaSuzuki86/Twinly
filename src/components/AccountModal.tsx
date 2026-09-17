@@ -138,7 +138,7 @@ export function AccountModal({
                 </Button>
               ) : null}
             </div>
-            {!sharingEnabled && <p className="text-sm">家族共有は有料限定です。プランのお試しをONにすると招待・共有を利用できます。</p>}
+            {!sharingEnabled && <p className="text-sm">家族共有は有料限定です。無料体験またはPremiumの契約を開始すると招待・共有を利用できます。</p>}
             <div className="space-y-2">
               {members.map((familyMember) => (
                 <div key={familyMember.uid} className="flex items-center gap-3 rounded-lg bg-muted/45 p-3">
@@ -191,3 +191,4 @@ export function AccountModal({
     </DialogComponents.Dialog>
   );
 }
+

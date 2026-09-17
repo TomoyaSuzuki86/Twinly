@@ -5,6 +5,16 @@ import { db, functions } from "@/firebase";
 export type FamilyAccess = {
   plan: "free" | "premium";
   canPreview: boolean;
+  billing?: {
+    complimentary?: boolean;
+    status: "not_started" | "trialing" | "expired" | "active";
+    trialEndsAt: number | null;
+    paidUntil: number;
+    priceYen: number;
+    canStartTrial: boolean;
+    hasSubscription: boolean;
+    cancelAtPeriodEnd: boolean;
+  };
   features: {
     aiReview: boolean;
     aiChat: boolean;
@@ -45,3 +55,4 @@ export function subscribeFamilyAccessChanges(
     onError
   );
 }
+

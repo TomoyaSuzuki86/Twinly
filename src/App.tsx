@@ -1,3 +1,4 @@
+import { BillingPrompt } from "./components/BillingPrompt";
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -454,7 +455,7 @@ export default function App() {
     );
   }
 
-  if (sharedAccessBlocked) return <AppContainer><div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-xl font-bold">家族共有は有料機能です</h1><p>{accessError || (familyAccess ? "無料モードの間は管理者だけが記録を利用できます。管理者がお試しをONにすると共有を再開します。" : "プランを確認中…")}</p><p>既存の記録とメンバー登録は保持しています。</p><Button onClick={handleSignOut}>ログアウト</Button></div></AppContainer>;
+  if (sharedAccessBlocked) return <AppContainer><div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-xl font-bold">家族共有は有料機能です</h1><p>{accessError || (familyAccess ? "無料モードの間は管理者だけが記録を利用できます。管理者が無料体験またはPremiumの契約を開始すると共有を再開します。" : "プランを確認中…")}</p><p>既存の記録とメンバー登録は保持しています。</p><Button onClick={handleSignOut}>ログアウト</Button></div></AppContainer>;
 
   if (sessionError || (syncStatus.error && authUser && family && !syncStatus.ready)) {
     return <AppContainer><div className="grid min-h-screen place-items-center p-6"><div className="max-w-md space-y-4 text-center">
@@ -845,6 +846,7 @@ export default function App() {
           return recordEventDrafts(eventDrafts);
         }} />}
       />
+      <BillingPrompt />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
         onOpenChange={setAccountModalOpen}
@@ -899,3 +901,4 @@ export default function App() {
     </AppContainer>
   );
 }
+

@@ -144,7 +144,11 @@ module.exports = function createAiServices(db) {
     ]);
     if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
     const ref = root.collection('services').doc('access');
-    const snap = await ref.get();
+    let snap = await ref.get();
+    if (process.env.TWINLY_BILLING_ENABLED === 'true' && snap.data()?.billingVersion !== 1) {
+      await ref.set({ billingVersion: 1 }, { merge: true });
+      snap = await ref.get();
+    }
     const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
@@ -240,6 +244,7 @@ module.exports = function createAiServices(db) {
 
   const setFamilyPreviewPlan = onCall(options, async request => {
     const c=await context(request);
+    if (process.env.TWINLY_BILLING_ENABLED === 'true' || c.access.billing) throw new HttpsError('failed-precondition','料金とプランから無料体験・お支払いへ進んでください');
     if (!c.canPreview) throw new HttpsError('permission-denied','試用切替は家族のオーナーのみ利用できます');
     const previewPlan=request.data?.plan;
     if (!['free','premium'].includes(previewPlan)) throw new HttpsError('invalid-argument','プランが不正です');
@@ -387,3 +392,4 @@ module.exports = function createAiServices(db) {
     sendDailySummaryEmails,
   };
 };
+
