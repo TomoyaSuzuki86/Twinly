@@ -23,6 +23,19 @@ import { useAppStore } from "./use-app-store";
 
 afterEach(() => { cleanup(); localStorage.clear(); mock.callbacks = []; });
 
+it("releases the startup loader before the first server snapshot arrives", () => {
+  const { result } = renderHook(() => {
+    const [app, setApp] = useState(createInitialAppState);
+    const [loading, setLoading] = useState(true);
+    const { status } = useAppStore("test-user", "test-family", false, setApp, setLoading);
+    return { app, loading, status };
+  });
+
+  expect(mock.callbacks).toHaveLength(1);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.status.ready).toBe(false);
+});
+
 it("keeps the current visible records while expanding from recent history to all history", () => {
   const server = appendEvents(createInitialAppState(), [
     { id: "kanata-170", babyId: "A", type: "milk", timestamp: 1000, milkMl: 170 },
