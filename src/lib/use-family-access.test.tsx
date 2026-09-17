@@ -6,7 +6,9 @@ const mocks = vi.hoisted(() => ({
   getFamilyAccess: vi.fn(),
   subscribeFamilyAccessChanges: vi.fn(),
   clearFamilyAccessState: vi.fn(),
+  getCurrentFamilyAccessState: vi.fn(),
   publishFamilyAccessState: vi.fn(),
+  readCachedFamilyAccess: vi.fn(),
   useCurrentFamilyAccess: vi.fn(),
   beginFamilyAccessBootstrap: vi.fn(),
   completeFamilyAccessBootstrap: vi.fn(),
@@ -22,7 +24,9 @@ vi.mock("./family-access", () => ({
 
 vi.mock("./family-access-state", () => ({
   clearFamilyAccessState: mocks.clearFamilyAccessState,
+  getCurrentFamilyAccessState: mocks.getCurrentFamilyAccessState,
   publishFamilyAccessState: mocks.publishFamilyAccessState,
+  readCachedFamilyAccess: mocks.readCachedFamilyAccess,
   useCurrentFamilyAccess: mocks.useCurrentFamilyAccess,
 }));
 
@@ -48,7 +52,10 @@ const access = {
 describe("useFamilyAccess bootstrap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.useCurrentFamilyAccess.mockReturnValue({ key: "user-1:family-1", access: null, error: "" });
+    const state = { key: "user-1:family-1", access: null, error: "" };
+    mocks.useCurrentFamilyAccess.mockReturnValue(state);
+    mocks.getCurrentFamilyAccessState.mockReturnValue(state);
+    mocks.readCachedFamilyAccess.mockReturnValue(null);
     mocks.getFamilyAccess.mockResolvedValue(access);
     mocks.canSubscribeFamilyAccessChanges.mockReturnValue(false);
     mocks.subscribeFamilyAccessChanges.mockReturnValue(() => {});
