@@ -23,7 +23,7 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
   const key = `${uid}:${familyId}`;
 
   useEffect(() => {
-    if (!uid || !familyId || !canSubscribeFamilyAccessChanges()) {
+    if (!uid || !familyId) {
       clearFamilyAccessState();
       return;
     }
@@ -56,19 +56,26 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
         });
     };
 
-    const stop = subscribeFamilyAccessChanges(
-      familyId,
-      refresh,
-      () => {
-        if (!active) return;
-        publishFamilyAccessState({
-          key,
-          access: null,
-          error: "プランの同期が停止しました。再読み込みしてください。",
-        });
-        failFamilyAccessBootstrap(uid, familyId);
-      }
-    );
+    const realtimeEnabled = canSubscribeFamilyAccessChanges();
+    const stop = realtimeEnabled
+      ? subscribeFamilyAccessChanges(
+          familyId,
+          refresh,
+          () => {
+            if (!active) return;
+            publishFamilyAccessState({
+              key,
+              access: null,
+              error: "プランの同期が停止しました。再読み込みしてください。",
+            });
+            failFamilyAccessBootstrap(uid, familyId);
+          }
+        )
+      : () => {};
+
+    // development billing demo intentionally disables Firestore realtime subscription,
+    // but the initial callable fetch is still required to complete app bootstrap.
+    if (!realtimeEnabled) refresh();
 
     const onFocus = () => { if (document.visibilityState !== "hidden") refresh(); };
     window.addEventListener("focus", onFocus);
@@ -86,4 +93,3 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
 
   return state.key === key ? state : EMPTY_ACCESS;
 }
-
