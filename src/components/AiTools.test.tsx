@@ -34,7 +34,7 @@ describe('pricing and plans',()=>{
   it('explains Premium benefits clearly without screenshot-style demos',async()=>{
     renderTools();
     expect(await screen.findByText('Twinly Premium')).toBeInTheDocument();
-    expect(screen.getByText('¥800')).toBeInTheDocument();
+    expect(screen.getByText('¥200')).toBeInTheDocument();
     expect(screen.getByText('Premiumでできること')).toBeInTheDocument();
     expect(screen.getByText('AIアドバイス & AI質問')).toBeInTheDocument();
     expect(screen.getByText('2人分のお世話ゲージ')).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe('pricing and plans',()=>{
   });
 
   it('expired trials open real checkout rather than restarting preview',async()=>{
-    publishFamilyAccessState({key:'user:test',error:'',access:{...free,billing:{status:'expired',trialEndsAt:1,paidUntil:0,priceYen:800,canStartTrial:false,hasSubscription:false,cancelAtPeriodEnd:false}}});
+    publishFamilyAccessState({key:'user:test',error:'',access:{...free,billing:{status:'expired',trialEndsAt:1,paidUntil:0,priceYen:200,canStartTrial:false,hasSubscription:false,cancelAtPeriodEnd:false}}});
     renderTools();
     fireEvent.click(screen.getAllByRole('button',{name:'支払いへ進む'})[0]);
     await waitFor(()=>expect(mock.billing).toHaveBeenCalledWith('createFamilyCheckout'));
@@ -79,7 +79,7 @@ describe('pricing and plans',()=>{
   });
 
   it('subscribers can manage their existing subscription',async()=>{
-    publishFamilyAccessState({key:'user:test',error:'',access:{...premium,billing:{status:'active',trialEndsAt:1,paidUntil:Date.now()+10000,priceYen:800,canStartTrial:false,hasSubscription:true,cancelAtPeriodEnd:false}}});
+    publishFamilyAccessState({key:'user:test',error:'',access:{...premium,billing:{status:'active',trialEndsAt:1,paidUntil:Date.now()+10000,priceYen:200,canStartTrial:false,hasSubscription:true,cancelAtPeriodEnd:false}}});
     renderTools();
     fireEvent.click(screen.getByRole('button',{name:'契約・支払いを管理'}));
     await waitFor(()=>expect(mock.billing).toHaveBeenCalledWith('createFamilyBillingPortal'));

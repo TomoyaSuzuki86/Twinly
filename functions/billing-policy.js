@@ -1,5 +1,5 @@
 const TRIAL_MS = 7 * 86400000;
-const PRICE_YEN = 800;
+const PRICE_YEN = 200;
 function billingState(data = {}, now = Date.now()) {
   const trialEndsAt = Number.isFinite(data.trialEndsAt) ? data.trialEndsAt : null;
   const paidUntil = Number.isFinite(data.paidUntil) ? data.paidUntil : 0;

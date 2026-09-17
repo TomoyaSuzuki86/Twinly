@@ -11,7 +11,7 @@ function setup(extra = {}) {
   return { services: factory(db), docs };
 }
 const request = { auth: { uid: 'u' }, data: {} };
-const price = { active: true, currency: 'jpy', unit_amount: 800, recurring: { interval: 'month', interval_count: 1 } };
+const price = { active: true, currency: 'jpy', unit_amount: 200, recurring: { interval: 'month', interval_count: 1 } };
 function fetchMock(routes) {
   global.fetch = async (url, options) => {
     const key = url.replace('https://api.stripe.com/v1/', '');

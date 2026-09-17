@@ -2,7 +2,7 @@
 
 ## 動作
 
-- 現行表示に合わせ月800円。家族オーナーが開始してから168時間の無料体験、家族につき一度。
+- 月200円。家族オーナーが開始してから168時間の無料体験、家族につき一度。
 - 体験の開始時はカード不要。終了後、起動中・復帰時に支払い案内を表示。無料の基本記録は継続可能。
 - Stripe Checkoutで契約すると毎月自動更新。カード情報をTwinlyには保存しない。
 - 決済成功の戻りURLだけでは有料化しない。署名確認したWebhookまたは本人の再確認によりStripeの現状と支払済み請求書を取得する。
@@ -18,7 +18,7 @@ Secrets:
 - TWINLY_STRIPE_WEBHOOK_SECRET: 対象Webhookの署名シークレット
 
 Variables:
-- TWINLY_STRIPE_PRICE_ID: JPY 800 / 月 / 1か月間隔の定期価格ID
+- TWINLY_STRIPE_PRICE_ID: JPY 200 / 月 / 1か月間隔の定期価格ID
 - TWINLY_APP_URL: 本番のHTTPS origin（例 https://twinly-prod.web.app）
 - TWINLY_BILLING_ENABLED: true（設定と検証完了後に有効化）
 
@@ -27,7 +27,7 @@ Variables:
 ## Stripe設定と公開手順
 
 1. Stripeアカウントの事業者情報・入金口座登録を完了する。
-2. テスト環境で月800円の定期価格を作る。Customer Portalでカード変更・期末解約を有効にし、プラン変更は無効にする。
+2. テスト環境で月200円の定期価格を作る。Customer Portalでカード変更・期末解約を有効にし、プラン変更は無効にする。
 3. Webhookを次のURLに登録。REST取得は2024-06-20に固定している。Webhookからはcustomer IDのみ参照し、権限判定では必ず現在のAPIを再取得する。
    `https://asia-northeast1-twinly-prod.cloudfunctions.net/stripeWebhook`
 4. イベント: checkout.session.completed / customer.subscription.created / customer.subscription.updated / customer.subscription.deleted / invoice.paid / invoice.payment_failed。
@@ -54,3 +54,10 @@ familyBilling/{familyId} はサーバー専用で顧客IDと決済試行を保�
 未解決のCheckout作成が23時間を超えた場合は再作成を止める。Stripe管理画面で当該顧客のSessionを確認してからcheckoutAttemptを復旧する。確認せず削除しない。
 
 Stripe APIの参照: https://docs.stripe.com/api/checkout/sessions/create / https://docs.stripe.com/webhooks / https://docs.stripe.com/api/customer_portal/sessions/create
+
+## 受領済みサンドボックス価格（2026-09-17）
+
+- 商品ID: `prod_VH0Ad8pKk5SDuB`
+- 価格ID: `price_1UGSA5BtBKzzWDenqD7PitXg`
+- 予定料金: 月200円（JPY）。IDのみから金額や環境は確認できないため、Stripe APIでの照合は未実施。
+- テスト環境専用の `TWINLY_STRIPE_PRICE_ID` に設定する。本番設定には流用しない。秘密キー・Webhook・テスト環境への配備は未設定。
