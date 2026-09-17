@@ -6,7 +6,9 @@ import {
 } from "./family-access";
 import {
   clearFamilyAccessState,
+  getCurrentFamilyAccessState,
   publishFamilyAccessState,
+  readCachedFamilyAccess,
   useCurrentFamilyAccess,
 } from "./family-access-state";
 import {
@@ -15,6 +17,7 @@ import {
   failFamilyAccessBootstrap,
   resetFamilyAccessBootstrap,
 } from "./family-access-bootstrap";
+import { beginBackgroundSync } from "./background-sync";
 
 const EMPTY_ACCESS = { access: null, error: "" };
 
@@ -31,11 +34,20 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
     let active = true;
     let revision = 0;
     let expiryTimer: ReturnType<typeof setTimeout> | undefined;
-    publishFamilyAccessState({ key, access: null, error: "" });
+    let finishBootstrapSync = beginBackgroundSync("family-access-bootstrap");
+    const cachedAccess = readCachedFamilyAccess(key);
+    publishFamilyAccessState({ key, access: cachedAccess, error: "" });
     beginFamilyAccessBootstrap(uid, familyId);
 
+    const finishInitialSync = () => {
+      finishBootstrapSync();
+      finishBootstrapSync = () => {};
+    };
+
     const refresh = () => {
+      finishInitialSync();
       const currentRevision = ++revision;
+      const finishSync = beginBackgroundSync("family-access");
       getFamilyAccess()
         .then((access) => {
           if (!active || currentRevision !== revision) return;
@@ -47,13 +59,15 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
         })
         .catch(() => {
           if (!active || currentRevision !== revision) return;
+          const current = getCurrentFamilyAccessState();
           publishFamilyAccessState({
             key,
-            access: null,
+            access: current.key === key ? current.access : cachedAccess,
             error: "プランを確認できません。再読み込みしてください。",
           });
           failFamilyAccessBootstrap(uid, familyId);
-        });
+        })
+        .finally(finishSync);
     };
 
     const realtimeEnabled = canSubscribeFamilyAccessChanges();
@@ -63,9 +77,11 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
           refresh,
           () => {
             if (!active) return;
+            finishInitialSync();
+            const current = getCurrentFamilyAccessState();
             publishFamilyAccessState({
               key,
-              access: null,
+              access: current.key === key ? current.access : cachedAccess,
               error: "プランの同期が停止しました。再読み込みしてください。",
             });
             failFamilyAccessBootstrap(uid, familyId);
@@ -73,14 +89,15 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
         )
       : () => {};
 
-    // development billing demo intentionally disables Firestore realtime subscription,
-    // but the initial callable fetch is still required to complete app bootstrap.
+    // development billing demo intentionally disables Firestore realtime subscription.
+    // Fetch in the background while the cached access state remains visible.
     if (!realtimeEnabled) refresh();
 
     const onFocus = () => { if (document.visibilityState !== "hidden") refresh(); };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
+      finishInitialSync();
       clearTimeout(expiryTimer);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
