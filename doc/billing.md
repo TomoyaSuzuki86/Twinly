@@ -61,3 +61,9 @@ Stripe APIの参照: https://docs.stripe.com/api/checkout/sessions/create / http
 - 価格ID: `price_1UGSA5BtBKzzWDenqD7PitXg`
 - 予定料金: 月200円（JPY）。IDのみから金額や環境は確認できないため、Stripe APIでの照合は未実施。
 - テスト環境専用の `TWINLY_STRIPE_PRICE_ID` に設定する。本番設定には流用しない。秘密キー・Webhook・テスト環境への配備は未設定。
+
+## サンドボックス接続チェック
+
+GitHub Actions Secret `TWINLY_STRIPE_TEST_SECRET_KEY` に `sk_test_` のキーを登録。
+`Stripe Sandbox Connection Check` は上記サンドボックス価格を読み取り、月200円・JPY・毎月・定額・商品IDを照合する。秘密キーはログや成果物に出さない。顧客や契約の作成、課金、Firebaseへの配備は行わない。
+テストキーは本番用 `TWINLY_STRIPE_SECRET_KEY` とは分離する。接続確認後も、隔離したFirebaseテスト環境への配備とWebhook設定、決済フローの実接続テストが必要。
