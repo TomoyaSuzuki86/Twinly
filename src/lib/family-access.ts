@@ -29,11 +29,14 @@ export type FamilyAccess = {
   };
 };
 
-export const canSubscribeFamilyAccessChanges = () => Boolean(db);
+const developmentBillingDemo = import.meta.env.VITE_TWINLY_BILLING_DEMO === "true";
+
+export const canSubscribeFamilyAccessChanges = () => Boolean(db) && !developmentBillingDemo;
 
 export async function getFamilyAccess(): Promise<FamilyAccess> {
   if (!functions) throw new Error("サーバー設定がありません");
-  const call = httpsCallable<unknown, FamilyAccess>(functions, "getFamilyAccess");
+  const name = developmentBillingDemo ? "developmentGetFamilyAccess" : "getFamilyAccess";
+  const call = httpsCallable<unknown, FamilyAccess>(functions, name);
   return (await call({})).data;
 }
 
@@ -48,11 +51,10 @@ export function subscribeFamilyAccessChanges(
   onChange: () => void,
   onError: (error: unknown) => void
 ) {
-  if (!db) return () => {};
+  if (!db || developmentBillingDemo) return () => {};
   return onSnapshot(
     doc(db, "families", familyId, "services", "access"),
     onChange,
     onError
   );
 }
-
