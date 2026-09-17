@@ -6,6 +6,7 @@ export type FamilyAccess = {
   plan: "free" | "premium";
   canPreview: boolean;
   billing?: {
+    complimentary?: boolean;
     status: "not_started" | "trialing" | "expired" | "active";
     trialEndsAt: number | null;
     paidUntil: number;

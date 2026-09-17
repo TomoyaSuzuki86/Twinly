@@ -155,7 +155,7 @@ export function AiTools({ embedded = false }: AiToolsProps) {
         {!premium ? <p className="mt-2 text-center text-[11px] text-muted-foreground">いつでも無料版へ戻せます。</p> : null}
       </section>
 
-      {billing && <p className="text-sm text-muted-foreground">{billing.status === "trialing" && billing.trialEndsAt ? `無料体験は${new Date(billing.trialEndsAt).toLocaleString("ja-JP")}まで。終了後はお支払いが必要です。` : billing.status === "expired" ? "無料体験は終了しました。Premiumを続けるにはお支払いへ進んでください。" : "体験中の請求はありません。お支払い後は月額200円で自動更新されます。"} {billing.cancelAtPeriodEnd ? "解約予約済みです。お支払い済みの期間終了まで利用できます。" : ""}</p>}
+      {billing && <p className="text-sm text-muted-foreground">{billing.complimentary ? "このファミリーは継続特典としてPremiumを期限なしで利用できます。お支払いは不要です。" : billing.status === "trialing" && billing.trialEndsAt ? `無料体験は${new Date(billing.trialEndsAt).toLocaleString("ja-JP")}まで。終了後はお支払いが必要です。` : billing.status === "expired" ? "無料体験は終了しました。Premiumを続けるにはお支払いへ進んでください。" : "体験中の請求はありません。お支払い後は月額200円で自動更新されます。"} {billing.cancelAtPeriodEnd ? "解約予約済みです。お支払い済みの期間終了まで利用できます。" : ""}</p>}
       <section className="min-w-0">
         <div className="mb-3">
           <h3 className="font-bold">Premiumでできること</h3>

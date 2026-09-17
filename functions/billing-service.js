@@ -70,6 +70,7 @@ module.exports = function createBillingServices(db) {
   });
   const createFamilyCheckout = onCall(options, async request => {
     const ctx = await ownerContext(request);
+    if (billingState((await ctx.ref.get()).data()).complimentary) throw new HttpsError('failed-precondition', 'このファミリーはお支払い不要でPremiumを利用できます');
     const { price, origin } = config();
     const priceData = await api(`prices/${price}`);
     if (!priceData.active || priceData.currency !== 'jpy' || priceData.unit_amount !== PRICE_YEN || priceData.recurring?.interval !== 'month' || priceData.recurring?.interval_count !== 1) {

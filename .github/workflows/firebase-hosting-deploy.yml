@@ -130,6 +130,7 @@ jobs:
           node --test functions/test/stock-alerts.test.js
           node --test functions/test/care-reminders.test.js
           node --test functions/test/billing*.test.js
+          node --test functions/test/preserve-legacy-premium.test.js
 
       - name: Run full frontend test suite
         if: steps.scope.outputs.frontend == 'true'
@@ -146,6 +147,14 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
+
+      - name: Install migration dependencies for rules-only deployment
+        if: steps.scope.outputs.rules == 'true' && steps.scope.outputs.functions != 'true'
+        run: npm ci --prefix functions --prefer-offline --no-audit --fund=false
+
+      - name: Preserve existing family Premium before deployment
+        if: steps.scope.outputs.functions == 'true' || steps.scope.outputs.rules == 'true'
+        run: node functions/scripts/preserve-legacy-premium.js
 
       - name: Configure private services
         id: ai_config

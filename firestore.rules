@@ -19,11 +19,11 @@ service cloud.firestore {
     }
 
     function hasPremiumAccess(access) {
-      return access.get('billingVersion', 0) == 1
+      return access.get('premiumGrant', '') == 'legacy' || (access.get('billingVersion', 0) == 1
         ? (access.get('trialEndsAt', 0) > request.time.toMillis()
           || (access.get('subscriptionStatus', '') in ['active', 'past_due']
             && access.get('paidUntil', 0) > request.time.toMillis()))
-        : access.get('features', {}).get('familySharing', false);
+        : access.get('features', {}).get('familySharing', false));
     }
 
     function isFamilyOwner(familyId) {

@@ -28,3 +28,13 @@ test('Stripe signatures reject altered bodies, bad secrets and replayed timestam
   assert.throws(() => verifyStripeEvent(body, `t=1000,v1=${signature}`, 'wrong', 1000000));
   assert.throws(() => verifyStripeEvent(body, `t=1000,v1=${signature}`, 'secret', 1301000));
 });
+
+test('explicit legacy grant survives trial expiration and canceled subscription', () => {
+  const data = {premiumGrant:'legacy', billingVersion:1, trialEndsAt:1, subscriptionStatus:'canceled',paidUntil:0};
+  assert.equal(billingState(data).status,'active');
+  assert.equal(billingState(data).complimentary,true);
+  assert.equal(billingState(data).canStartTrial,false);
+  assert.throws(() => startTrial(data));
+  assert.ok(Object.values(accessFor(data).features).every(Boolean));
+  assert.equal(accessFor({...data,premiumGrant:'false'}).plan,'free');
+});

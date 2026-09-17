@@ -11,7 +11,7 @@ export function BillingPrompt() {
   const shown = useRef('');
   const billing = access?.billing;
   useEffect(() => {
-    if (!billing || !access?.canPreview) return;
+    if (!billing || billing.complimentary || !access?.canPreview) return;
     const returning = new URLSearchParams(window.location.search).get('billing');
     const promptKey = `${key}:${billing.trialEndsAt}`;
     if ((billing.status === 'expired' && shown.current !== promptKey) || returning) {

@@ -8,7 +8,7 @@ const DAY = 86400000;
 const JST = 9 * 3600000;
 const { billingState } = require('./billing-policy');
 function accessFor(data = {}, trialAllowed = false) {
-  if (process.env.TWINLY_BILLING_ENABLED === 'true' || data.billingVersion === 1) {
+  if (data.premiumGrant === 'legacy' || process.env.TWINLY_BILLING_ENABLED === 'true' || data.billingVersion === 1) {
     const billing = billingState(data);
     const plan = ['active', 'trialing'].includes(billing.status) ? 'premium' : 'free';
     return { plan, trialAllowed: false, billing, features: Object.fromEntries(Object.keys(FEATURES).map(key => [key, plan === 'premium'])) };
