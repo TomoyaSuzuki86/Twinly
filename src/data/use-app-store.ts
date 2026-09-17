@@ -3,10 +3,6 @@ import type { AppState } from "@/types";
 import { db } from "@/firebase";
 import { createInitialAppState } from "@/lib/app-state";
 import { loadPendingEvents, removePendingEvents, mergePendingEvents } from "@/lib/pending-events";
-import {
-  getFamilyAccessBootstrapState,
-  subscribeFamilyAccessBootstrap,
-} from "@/lib/family-access-bootstrap";
 import { AppStore, type StoreStatus } from "./app-store";
 import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
 import { applyAppStorePresentation } from "./app-store-presentation";
@@ -58,25 +54,18 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     }
     const reuseServerReady = serverReadyIdentity.current === identity;
 
-    setLoading(true);
+    // The dashboard must not wait for family-access or server synchronization.
+    // Render the local state immediately and let every remote check continue in the background.
+    setLoading(false);
 
     let stopped = false;
     let migrated = false;
     let stop = () => {};
-    let latestStatus: StoreStatus = { pending: 0, error: null, ready: false, fromCache: true, conflicts: [] };
-    const syncBootstrapLoading = () => {
-      if (stopped) return;
-      const accessState = getFamilyAccessBootstrapState(userId, familyId);
-      const accessLoading = accessState === "idle" || accessState === "loading";
-      setLoading(accessLoading);
-    };
-    const stopAccessBootstrap = subscribeFamilyAccessBootstrap(syncBootstrapLoading);
     try {
       const initial = reuseVisibleState ? lastApp.current : createInitialAppState();
       const instance = new AppStore(createFirestoreAppRepository(db, familyId, userId, effectiveAllHistory),
         initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
-          latestStatus = nextStatus;
           if (nextStatus.ready) serverReadyIdentity.current = identity;
           setApp((previous) => {
             const merged = { ...next, ui: previous.ui };
@@ -86,7 +75,6 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
           // A network error before the first server-confirmed snapshot is non-fatal.
           // Keep retry state visible through connection/checking while the local UI stays usable.
           setStatus(nextStatus.ready ? nextStatus : { ...nextStatus, error: null });
-          syncBootstrapLoading();
           if (!migrated && nextStatus.ready && familyId === userId) {
             migrated = true;
             const pending = loadPendingEvents(userId);
@@ -98,10 +86,9 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
         }, { initialReady: reuseServerReady });
       store.current = instance;
       stop = instance.start();
-      syncBootstrapLoading();
     } catch (error) {
-      latestStatus = { pending: 0, ready: false, fromCache: true, conflicts: [], error: error instanceof Error ? error.message : "端末の保存領域を利用できません。" };
-      setStatus(latestStatus);
+      const nextStatus = { pending: 0, ready: false, fromCache: true, conflicts: [], error: error instanceof Error ? error.message : "端末の保存領域を利用できません。" };
+      setStatus(nextStatus);
       setLoading(false);
     }
 
@@ -114,7 +101,6 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     return () => {
       stopped = true;
       stop();
-      stopAccessBootstrap();
       store.current = null;
       stopLifecycle();
     };
