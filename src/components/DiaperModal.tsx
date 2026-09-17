@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DiaperKind, BabyProfile } from "@/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DiaperDraft } from "@/lib/entry-drafts";
@@ -51,9 +51,12 @@ export function DiaperModal({
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
   const [currentDiaperStock, setCurrentDiaperStock] = useState<number>(0);
   const [autoWake, setAutoWake] = useState(true);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!justOpened) return;
     setDiaperKind(initialDraft.diaperKind);
     setNote(initialDraft.note);
     setSelectedDiaperSize(initialDraft.selectedDiaperSize);

@@ -24,8 +24,8 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   const [status, setStatus] = useState<StoreStatus>({ pending: 0, error: null, ready: false, fromCache: true, conflicts: [] });
   const identity = `${userId ?? ""}:${familyId ?? ""}`;
   const [historyMode, setHistoryMode] = useState<HistoryMode>({ identity, allHistory });
-  const initialLoadComplete = useRef(false);
-  const initialLoadIdentity = useRef("");
+  const visibleIdentity = useRef("");
+  const serverReadyIdentity = useRef("");
 
   const effectiveAllHistory = historyMode.identity === identity
     ? historyMode.allHistory || allHistory
@@ -50,14 +50,15 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   useEffect(() => {
     if (!db || !userId || !familyId) return;
 
-    const reuseVisibleState = initialLoadIdentity.current === identity && initialLoadComplete.current;
-    if (initialLoadIdentity.current !== identity) {
-      initialLoadIdentity.current = identity;
-      initialLoadComplete.current = false;
+    const reuseVisibleState = visibleIdentity.current === identity;
+    if (!reuseVisibleState) {
+      visibleIdentity.current = identity;
+      serverReadyIdentity.current = "";
       lastApp.current = createInitialAppState();
     }
+    const reuseServerReady = serverReadyIdentity.current === identity;
 
-    setLoading(!initialLoadComplete.current);
+    setLoading(true);
 
     let stopped = false;
     let migrated = false;
@@ -65,15 +66,9 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     let latestStatus: StoreStatus = { pending: 0, error: null, ready: false, fromCache: true, conflicts: [] };
     const syncBootstrapLoading = () => {
       if (stopped) return;
-      if (initialLoadComplete.current) {
-        setLoading(false);
-        return;
-      }
       const accessState = getFamilyAccessBootstrapState(userId, familyId);
       const accessLoading = accessState === "idle" || accessState === "loading";
-      const loading = (!latestStatus.ready && !latestStatus.error) || accessLoading;
-      setLoading(loading);
-      if (!loading) initialLoadComplete.current = true;
+      setLoading(accessLoading);
     };
     const stopAccessBootstrap = subscribeFamilyAccessBootstrap(syncBootstrapLoading);
     try {
@@ -82,12 +77,15 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
         initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
           latestStatus = nextStatus;
+          if (nextStatus.ready) serverReadyIdentity.current = identity;
           setApp((previous) => {
             const merged = { ...next, ui: previous.ui };
             lastApp.current = merged;
             return merged;
           });
-          setStatus(nextStatus);
+          // A network error before the first server-confirmed snapshot is non-fatal.
+          // Keep retry state visible through connection/checking while the local UI stays usable.
+          setStatus(nextStatus.ready ? nextStatus : { ...nextStatus, error: null });
           syncBootstrapLoading();
           if (!migrated && nextStatus.ready && familyId === userId) {
             migrated = true;
@@ -97,14 +95,13 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
               removePendingEvents(userId, pending.map((event) => event.id));
             }
           }
-        }, { initialReady: reuseVisibleState });
+        }, { initialReady: reuseServerReady });
       store.current = instance;
       stop = instance.start();
       syncBootstrapLoading();
     } catch (error) {
       latestStatus = { pending: 0, ready: false, fromCache: true, conflicts: [], error: error instanceof Error ? error.message : "端末の保存領域を利用できません。" };
       setStatus(latestStatus);
-      initialLoadComplete.current = true;
       setLoading(false);
     }
 

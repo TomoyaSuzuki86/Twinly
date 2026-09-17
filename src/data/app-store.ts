@@ -416,7 +416,6 @@ export class AppStore {
   }
 
   update(updater: (state: AppState) => AppState, options: { absoluteSettings?: boolean } = {}) {
-    if (!this.status.ready) throw new Error("記録を読み込んでいます。");
     this.queue = this.readQueue();
     this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
