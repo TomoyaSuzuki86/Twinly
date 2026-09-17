@@ -1,0 +1,32 @@
+name: Stripe Sandbox Connection Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/stripe-seven-day-trial
+    paths:
+      - .github/workflows/stripe-sandbox-check.yml
+      - functions/scripts/check-stripe-sandbox.js
+      - functions/stripe-client.js
+      - functions/billing-policy.js
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify sandbox credentials and monthly price
+        env:
+          TWINLY_STRIPE_TEST_SECRET_KEY: ${{ secrets.TWINLY_STRIPE_TEST_SECRET_KEY }}
+          TWINLY_STRIPE_TEST_PRICE_ID: price_1UGSA5BtBKzzWDenqD7PitXg
+        run: node functions/scripts/check-stripe-sandbox.js
