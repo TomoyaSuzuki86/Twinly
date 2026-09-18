@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "@/types";
 import { db } from "@/firebase";
 import { createInitialAppState } from "@/lib/app-state";
@@ -24,6 +24,10 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   const visibleIdentity = useRef("");
   const serverReadyIdentity = useRef("");
   const [hydratedIdentity, setHydratedIdentity] = useState("");
+  const cachedForIdentity = useMemo(() => {
+    if (!userId || !familyId || typeof window === "undefined") return null;
+    return readCachedAppState(window.localStorage, userId, familyId);
+  }, [identity, userId, familyId]);
 
   const effectiveAllHistory = historyMode.identity === identity
     ? historyMode.allHistory || allHistory
@@ -45,7 +49,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     status.conflicts,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!db || !userId || !familyId) return;
 
     const reuseVisibleState = visibleIdentity.current === identity;
@@ -53,7 +57,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     if (!reuseVisibleState) {
       visibleIdentity.current = identity;
       serverReadyIdentity.current = "";
-      const cached = readCachedAppState(localStorage, userId, familyId);
+      const cached = cachedForIdentity;
       lastApp.current = cached ?? createInitialAppState();
       if (cached) {
         initialHydrated = true;
@@ -120,14 +124,14 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
       store.current = null;
       stopLifecycle();
     };
-  }, [userId, familyId, identity, effectiveAllHistory, setApp, setLoading]);
+  }, [userId, familyId, identity, effectiveAllHistory, cachedForIdentity, hydratedIdentity, setApp, setLoading]);
 
   const requestSync = () => {
     store.current?.recheck("pageshow");
     void store.current?.flush();
   };
 
-  const hydrated = Boolean(userId && familyId && hydratedIdentity === identity);
+  const hydrated = Boolean(userId && familyId && (hydratedIdentity === identity || cachedForIdentity));
 
   return { store, status, requestSync, hydrated };
 }
