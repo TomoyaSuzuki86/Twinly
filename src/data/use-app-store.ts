@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "@/types";
 import { db } from "@/firebase";
 import { createInitialAppState } from "@/lib/app-state";
@@ -7,7 +7,7 @@ import { AppStore, type StoreStatus } from "./app-store";
 import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
 import { applyAppStorePresentation } from "./app-store-presentation";
 import { createFirestoreAppRepository } from "./firestore-app-repository";
-import { readCachedAppState, writeCachedAppState } from "./app-state-cache";
+import { readCachedAppState, scheduleCachedAppStateWrite } from "./app-state-cache";
 
 type HistoryMode = {
   identity: string;
@@ -84,12 +84,20 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
           if (stopped) return;
           if (nextStatus.ready) serverReadyIdentity.current = identity;
           if (nextStatus.hydrated) {
-            setApp((previous) => {
-              const merged = { ...next, ui: previous.ui };
-              lastApp.current = merged;
-              writeCachedAppState(localStorage, userId, familyId, merged);
-              return merged;
-            });
+            lastApp.current = next;
+            scheduleCachedAppStateWrite(localStorage, userId, familyId, next);
+
+            const applyVisibleState = () => {
+              setApp((previous) => ({ ...next, ui: previous.ui }));
+            };
+
+            // Server-confirmed snapshots can be comparatively large. Treat them as
+            // non-urgent so tab changes and care actions can interrupt rendering.
+            if (nextStatus.ready && !nextStatus.fromCache && nextStatus.pending === 0) {
+              startTransition(applyVisibleState);
+            } else {
+              applyVisibleState();
+            }
             setHydratedIdentity(identity);
           }
           // A network error before the first server-confirmed snapshot is non-fatal.
