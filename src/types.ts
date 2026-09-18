@@ -63,6 +63,7 @@ export type BabyProfile = {
   voiceAliases?: string[];
   milkGaugeWindowHours?: number;
   milkTargetMlOverride?: number | null;
+  diaperGaugeWindowMinutes?: number;
   activityLimitMinutesOverride?: number | null;
   sleepTargetHoursOverride?: number | null;
 };
