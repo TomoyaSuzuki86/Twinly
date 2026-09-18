@@ -4,7 +4,7 @@ const factory=require('../ai-service');
 const {summarize}=require('../ai-policy');
 const originalFetch=global.fetch;
 
-afterEach(()=>{global.fetch=originalFetch;delete process.env.TWINLY_AI_API_KEY;});
+afterEach(()=>{global.fetch=originalFetch;delete process.env.TWINLY_AI_API_KEY;delete process.env.TWINLY_BILLING_ENABLED;});
 
 function setup(extra={}) {
   const docs=new Map(Object.entries({
@@ -75,6 +75,31 @@ test('direct AI calls in free mode never contact provider',async()=>{
   global.fetch=()=>{throw new Error('must not call provider');};
   const {services}=setup();
   await assert.rejects(services.twinlyAi.run(request({mode:'review'})),e=>e.code==='permission-denied');
+});
+
+test('production billing trial grants AI through production callable',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  process.env.TWINLY_BILLING_ENABLED='true';
+  const now=Date.now();
+  const {services}=setup({'families/f/services/access':{billingVersion:1,trialStartedAt:now-1000,trialEndsAt:now+7*86400000},'families/f/app/state':reviewState(now)});
+  global.fetch=async()=>geminiJson({observations:'trial works',checks:'ok'});
+  const result=await services.twinlyAi.run(request({mode:'review'}));
+  assert.equal(result.observations,'trial works');
+});
+
+test('development trial grants AI through development callable without granting production AI',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  process.env.TWINLY_BILLING_ENABLED='true';
+  const now=Date.now();
+  const {services}=setup({
+    'families/f/services/access':{billingVersion:1},
+    'families/f/services/developmentAccess':{billingVersion:1,trialStartedAt:now-1000,trialEndsAt:now+7*86400000},
+    'families/f/app/state':reviewState(now),
+  });
+  global.fetch=async()=>geminiJson({observations:'奏汰と日向の最近の傾向です。',checks:'今日も睡眠を確認してください。'});
+  await assert.rejects(services.twinlyAi.run(request({mode:'review'})),e=>e.code==='permission-denied');
+  const result=await services.developmentTwinlyAi.run(request({mode:'review'}));
+  assert.match(result.observations,/奏汰/);
 });
 
 test('provider configuration errors do not consume successful quota',async()=>{
