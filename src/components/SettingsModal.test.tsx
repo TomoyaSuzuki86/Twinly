@@ -58,7 +58,7 @@ describe("SettingsModal", () => {
     renderSettings(app, true);
 
     fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
-    expect(screen.getByText("2時間")).toBeInTheDocument();
+    expect(screen.getAllByText("2時間").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole("button", { name: "活動可能時間を初期値に戻す" })[0]);
     expect(screen.getByText("初期値に戻しますか？")).toBeTruthy();
@@ -91,6 +91,19 @@ describe("SettingsModal", () => {
     fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
     expect(screen.getAllByText(/睡眠管理がオフです/).length).toBe(2);
     expect(screen.queryByRole("button", { name: /活動可能時間を10分/ })).toBeNull();
+  });
+
+  it("lets each baby customize the diaper gauge timing", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    app.profiles.A.displayName = "A";
+    renderSettings(app, true);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "Aのおむつ間隔を30分長くする" }));
+
+    expect(screen.getAllByText("2時間30分").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/交換直後はゲージが空になります/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/たつと満タンになります/).length).toBeGreaterThan(0);
   });
 
   it("can copy one baby's gauge settings to the other baby", () => {
