@@ -133,6 +133,24 @@ test('transient primary model failure falls back to secondary model and succeeds
   assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
 });
 
+test('registered names like 赤ちゃんA are not duplicated by label normalization',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  const now=Date.now();
+  const state=reviewState(now);
+  state.app.profiles.A.displayName='赤ちゃんA';
+  state.app.profiles.B.displayName='赤ちゃんB';
+  const {services}=setup({'families/f/services/access':{plan:'premium'},'families/f/app/state':state});
+  global.fetch=async()=>geminiJson({
+    observations:'赤ちゃんaは安定しており、Bも安定しています。',
+    checks:'Aと赤ちゃんBの様子を確認してください。'
+  });
+  const result=await services.twinlyAi.run(request({mode:'review'}));
+  assert.equal(result.observations,'赤ちゃんAは安定しており、赤ちゃんBも安定しています。');
+  assert.equal(result.checks,'赤ちゃんAと赤ちゃんBの様子を確認してください。');
+  assert.doesNotMatch(result.observations,/赤ちゃん赤ちゃん/i);
+  assert.doesNotMatch(result.checks,/赤ちゃん赤ちゃん/i);
+});
+
 test('review caches summary context but returns only public advice',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10);
