@@ -28,9 +28,13 @@ export type DailySummaryEmailDeliveryStatus = {
   lastDeliveryError: string;
 };
 
+const developmentBillingDemo = import.meta.env.VITE_TWINLY_BILLING_DEMO === 'true';
+export const resolveServiceName = (name: string, development = developmentBillingDemo) =>
+  development && name === 'twinlyAi' ? 'developmentTwinlyAi' : name;
+
 export async function callService<T>(name: string, data: unknown = {}): Promise<T> {
   if (!functions) throw new Error('サーバー設定がありません');
-  return (await httpsCallable<unknown,T>(functions,name)(data)).data;
+  return (await httpsCallable<unknown,T>(functions,resolveServiceName(name))(data)).data;
 }
 
 export function validConfirmedDrafts(events: AiDraft[], now=Date.now()): boolean {

@@ -42,7 +42,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only HEAD^ HEAD | grep -Eq '^(functions/(development-billing-(policy|service)\.js|billing-policy\.js|stripe-client\.js|index\.js)|src/(lib/(family-access|billing)(\.test)?\.ts|components/BillingPrompt\.tsx)|\.github/workflows/firebase-hosting-development\.yml)$'; then
+          elif git diff --name-only HEAD^ HEAD | grep -Eq '^(functions/(development-billing-(policy|service)\.js|billing-policy\.js|stripe-client\.js|ai-service\.js|index\.js)|src/(lib/(family-access|billing|ai)(\.test)?\.ts|components/BillingPrompt\.tsx)|\.github/workflows/firebase-hosting-development\.yml)$'; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
@@ -104,7 +104,7 @@ jobs:
         shell: bash
         run: >-
           npx --yes firebase-tools@latest deploy
-          --only functions:developmentGetFamilyAccess,functions:developmentStartFamilyTrial,functions:developmentExpireFamilyTrial,functions:developmentCreateFamilyCheckout,functions:developmentCreateFamilyBillingPortal,functions:developmentRefreshFamilyBilling
+          --only functions:developmentGetFamilyAccess,functions:developmentStartFamilyTrial,functions:developmentExpireFamilyTrial,functions:developmentCreateFamilyCheckout,functions:developmentCreateFamilyBillingPortal,functions:developmentRefreshFamilyBilling,functions:developmentTwinlyAi
           --project twinly-prod
           --non-interactive
 
