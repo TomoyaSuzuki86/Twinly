@@ -124,7 +124,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
       store.current = null;
       stopLifecycle();
     };
-  }, [userId, familyId, identity, effectiveAllHistory, cachedForIdentity, hydratedIdentity, setApp, setLoading]);
+  }, [userId, familyId, identity, effectiveAllHistory, cachedForIdentity, setApp, setLoading]);
 
   const requestSync = () => {
     store.current?.recheck("pageshow");
