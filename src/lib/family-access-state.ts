@@ -18,6 +18,21 @@ let currentState: FamilyAccessState = EMPTY_STATE;
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((listener) => listener());
+
+const stableAccessKey = (access: FamilyAccess | null) => {
+  if (!access) return "";
+  return JSON.stringify({
+    plan: access.plan,
+    canPreview: access.canPreview,
+    billing: access.billing ?? null,
+    features: access.features,
+  });
+};
+
+export const isSameFamilyAccessState = (left: FamilyAccessState, right: FamilyAccessState) =>
+  left.key === right.key &&
+  left.error === right.error &&
+  stableAccessKey(left.access) === stableAccessKey(right.access);
 const cacheKey = (key: string) => `${FAMILY_ACCESS_CACHE_PREFIX}${key}`;
 
 const isFamilyAccess = (value: unknown): value is FamilyAccess => {
@@ -64,9 +79,11 @@ export const subscribeCurrentFamilyAccess = (listener: () => void) => {
 };
 
 export const publishFamilyAccessState = (state: FamilyAccessState) => {
+  if (isSameFamilyAccessState(currentState, state)) return false;
   currentState = state;
   if (state.key && state.access) writeCachedFamilyAccess(state.key, state.access);
   emit();
+  return true;
 };
 
 export const clearFamilyAccessState = (key?: string) => {
