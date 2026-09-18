@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { createInitialAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
+import { appStateCacheKey } from "./app-state-cache";
 import type { AppSnapshot } from "./app-repository";
 
 const mock = vi.hoisted(() => ({ callbacks: [] as Array<(snapshot: AppSnapshot) => void> }));
@@ -27,13 +28,37 @@ it("releases the startup loader before the first server snapshot arrives", () =>
   const { result } = renderHook(() => {
     const [app, setApp] = useState(createInitialAppState);
     const [loading, setLoading] = useState(true);
-    const { status } = useAppStore("test-user", "test-family", false, setApp, setLoading);
-    return { app, loading, status };
+    const { status, hydrated } = useAppStore("test-user", "test-family", false, setApp, setLoading);
+    return { app, loading, status, hydrated };
   });
 
   expect(mock.callbacks).toHaveLength(1);
   expect(result.current.loading).toBe(false);
   expect(result.current.status.ready).toBe(false);
+  expect(result.current.hydrated).toBe(false);
+
+  act(() => mock.callbacks[0]({ app: createInitialAppState(), fromCache: true, completeHistory: false }));
+  expect(result.current.hydrated).toBe(true);
+});
+
+
+it("restores cached baby profiles before releasing the startup loader", () => {
+  const cached = createInitialAppState();
+  cached.profiles.A.displayName = "奏汰";
+  cached.profiles.B.displayName = "日向";
+  localStorage.setItem(appStateCacheKey("test-user", "test-family"), JSON.stringify(cached));
+
+  const { result } = renderHook(() => {
+    const [app, setApp] = useState(createInitialAppState);
+    const [loading, setLoading] = useState(true);
+    const { hydrated } = useAppStore("test-user", "test-family", false, setApp, setLoading);
+    return { app, loading, hydrated };
+  });
+
+  expect(result.current.loading).toBe(false);
+  expect(result.current.hydrated).toBe(true);
+  expect(result.current.app.profiles.A.displayName).toBe("奏汰");
+  expect(result.current.app.profiles.B.displayName).toBe("日向");
 });
 
 it("keeps the current visible records while expanding from recent history to all history", () => {
