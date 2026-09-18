@@ -81,24 +81,28 @@ test('provider configuration errors do not consume successful quota',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
   const {services,docs}=setup({'families/f/services/access':{plan:'premium'},'families/f/app/state':reviewState(now)});
-  global.fetch=async()=>({ok:false,status:400,text:async()=>'{"error":"bad config"}'});
+  let calls=0;
+  global.fetch=async()=>{calls+=1;return {ok:false,status:400,text:async()=>'{"error":"bad config"}'}};
   await assert.rejects(services.twinlyAi.run(request({mode:'review'})),e=>e.code==='failed-precondition'&&e.message.includes('送信設定'));
+  assert.equal(calls,1);
   assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount||0,0);
   assert.equal(docs.get(`families/f/aiUsage/${month}`)?.successfulCount||0,0);
 });
 
-test('transient provider failure is retried once and succeeds',async()=>{
+test('transient primary model failure falls back to secondary model and succeeds',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
   const {services,docs}=setup({'families/f/services/access':{plan:'premium'},'families/f/app/state':reviewState(now)});
-  let calls=0;
-  global.fetch=async()=>{
-    calls+=1;
-    if(calls===1) return {ok:false,status:503,text:async()=>'{"error":"temporarily unavailable"}'};
+  const urls=[];
+  global.fetch=async(url)=>{
+    urls.push(String(url));
+    if(urls.length===1) return {ok:false,status:503,text:async()=>'{"error":"temporarily unavailable"}'};
     return geminiJson({observations:'奏汰と日向の最近の傾向です。',checks:'今日も睡眠を確認してください。'});
   };
   const result=await services.twinlyAi.run(request({mode:'review'}));
-  assert.equal(calls,2);
+  assert.equal(urls.length,2);
+  assert.match(urls[0],/gemini-3\.6-flash/);
+  assert.match(urls[1],/gemini-3\.5-flash-lite/);
   assert.match(result.observations,/奏汰/);
   assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
   assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
