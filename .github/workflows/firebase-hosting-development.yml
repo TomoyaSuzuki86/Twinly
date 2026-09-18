@@ -16,11 +16,10 @@ concurrency:
 jobs:
   preview:
     runs-on: ubuntu-latest
-    # Reuse the existing Firebase credentials/config without deploying Functions,
-    # Firestore rules, or the production Hosting live channel.
     environment: production
     env:
       TZ: Asia/Tokyo
+      VITE_TWINLY_BILLING_DEMO: "true"
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -34,6 +33,20 @@ jobs:
     steps:
       - name: Checkout development
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect development billing changes
+        id: billing_scope
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^ HEAD | grep -Eq '^(functions/(development-billing-(policy|service)\.js|billing-policy\.js|stripe-client\.js|index\.js)|src/(lib/(family-access|billing)(\.test)?\.ts|components/BillingPrompt\.tsx)|\.github/workflows/firebase-hosting-development\.yml)$'; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -44,14 +57,56 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --fund=false
 
+      - name: Install Functions dependencies
+        if: steps.billing_scope.outputs.deploy == 'true'
+        run: npm ci --prefix functions --prefer-offline --no-audit --fund=false
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test app
         run: npm test
 
+      - name: Test development billing policy
+        if: steps.billing_scope.outputs.deploy == 'true'
+        run: node --test functions/test/development-billing-policy.test.js
+
+      - name: Verify Stripe sandbox price
+        if: steps.billing_scope.outputs.deploy == 'true'
+        env:
+          TWINLY_STRIPE_TEST_SECRET_KEY: ${{ secrets.TWINLY_STRIPE_TEST_SECRET_KEY }}
+          TWINLY_STRIPE_TEST_PRICE_ID: price_1UGSA5BtBKzzWDenqD7PitXg
+        run: node functions/scripts/check-stripe-sandbox.js
+
       - name: Build app
         run: npm run build
+
+      - name: Authenticate to Google Cloud
+        if: steps.billing_scope.outputs.deploy == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TWINLY_PROD }}
+
+      - name: Configure development billing sandbox
+        if: steps.billing_scope.outputs.deploy == 'true'
+        env:
+          TWINLY_STRIPE_TEST_SECRET_KEY: ${{ secrets.TWINLY_STRIPE_TEST_SECRET_KEY }}
+          TWINLY_STRIPE_TEST_PRICE_ID: price_1UGSA5BtBKzzWDenqD7PitXg
+        shell: bash
+        run: |
+          if ! gcloud secrets describe TWINLY_STRIPE_TEST_SECRET_KEY --project twinly-prod >/dev/null 2>&1; then
+            printf '%s' "$TWINLY_STRIPE_TEST_SECRET_KEY" | npx --yes firebase-tools@latest functions:secrets:set TWINLY_STRIPE_TEST_SECRET_KEY --data-file - --project twinly-prod --non-interactive
+          fi
+          printf 'TWINLY_DEVELOPMENT_BILLING=true\nTWINLY_DEVELOPMENT_STRIPE_PRICE_ID=%s\nTWINLY_AI_MODEL=gemini-3.6-flash\n' "$TWINLY_STRIPE_TEST_PRICE_ID" > functions/.env.twinly-prod
+
+      - name: Deploy development billing functions
+        if: steps.billing_scope.outputs.deploy == 'true'
+        shell: bash
+        run: >-
+          npx --yes firebase-tools@latest deploy
+          --only functions:developmentGetFamilyAccess,functions:developmentStartFamilyTrial,functions:developmentExpireFamilyTrial,functions:developmentCreateFamilyCheckout,functions:developmentCreateFamilyBillingPortal,functions:developmentRefreshFamilyBilling
+          --project twinly-prod
+          --non-interactive
 
       - name: Deploy development preview
         id: deploy

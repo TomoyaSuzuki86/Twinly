@@ -53,6 +53,7 @@ html[data-twinly-sync-checking='true'] body::before {
 }
 
 html[data-twinly-sync-checking='true'] #twinly-manual-sync-button svg,
+html[data-twinly-background-syncing='true'] #twinly-manual-sync-button svg,
 html:has(.twinly-baby-tabs > .sticky > header + [role="status"]:not(:has(button))) #twinly-manual-sync-button svg {
   animation: twinly-sync-spin 0.8s linear infinite;
 }
@@ -92,6 +93,7 @@ html:has(.twinly-baby-tabs > .sticky > header + [role="status"]:not(:has(button)
 
   #twinly-manual-sync-button[data-state='syncing'] svg,
   html[data-twinly-sync-checking='true'] #twinly-manual-sync-button svg,
+  html[data-twinly-background-syncing='true'] #twinly-manual-sync-button svg,
   html:has(.twinly-baby-tabs > .sticky > header + [role="status"]:not(:has(button))) #twinly-manual-sync-button svg {
     animation-duration: 1.4s;
   }

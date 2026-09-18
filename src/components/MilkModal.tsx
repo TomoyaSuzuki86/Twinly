@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { MilkDraft } from "@/lib/entry-drafts";
@@ -40,9 +40,12 @@ export function MilkModal({
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
   const [autoWake, setAutoWake] = useState(true);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!justOpened) return;
     setRecordType("milk");
     setMilkMl(initialDraft.milkMl);
     setNote(initialDraft.note);

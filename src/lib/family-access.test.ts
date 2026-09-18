@@ -18,6 +18,8 @@ import {
   subscribeFamilyAccessChanges,
 } from "./family-access";
 
+const developmentBillingDemo = import.meta.env.VITE_TWINLY_BILLING_DEMO === "true";
+
 const access = {
   plan: "premium" as const,
   canPreview: true,
@@ -42,7 +44,10 @@ describe("family access provider boundary", () => {
 
   it("loads access through the named callable", async () => {
     await expect(getFamilyAccess()).resolves.toEqual(access);
-    expect(mocks.httpsCallable).toHaveBeenCalledWith(expect.anything(), "getFamilyAccess");
+    expect(mocks.httpsCallable).toHaveBeenCalledWith(
+      expect.anything(),
+      developmentBillingDemo ? "developmentGetFamilyAccess" : "getFamilyAccess"
+    );
     expect(mocks.callable).toHaveBeenCalledWith({});
   });
 
@@ -52,14 +57,21 @@ describe("family access provider boundary", () => {
     expect(mocks.callable).toHaveBeenCalledWith({ plan: "free" });
   });
 
-  it("owns the realtime access document path", () => {
+  it("owns the realtime access document path outside development billing demo", () => {
     const onChange = vi.fn();
     const onError = vi.fn();
     const stop = subscribeFamilyAccessChanges("family-1", onChange, onError);
 
-    expect(canSubscribeFamilyAccessChanges()).toBe(true);
+    expect(canSubscribeFamilyAccessChanges()).toBe(!developmentBillingDemo);
+    expect(stop).toEqual(expect.any(Function));
+
+    if (developmentBillingDemo) {
+      expect(mocks.doc).not.toHaveBeenCalled();
+      expect(mocks.onSnapshot).not.toHaveBeenCalled();
+      return;
+    }
+
     expect(mocks.doc).toHaveBeenCalledWith(expect.anything(), "families", "family-1", "services", "access");
     expect(mocks.onSnapshot).toHaveBeenCalledWith(expect.anything(), onChange, onError);
-    expect(stop).toEqual(expect.any(Function));
   });
 });
