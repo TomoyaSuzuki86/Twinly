@@ -51,7 +51,7 @@ type SettingsModalProps = {
 
 type ResetRequest = {
   babyId: BabyId;
-  kind: "milkWindow" | "milkTarget" | "activityLimit" | "sleepTarget";
+  kind: "milkWindow" | "milkTarget" | "diaperWindow" | "activityLimit" | "sleepTarget";
   label: string;
 };
 
@@ -128,6 +128,7 @@ export function SettingsModal({
         ...prev[targetBabyId],
         milkGaugeWindowHours: prev[sourceBabyId].milkGaugeWindowHours,
         milkTargetMlOverride: prev[sourceBabyId].milkTargetMlOverride,
+        diaperGaugeWindowMinutes: prev[sourceBabyId].diaperGaugeWindowMinutes,
         activityLimitMinutesOverride: prev[sourceBabyId].activityLimitMinutesOverride,
         sleepTargetHoursOverride: prev[sourceBabyId].sleepTargetHoursOverride,
       },
@@ -178,6 +179,8 @@ export function SettingsModal({
       handleProfileChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
     } else if (resetRequest.kind === "milkTarget") {
       handleProfileChange(resetRequest.babyId, "milkTargetMlOverride", null);
+    } else if (resetRequest.kind === "diaperWindow") {
+      handleProfileChange(resetRequest.babyId, "diaperGaugeWindowMinutes", 120);
     } else if (resetRequest.kind === "activityLimit") {
       handleProfileChange(resetRequest.babyId, "activityLimitMinutesOverride", null);
     } else {
@@ -311,6 +314,7 @@ export function SettingsModal({
                   const autoMilkTarget = calculatedMilkTarget ? Math.round(calculatedMilkTarget) : null;
                   const milkTarget = profile.milkTargetMlOverride ?? autoMilkTarget;
                   const milkWindowHours = profile.milkGaugeWindowHours ?? 3;
+                  const diaperWindowMinutes = profile.diaperGaugeWindowMinutes ?? 120;
                   const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(profile.birthDate, new Date());
                   const defaultSleepTargetHours = getDefaultSleepTargetHours(profile.birthDate, new Date());
                   const activityLimitMinutes = profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes;
@@ -349,7 +353,7 @@ export function SettingsModal({
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h4 className="font-semibold">🍼 ミルク</h4>
-                            <p className="text-xs text-muted-foreground">飲んだ量と経過時間から、次のミルクを見やすくします。</p>
+                            <p className="text-xs text-muted-foreground">ミルクを飲むとゲージが減り、時間がたつと少しずつ増えます。</p>
                           </div>
                         </div>
 
@@ -485,14 +489,87 @@ export function SettingsModal({
                         </div>
 
                         <div className="rounded-lg bg-muted/60 p-3">
-                          <div className="mb-2 h-2 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full w-full rounded-full bg-primary" />
-                          </div>
                           <p className="text-sm font-medium">
-                            {milkTarget == null ? "記録がたまると1回量を自動で提案します" : `${Math.round(milkTarget)}mlで満タン`}
+                            {milkTarget == null
+                              ? "記録がたまると1回量を自動で提案します"
+                              : `${Math.round(milkTarget)}mlを飲んだ直後はゲージが空になります`}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            約{formatSleepDuration(Math.round(milkWindowHours * 60))}でゲージが空になります
+                            設定時間内のミルク量と経過時間を反映し、飲まずに
+                            {formatSleepDuration(Math.round(milkWindowHours * 60))}
+                            たつとゲージが満タンになります。追加で飲むと、その分ゲージが減ります。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 rounded-xl border bg-background/50 p-4">
+                        <div>
+                          <h4 className="font-semibold">🧷 おむつ</h4>
+                          <p className="text-xs text-muted-foreground">
+                            おむつ交換の直後はゲージが空になり、時間がたつほど増えていきます。
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>次のおむつチェックまで</Label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={diaperWindowMinutes === 120}
+                              onClick={() =>
+                                setResetRequest({ babyId, kind: "diaperWindow", label: "次のおむつチェックまでの時間" })
+                              }
+                              aria-label="おむつゲージの時間を初期値に戻す"
+                            >
+                              おすすめに戻す
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のおむつ間隔を30分短くする`}
+                              disabled={diaperWindowMinutes <= 30}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "diaperGaugeWindowMinutes",
+                                  Math.max(30, diaperWindowMinutes - 30)
+                                )
+                              }
+                            >
+                              −
+                            </Button>
+                            <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                              <div className="text-lg font-semibold">{formatSleepDuration(diaperWindowMinutes)}</div>
+                              <div className="text-xs text-muted-foreground">おすすめは2時間</div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のおむつ間隔を30分長くする`}
+                              disabled={diaperWindowMinutes >= 720}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "diaperGaugeWindowMinutes",
+                                  Math.min(720, diaperWindowMinutes + 30)
+                                )
+                              }
+                            >
+                              ＋
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                          <p>交換直後はゲージが空になります。</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            その後少しずつ増え、{formatSleepDuration(diaperWindowMinutes)}たつと満タンになります。
                           </p>
                         </div>
                       </div>
@@ -650,7 +727,7 @@ export function SettingsModal({
                           </div>
 
                           <div className="rounded-lg bg-muted/60 p-3 text-sm">
-                            <p>起床から約{formatSleepDuration(activityLimitMinutes)}で活動ゲージが空になります。</p>
+                            <p>起床から約{formatSleepDuration(activityLimitMinutes)}で活動ゲージが満タンになります。</p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               1日の睡眠目標は{formatSleepDuration(Math.round(sleepTargetHours * 60))}です。
                             </p>
@@ -689,7 +766,7 @@ export function SettingsModal({
                     ) : (
                       <>
                         <p className="text-sm text-muted-foreground">
-                          ミルク・おむつのゲージが空になると通知します。通知時刻が15分以内ならまとめて1通にします。
+                          ミルク・おむつのゲージが満タンになる頃に通知します。通知時刻が15分以内ならまとめて1通にします。
                         </p>
                         <p className="text-sm text-muted-foreground">
                           状態:{" "}
