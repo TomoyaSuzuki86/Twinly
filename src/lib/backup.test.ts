@@ -44,6 +44,7 @@ describe("parseBackup", () => {
     legacy.profiles.A.calendarId = "legacy-calendar";
     legacy.profiles.A.calendarName = "legacy";
     delete legacy.profiles.A.milkGaugeWindowHours;
+    delete legacy.profiles.A.diaperGaugeWindowMinutes;
     legacy.events = [
       {
         id: "legacy-event",
@@ -61,6 +62,7 @@ describe("parseBackup", () => {
     expect(restored.profiles.A).not.toHaveProperty("calendarId");
     expect(restored.profiles.A).not.toHaveProperty("calendarName");
     expect(restored.profiles.A.milkGaugeWindowHours).toBe(3);
+    expect(restored.profiles.A.diaperGaugeWindowMinutes).toBe(120);
     expect(restored.events[0]).not.toHaveProperty("calendarStatus");
     expect(restored.events[0]).not.toHaveProperty("calendarEventId");
   });
