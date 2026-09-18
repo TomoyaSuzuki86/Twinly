@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +59,37 @@ describe("useFamilyAccess bootstrap", () => {
     mocks.getFamilyAccess.mockResolvedValue(access);
     mocks.canSubscribeFamilyAccessChanges.mockReturnValue(false);
     mocks.subscribeFamilyAccessChanges.mockReturnValue(() => {});
+  });
+
+
+  it("coalesces production realtime access bursts into one refresh", async () => {
+    vi.useFakeTimers();
+    try {
+      let realtimeChange = () => {};
+      mocks.canSubscribeFamilyAccessChanges.mockReturnValue(true);
+      mocks.subscribeFamilyAccessChanges.mockImplementation((_familyId: string, onChange: () => void) => {
+        realtimeChange = onChange;
+        return () => {};
+      });
+
+      const { unmount } = renderHook(() => useFamilyAccess("user-1", "family-1"));
+
+      act(() => {
+        realtimeChange();
+        realtimeChange();
+        realtimeChange();
+      });
+
+      expect(mocks.getFamilyAccess).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(mocks.getFamilyAccess).toHaveBeenCalledTimes(1);
+
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("loads access and completes bootstrap even when realtime subscription is disabled", async () => {

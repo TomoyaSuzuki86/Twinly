@@ -39,6 +39,23 @@ describe("family access state", () => {
     unsubscribe();
   });
 
+
+  it("does not notify consumers when the confirmed access is identical to the cached access", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeCurrentFamilyAccess(listener);
+    const cached = {
+      ...premium,
+      features: { ...premium.features },
+    };
+
+    expect(publishFamilyAccessState({ key: "u1:f1", access: premium, error: "" })).toBe(true);
+    listener.mockClear();
+
+    expect(publishFamilyAccessState({ key: "u1:f1", access: cached, error: "" })).toBe(false);
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it("updates the shared snapshot immediately after a preview plan change", async () => {
     publishFamilyAccessState({ key: "u1:f1", access: free, error: "" });
     mock.setPlan.mockResolvedValue(premium);
