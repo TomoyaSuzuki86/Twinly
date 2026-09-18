@@ -46,6 +46,7 @@ import { createInitialAppState } from "./lib/app-state";
 import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
+import { readCachedAppState } from "./data/app-state-cache";
 import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
@@ -57,6 +58,7 @@ import {
   createFamilyInvite,
   joinFamilyWithInvite,
   loadFamilySession,
+  readCachedFamilySession,
   subscribeFamilyMembers,
   updateMemberProfile,
 } from "./lib/family";
@@ -132,23 +134,40 @@ export default function App() {
 
   const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
     setSessionError(null);
-    setFamily(null);
-    setFamilyMember(null);
-    setFamilyMembers([]);
-    setApp(createEmptyState());
     closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
     resetUndo();
 
     if (user) {
-      setAppLoading(true);
+      const cachedSession = readCachedFamilySession(user.uid);
+      const cachedApp = cachedSession
+        ? readCachedAppState(window.localStorage, user.uid, cachedSession.family.id)
+        : null;
+
+      if (cachedSession) {
+        // Restore the last usable dashboard synchronously. Authentication and server
+        // revalidation continue in the background and must not block interaction.
+        setFamily(cachedSession.family);
+        setFamilyMember(cachedSession.member);
+        setFamilyMembers([cachedSession.member]);
+        if (cachedApp) setApp((previous) => ({ ...cachedApp, ui: previous.ui }));
+        setAppLoading(false);
+      } else {
+        setFamily(null);
+        setFamilyMember(null);
+        setFamilyMembers([]);
+        setApp(createEmptyState());
+        setAppLoading(true);
+      }
+
       try {
         const session = await loadFamilySession(user);
         if (!context.isCurrent()) return;
         setFamily(session?.family ?? null);
         setFamilyMember(session?.member ?? null);
         if (session) {
+          setFamilyMembers((current) => current.length ? current : [session.member]);
           if (session.member.profileCompleted === false) setAccountModalOpen(true);
           void ensureNotificationSettingsDocument(user).catch(console.error);
         } else {
@@ -158,10 +177,12 @@ export default function App() {
       } catch (error) {
         console.error("Failed to load family session", error);
         if (!context.isCurrent()) return;
-        setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
-        setFamily(null);
-        setFamilyMember(null);
-        setFamilyMembers([]);
+        if (!cachedSession) {
+          setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
+          setFamily(null);
+          setFamilyMember(null);
+          setFamilyMembers([]);
+        }
         setAppLoading(false);
       }
       return;
