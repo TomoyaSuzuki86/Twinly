@@ -104,6 +104,33 @@ describe("AppStore resilient synchronization", () => {
     stop();
   });
 
+
+  it("does not reconnect every Firestore listener when pageshow fires during startup sync", () => {
+    const initial = createInitialAppState();
+    let listener: (snapshot: AppSnapshot) => void = () => {};
+    const subscribe = vi.fn((next: (snapshot: AppSnapshot) => void) => {
+      listener = next;
+      next({ app: initial, fromCache: true, completeHistory: true });
+      return () => {};
+    });
+    const repository: AppRepository = {
+      subscribe,
+      commit: vi.fn(async (mutation) => mutation),
+      loadAll: async () => initial,
+    };
+    const context = createStore(repository, initial);
+    const stop = context.store.start();
+
+    expect(context.status().checking).toBe(true);
+    context.store.recheck("pageshow");
+    expect(subscribe).toHaveBeenCalledTimes(1);
+
+    listener({ app: initial, fromCache: false, completeHistory: true });
+    expect(context.status().ready).toBe(true);
+    expect(context.status().checking).toBe(false);
+    stop();
+  });
+
   it("re-subscribes on resume without clearing the rendered state", () => {
     const initial = appendEvents(createInitialAppState(), [remoteMilk]);
     const subscribe = vi.fn((next: (snapshot: AppSnapshot) => void) => {
