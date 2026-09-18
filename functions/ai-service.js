@@ -14,12 +14,16 @@ const JST = 9 * 3600000;
 
 function replaceBabyLabels(text, summary) {
   let value = String(text);
-  for (const baby of summary) {
-    const id = baby.babyId;
+  const replacements = [];
+  summary.forEach((baby, index) => {
+    const id = String(baby.babyId || '').toUpperCase();
     const name = baby.name || id;
-    value = value.replace(new RegExp(`赤ちゃん${id}`, 'g'), name);
-    value = value.replace(new RegExp(`(^|[^A-Za-z0-9])${id}(?=[^A-Za-z0-9]|$)`, 'g'), (_match, prefix) => `${prefix}${name}`);
-  }
+    const token = `__TWINLY_CHILD_${index}__`;
+    value = value.replace(new RegExp(`赤ちゃん${id}`, 'gi'), token);
+    value = value.replace(new RegExp(`(^|[^A-Za-z0-9])${id}(?=[^A-Za-z0-9]|$)`, 'gi'), (_match, prefix) => `${prefix}${token}`);
+    replacements.push([token, name]);
+  });
+  for (const [token, name] of replacements) value = value.replaceAll(token, name);
   return value;
 }
 
