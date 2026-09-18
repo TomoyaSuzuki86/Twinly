@@ -87,6 +87,23 @@ test('provider configuration errors do not consume successful quota',async()=>{
   assert.equal(docs.get(`families/f/aiUsage/${month}`)?.successfulCount||0,0);
 });
 
+test('transient provider failure is retried once and succeeds',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10),month=day.slice(0,7);
+  const {services,docs}=setup({'families/f/services/access':{plan:'premium'},'families/f/app/state':reviewState(now)});
+  let calls=0;
+  global.fetch=async()=>{
+    calls+=1;
+    if(calls===1) return {ok:false,status:503,text:async()=>'{"error":"temporarily unavailable"}'};
+    return geminiJson({observations:'奏汰と日向の最近の傾向です。',checks:'今日も睡眠を確認してください。'});
+  };
+  const result=await services.twinlyAi.run(request({mode:'review'}));
+  assert.equal(calls,2);
+  assert.match(result.observations,/奏汰/);
+  assert.equal(docs.get(`families/f/aiUsage/${day}`).successfulCount,1);
+  assert.equal(docs.get(`families/f/aiUsage/${month}`).successfulCount,1);
+});
+
 test('review caches summary context but returns only public advice',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   const now=Date.now(),day=new Date(now+9*3600000).toISOString().slice(0,10);
