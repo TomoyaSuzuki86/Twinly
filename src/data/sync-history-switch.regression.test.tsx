@@ -51,12 +51,13 @@ it("restores cached baby profiles before releasing the startup loader", () => {
   const { result } = renderHook(() => {
     const [app, setApp] = useState(createInitialAppState);
     const [loading, setLoading] = useState(true);
-    const { hydrated } = useAppStore("test-user", "test-family", false, setApp, setLoading);
-    return { app, loading, hydrated };
+    const { hydrated, store } = useAppStore("test-user", "test-family", false, setApp, setLoading);
+    return { app, loading, hydrated, store };
   });
 
   expect(result.current.loading).toBe(false);
   expect(result.current.hydrated).toBe(true);
+  expect(result.current.store.current).not.toBeNull();
   expect(result.current.app.profiles.A.displayName).toBe("奏汰");
   expect(result.current.app.profiles.B.displayName).toBe("日向");
 });
