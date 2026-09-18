@@ -7,6 +7,7 @@ import { AppStore, type StoreStatus } from "./app-store";
 import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
 import { applyAppStorePresentation } from "./app-store-presentation";
 import { createFirestoreAppRepository } from "./firestore-app-repository";
+import { readCachedAppState, writeCachedAppState } from "./app-state-cache";
 
 type HistoryMode = {
   identity: string;
@@ -22,6 +23,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   const [historyMode, setHistoryMode] = useState<HistoryMode>({ identity, allHistory });
   const visibleIdentity = useRef("");
   const serverReadyIdentity = useRef("");
+  const [hydratedIdentity, setHydratedIdentity] = useState("");
 
   const effectiveAllHistory = historyMode.identity === identity
     ? historyMode.allHistory || allHistory
@@ -50,19 +52,27 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     if (!reuseVisibleState) {
       visibleIdentity.current = identity;
       serverReadyIdentity.current = "";
-      lastApp.current = createInitialAppState();
+      const cached = readCachedAppState(localStorage, userId, familyId);
+      lastApp.current = cached ?? createInitialAppState();
+      if (cached) {
+        setApp((previous) => ({ ...cached, ui: previous.ui }));
+        setHydratedIdentity(identity);
+      } else {
+        setHydratedIdentity("");
+      }
     }
     const reuseServerReady = serverReadyIdentity.current === identity;
 
     // The dashboard must not wait for family-access or server synchronization.
-    // Render the local state immediately and let every remote check continue in the background.
+    // Restore the last hydrated state first; otherwise render neutral placeholders until
+    // Firestore supplies the first local/server snapshot.
     setLoading(false);
 
     let stopped = false;
     let migrated = false;
     let stop = () => {};
     try {
-      const initial = reuseVisibleState ? lastApp.current : createInitialAppState();
+      const initial = lastApp.current;
       const instance = new AppStore(createFirestoreAppRepository(db, familyId, userId, effectiveAllHistory),
         initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
@@ -70,8 +80,10 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
           setApp((previous) => {
             const merged = { ...next, ui: previous.ui };
             lastApp.current = merged;
+            writeCachedAppState(localStorage, userId, familyId, merged);
             return merged;
           });
+          setHydratedIdentity(identity);
           // A network error before the first server-confirmed snapshot is non-fatal.
           // Keep retry state visible through connection/checking while the local UI stays usable.
           setStatus(nextStatus.ready ? nextStatus : { ...nextStatus, error: null });
@@ -111,5 +123,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     void store.current?.flush();
   };
 
-  return { store, status, requestSync };
+  const hydrated = Boolean(userId && familyId && hydratedIdentity === identity);
+
+  return { store, status, requestSync, hydrated };
 }
