@@ -136,24 +136,12 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       let recent: LogEvent[] = [];
       let seeds: LogEvent[] = [];
       let ready = false;
-      let fromCache = true;
       let stateFromCache = true;
-      let expectedEventSources = 0;
-      const eventSourceCache = new Map<string, boolean>();
-      const refreshCacheStatus = () => {
-        if (!expectedEventSources) {
-          fromCache = stateFromCache;
-          return;
-        }
-        fromCache = stateFromCache || eventSourceCache.size < expectedEventSources ||
-          [...eventSourceCache.values()].some(Boolean);
-      };
       const emit = () => {
         if (stopped || !ready) return;
-        refreshCacheStatus();
         const byId = new Map([...seeds, ...recent].map((event) => [event.id, event]));
         onChange({ app: { ...current, events: [...byId.values()].sort((a, b) => b.timestamp - a.timestamp) },
-          fromCache, completeHistory: allHistory });
+          fromCache: stateFromCache, completeHistory: allHistory });
       };
       const stopState = onSnapshot(stateRef, { includeMetadataChanges: true }, (snapshot) => {
         if (stopped) return;
@@ -172,11 +160,9 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         if (version === 2) { emit(); return; }
         version = 2;
         if (allHistory) {
-          expectedEventSources = 1;
-          stopEvents = onSnapshot(query(eventsRef, orderBy("timestamp", "desc")), { includeMetadataChanges: true }, (rows) => {
+          stopEvents = onSnapshot(query(eventsRef, orderBy("timestamp", "desc")), (rows) => {
             if (stopped) return;
             recent = rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent);
-            eventSourceCache.set("all", rows.metadata.fromCache);
             ready = true;
             emit();
           }, onError);
@@ -184,7 +170,6 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         }
         const since = Date.now() - RECENT_DAYS * 86400000;
         const types: EventType[] = ["milk", "solidFood", "diaper", "sleepStart", "wake", "weight", "height"];
-        expectedEventSources = types.length * 2 + 1;
         const seedRows = new Map<string, LogEvent[]>();
         const stops: (() => void)[] = [];
         let windowReady = false;
@@ -196,16 +181,14 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         for (const babyId of ["A", "B"] as const) for (const type of types) {
           const sourceKey = `${babyId}:${type}`;
           stops.push(onSnapshot(query(eventsRef, where("babyId", "==", babyId), where("type", "==", type),
-            where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)), { includeMetadataChanges: true }, (rows) => {
+            where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)), (rows) => {
               seedRows.set(sourceKey, rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
-              eventSourceCache.set(sourceKey, rows.metadata.fromCache);
               finish();
             }, onError));
         }
         stops.push(onSnapshot(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")),
-          { includeMetadataChanges: true }, (rows) => {
+          (rows) => {
             recent = rows.docs.map((item) => ({ ...item.data(), id: item.id }) as LogEvent);
-            eventSourceCache.set("window", rows.metadata.fromCache);
             windowReady = true;
             finish();
           }, onError));
