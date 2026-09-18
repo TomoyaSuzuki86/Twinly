@@ -132,7 +132,7 @@ function formatDailySummaryMail(summary) {
 }
 
 module.exports = function createAiServices(db) {
-  async function context(request) {
+  async function context(request, accessDocId = 'access') {
     if (!request.auth) throw new HttpsError('unauthenticated','ログインしてください');
     const uid = request.auth.uid;
     const user = await db.doc(`users/${uid}`).get();
@@ -144,7 +144,7 @@ module.exports = function createAiServices(db) {
       root.get(),
     ]);
     if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
-    const ref = root.collection('services').doc('access');
+    const ref = root.collection('services').doc(accessDocId);
     let snap = await ref.get();
     if (process.env.TWINLY_BILLING_ENABLED === 'true' && snap.data()?.billingVersion !== 1) {
       await ref.set({ billingVersion: 1 }, { merge: true });
@@ -297,8 +297,8 @@ module.exports = function createAiServices(db) {
     return { enabled, hourJst, recipients:await familyEmails(c.root), canEdit:true };
   });
 
-  const twinlyAi = onCall({...options,secrets:[key]},async request => {
-    const c=await context(request);
+  const createTwinlyAi = accessDocId => onCall({...options,secrets:[key]},async request => {
+    const c=await context(request, accessDocId);
     const mode=request.data?.mode;
     const feature=mode==='review'?'aiReview':mode==='ask'?'aiChat':null;
     if (!feature) throw new HttpsError('invalid-argument','操作が不正です');
@@ -333,7 +333,7 @@ module.exports = function createAiServices(db) {
         }
       );
       if(typeof result.answer!=='string' || !result.answer.trim() || result.answer.length>1600) throw new HttpsError('data-loss','AI回答の形式が不正です');
-      const latest=await context(request);
+      const latest=await context(request, accessDocId);
       if(!latest.access.features.aiChat) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
       await commitUsage(c,reservation);
       return {answer:replaceBabyLabels(result.answer,cachedData.summary),source:deep?'review+timeline':'review',generatedAt:now};
@@ -349,7 +349,7 @@ module.exports = function createAiServices(db) {
       summary
     );
     if(typeof result.observations!=='string'||typeof result.checks!=='string'||result.observations.length>1200||result.checks.length>1200) throw new HttpsError('data-loss','AIアドバイスの形式が不正です');
-    const latest=await context(request);
+    const latest=await context(request, accessDocId);
     if(!latest.access.features.aiReview) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
     const review={
       version:REVIEW_VERSION,
@@ -362,6 +362,9 @@ module.exports = function createAiServices(db) {
     await cache.set(review);
     return publicReview(review);
   });
+
+  const twinlyAi = createTwinlyAi('access');
+  const developmentTwinlyAi = createTwinlyAi('developmentAccess');
 
   const sendDailySummaryEmails = onSchedule(
     {schedule:'every 60 minutes',timeZone:'Asia/Tokyo',region:'asia-northeast1',maxInstances:1},
@@ -406,6 +409,7 @@ module.exports = function createAiServices(db) {
     getDailySummaryEmailSettings,
     setDailySummaryEmailSettings,
     twinlyAi,
+    developmentTwinlyAi,
     sendDailySummaryEmails,
   };
 };
