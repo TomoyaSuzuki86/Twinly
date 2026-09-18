@@ -49,12 +49,14 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     if (!db || !userId || !familyId) return;
 
     const reuseVisibleState = visibleIdentity.current === identity;
+    let initialHydrated = reuseVisibleState && hydratedIdentity === identity;
     if (!reuseVisibleState) {
       visibleIdentity.current = identity;
       serverReadyIdentity.current = "";
       const cached = readCachedAppState(localStorage, userId, familyId);
       lastApp.current = cached ?? createInitialAppState();
       if (cached) {
+        initialHydrated = true;
         setApp((previous) => ({ ...cached, ui: previous.ui }));
         setHydratedIdentity(identity);
       } else {
@@ -77,13 +79,15 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
         initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
           if (nextStatus.ready) serverReadyIdentity.current = identity;
-          setApp((previous) => {
-            const merged = { ...next, ui: previous.ui };
-            lastApp.current = merged;
-            writeCachedAppState(localStorage, userId, familyId, merged);
-            return merged;
-          });
-          setHydratedIdentity(identity);
+          if (nextStatus.hydrated) {
+            setApp((previous) => {
+              const merged = { ...next, ui: previous.ui };
+              lastApp.current = merged;
+              writeCachedAppState(localStorage, userId, familyId, merged);
+              return merged;
+            });
+            setHydratedIdentity(identity);
+          }
           // A network error before the first server-confirmed snapshot is non-fatal.
           // Keep retry state visible through connection/checking while the local UI stays usable.
           setStatus(nextStatus.ready ? nextStatus : { ...nextStatus, error: null });
@@ -95,7 +99,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
               removePendingEvents(userId, pending.map((event) => event.id));
             }
           }
-        }, { initialReady: reuseServerReady });
+        }, { initialReady: reuseServerReady, initialHydrated });
       store.current = instance;
       stop = instance.start();
     } catch (error) {
