@@ -10,7 +10,7 @@ vi.mock('@/lib/family-access',()=>({setFamilyPreviewPlan:vi.fn()}));
 
 const premium={plan:'premium' as const,canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
 const free={plan:'free' as const,canPreview:true,features:{aiReview:false,aiChat:false,dailySummaryEmail:false}};
-const setAccess=(access:typeof free|typeof premium)=>publishFamilyAccessState({key:'user:test',access,error:''});
+const setAccess=(access:typeof free|typeof premium,key='user:test')=>publishFamilyAccessState({key,access,error:''});
 
 describe('AI advice menu integration',()=>{
   afterEach(()=>{cleanup();localStorage.clear();clearFamilyAccessState();delete document.documentElement.dataset.twinlyAiAdvice;});
@@ -54,5 +54,25 @@ describe('AI advice menu integration',()=>{
     expect(await screen.findByText('直近の集計では大きな変化はありません。')).toBeInTheDocument();
     await waitFor(()=>expect(mock.service.mock.calls.some(([name,data])=>name==='twinlyAi'&&data?.mode==='ask')).toBe(true));
     expect(mock.service.mock.calls.some(([name])=>name==='getFamilyAccess')).toBe(false);
+  });
+
+  it('clears the same-day AI review when the signed-in account or family changes',async()=>{
+    localStorage.setItem('twinly-ai-review-consent-v3','yes');
+    setAccess(premium,'user:first-family');
+    mock.service
+      .mockResolvedValueOnce({observations:'奏汰と日向のアドバイス',checks:'最初の家族です',generatedAt:Date.now()})
+      .mockResolvedValueOnce({observations:'赤ちゃんAと赤ちゃんBのアドバイス',checks:'次の家族です',generatedAt:Date.now()});
+
+    render(<AiAdviceLauncher/>);
+    await waitFor(()=>expect(document.documentElement.dataset.twinlyAiAdvice).toBe('enabled'));
+    window.dispatchEvent(new Event('twinly-ai-advice-open'));
+    expect(await screen.findByText('奏汰と日向のアドバイス')).toBeInTheDocument();
+
+    setAccess(premium,'user:second-family');
+    await waitFor(()=>expect(screen.queryByText('奏汰と日向のアドバイス')).not.toBeInTheDocument());
+
+    window.dispatchEvent(new Event('twinly-ai-advice-open'));
+    expect(await screen.findByText('赤ちゃんAと赤ちゃんBのアドバイス')).toBeInTheDocument();
+    expect(mock.service.mock.calls.filter(([name,data])=>name==='twinlyAi'&&data?.mode==='review')).toHaveLength(2);
   });
 });

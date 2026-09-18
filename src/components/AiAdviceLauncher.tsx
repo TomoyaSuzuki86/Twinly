@@ -11,7 +11,7 @@ const JST = 9 * 60 * 60 * 1000;
 const dayKey = (timestamp = Date.now()) => new Date(timestamp + JST).toISOString().slice(0, 10);
 
 export function AiAdviceLauncher() {
-  const { access } = useCurrentFamilyAccess();
+  const { key: familyAccessKey, access } = useCurrentFamilyAccess();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState("");
@@ -24,6 +24,19 @@ export function AiAdviceLauncher() {
   });
   const [consentChecked, setConsentChecked] = useState(consent);
   const inFlight = useRef(false);
+  const familyAccessKeyRef = useRef(familyAccessKey);
+  familyAccessKeyRef.current = familyAccessKey;
+
+  useEffect(() => {
+    inFlight.current = false;
+    setOpen(false);
+    setReview(null);
+    setAnswer(null);
+    setQuestion("");
+    setError("");
+    setBusy(false);
+    setBusyText("");
+  }, [familyAccessKey]);
 
   useEffect(() => {
     const state = access === null ? "loading" : access.features.aiReview ? "enabled" : "premium-required";
@@ -50,39 +63,51 @@ export function AiAdviceLauncher() {
   const loadReview = async () => {
     if (inFlight.current) return;
     if (review && dayKey(review.generatedAt) === dayKey()) return;
+    const requestKey = familyAccessKey;
     inFlight.current = true;
     setBusy(true);
     setBusyText("直近2週間を確認しています…");
     setError("");
     try {
       const next = await callService<AiReview>("twinlyAi", { mode: "review" });
+      if (familyAccessKeyRef.current !== requestKey) return;
       setReview(next);
       setAnswer(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AIアドバイスを取得できませんでした");
+      if (familyAccessKeyRef.current === requestKey) {
+        setError(e instanceof Error ? e.message : "AIアドバイスを取得できませんでした");
+      }
     } finally {
-      inFlight.current = false;
-      setBusy(false);
-      setBusyText("");
+      if (familyAccessKeyRef.current === requestKey) {
+        inFlight.current = false;
+        setBusy(false);
+        setBusyText("");
+      }
     }
   };
 
   const askQuestion = async () => {
     const value = question.trim();
     if (!value || inFlight.current) return;
+    const requestKey = familyAccessKey;
     inFlight.current = true;
     setBusy(true);
     setBusyText("AIが記録を確認しています…");
     setError("");
     try {
       const next = await callService<AiQuestionAnswer>("twinlyAi", { mode: "ask", question: value });
+      if (familyAccessKeyRef.current !== requestKey) return;
       setAnswer(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "質問に回答できませんでした");
+      if (familyAccessKeyRef.current === requestKey) {
+        setError(e instanceof Error ? e.message : "質問に回答できませんでした");
+      }
     } finally {
-      inFlight.current = false;
-      setBusy(false);
-      setBusyText("");
+      if (familyAccessKeyRef.current === requestKey) {
+        inFlight.current = false;
+        setBusy(false);
+        setBusyText("");
+      }
     }
   };
 
