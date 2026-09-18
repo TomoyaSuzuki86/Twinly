@@ -6,7 +6,8 @@ if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('GitHub Actions専用
 
 const familyId = process.env.TWINLY_TRIAL_FAMILY_ID || '';
 const model = process.env.TWINLY_AI_MODEL || 'gemini-3.6-flash';
-if (!/^[A-Za-z0-9_-]*$/.test(familyId) || !/^[A-Za-z0-9.-]+$/.test(model)) throw new Error('AI設定値が不正です');
+const fallbackModel = process.env.TWINLY_AI_FALLBACK_MODEL || 'gemini-3.5-flash-lite';
+if (!/^[A-Za-z0-9_-]*$/.test(familyId) || !/^[A-Za-z0-9.-]+$/.test(model) || !/^[A-Za-z0-9.-]+$/.test(fallbackModel)) throw new Error('AI設定値が不正です');
 
 function setSecret(name, value, label) {
   const result = spawnSync(
@@ -27,6 +28,7 @@ fs.writeFileSync(
   [
     `TWINLY_TRIAL_FAMILY_ID=${familyId}`,
     `TWINLY_AI_MODEL=${model}`,
+    `TWINLY_AI_FALLBACK_MODEL=${fallbackModel}`,
     '',
   ].join('\n')
 );

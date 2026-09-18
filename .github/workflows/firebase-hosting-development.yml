@@ -97,7 +97,7 @@ jobs:
           if ! gcloud secrets describe TWINLY_STRIPE_TEST_SECRET_KEY --project twinly-prod >/dev/null 2>&1; then
             printf '%s' "$TWINLY_STRIPE_TEST_SECRET_KEY" | npx --yes firebase-tools@latest functions:secrets:set TWINLY_STRIPE_TEST_SECRET_KEY --data-file - --project twinly-prod --non-interactive
           fi
-          printf 'TWINLY_DEVELOPMENT_BILLING=true\nTWINLY_DEVELOPMENT_STRIPE_PRICE_ID=%s\nTWINLY_AI_MODEL=gemini-3.6-flash\n' "$TWINLY_STRIPE_TEST_PRICE_ID" > functions/.env.twinly-prod
+          printf 'TWINLY_DEVELOPMENT_BILLING=true\nTWINLY_DEVELOPMENT_STRIPE_PRICE_ID=%s\nTWINLY_AI_MODEL=gemini-3.6-flash\nTWINLY_AI_FALLBACK_MODEL=gemini-3.5-flash-lite\n' "$TWINLY_STRIPE_TEST_PRICE_ID" > functions/.env.twinly-prod
 
       - name: Deploy development billing functions
         if: steps.billing_scope.outputs.deploy == 'true'
