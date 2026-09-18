@@ -58,6 +58,7 @@ describe("stripLegacyCalendarFields", () => {
     expect(migrated.events[0]).not.toHaveProperty("calendarStatus");
     expect(migrated.events[0]).not.toHaveProperty("calendarEventId");
     expect(migrated.events[1]).not.toHaveProperty("calendarStatus");
+    expect(migrated.profiles.A.diaperGaugeWindowMinutes).toBe(120);
     expect(migrated.profiles.A.activityLimitMinutesOverride).toBeNull();
     expect(migrated.profiles.A.sleepTargetHoursOverride).toBe(15);
     expect(migrated.sleepManagementEnabled).toBe(true);
@@ -73,6 +74,7 @@ describe("createInitialAppState", () => {
     expect(app.profiles.B).not.toHaveProperty("calendarName");
     expect(app.profiles.B).not.toHaveProperty("calendarId");
     expect(app.events).toEqual([]);
+    expect(app.profiles.A.diaperGaugeWindowMinutes).toBe(120);
     expect(app.profiles.A.activityLimitMinutesOverride).toBeNull();
     expect(app.profiles.A.sleepTargetHoursOverride).toBeNull();
     expect(app.sleepManagementEnabled).toBe(true);
