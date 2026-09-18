@@ -10,7 +10,7 @@ export async function ensureNotificationSettingsDocument(user: User) {
     if (snapshot.exists()) return;
     transaction.set(settingsRef, {
       milkReminder: { enabled: true, intervalMinutes: 150, mergeWindowMinutes: 15 },
-      careReminder: { enabled: true, mergeWindowMinutes: 15, diaperGaugeWindowMinutes: 120 },
+      careReminder: { enabled: true, mergeWindowMinutes: 15 },
       updatedAt: serverTimestamp(),
     });
   });
