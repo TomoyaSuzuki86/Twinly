@@ -33,6 +33,7 @@ import { SnackbarUndo } from "./components/SnackbarUndo";
 import { iconGradients } from "./lib/utils";
 const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
 import { SkeletonLoader } from "./components/SkeletonLoader";
+import { BabyPanelHydrationPlaceholder, BabyTabHydrationPlaceholder } from "./components/AppHydrationPlaceholder";
 const DailyReportModal = lazy(() => import("./components/DailyReportModal").then((module) => ({ default: module.DailyReportModal })));
 const EventHistoryModal = lazy(() => import("./components/EventHistoryModal").then((module) => ({ default: module.EventHistoryModal })));
 const SleepHistoryModal = lazy(() => import("./components/SleepHistoryModal").then((module) => ({ default: module.SleepHistoryModal })));
@@ -199,7 +200,7 @@ export default function App() {
 
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
-  const { store, status: syncStatus, requestSync } = useAppStore(
+  const { store, status: syncStatus, requestSync, hydrated: appHydrated } = useAppStore(
     authUser?.uid,
     sharedAccessBlocked ? undefined : family?.id,
     allHistory,
@@ -573,14 +574,18 @@ export default function App() {
                   onPointerCancel={clearVoiceLongPress}
                   onContextMenu={(event) => event.preventDefault()}
                 >
-                <BabyTabTrigger
-                  profile={app.profiles.A}
-                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={dashboard.A.tabGaugePercents}
-                  activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && dashboard.A.sleeping}
-                  selected={selectedBabyTab === "A"}
-                />
+                {appHydrated ? (
+                  <BabyTabTrigger
+                    profile={app.profiles.A}
+                    gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                    gaugePercents={dashboard.A.tabGaugePercents}
+                    activityGaugeEnabled={app.sleepManagementEnabled}
+                    sleeping={app.sleepManagementEnabled && dashboard.A.sleeping}
+                    selected={selectedBabyTab === "A"}
+                  />
+                ) : (
+                  <BabyTabHydrationPlaceholder selected={selectedBabyTab === "A"} />
+                )}
                 </TabsTrigger>
                 <TabsTrigger
                   ref={tutorialAnchors.ref("baby-tab:B")}
@@ -593,14 +598,18 @@ export default function App() {
                   onPointerCancel={clearVoiceLongPress}
                   onContextMenu={(event) => event.preventDefault()}
                 >
-                <BabyTabTrigger
-                  profile={app.profiles.B}
-                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={dashboard.B.tabGaugePercents}
-                  activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && dashboard.B.sleeping}
-                  selected={selectedBabyTab === "B"}
-                />
+                {appHydrated ? (
+                  <BabyTabTrigger
+                    profile={app.profiles.B}
+                    gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                    gaugePercents={dashboard.B.tabGaugePercents}
+                    activityGaugeEnabled={app.sleepManagementEnabled}
+                    sleeping={app.sleepManagementEnabled && dashboard.B.sleeping}
+                    selected={selectedBabyTab === "B"}
+                  />
+                ) : (
+                  <BabyTabHydrationPlaceholder selected={selectedBabyTab === "B"} />
+                )}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -613,7 +622,8 @@ export default function App() {
               }}
             >
             <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
-              <BabyPanel
+              {appHydrated ? (
+                <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
                 primaryActionMorph={{
                   stickyRef: primaryActionStickyRef,
@@ -651,9 +661,13 @@ export default function App() {
                 }
                 memberNameByUid={memberNameByUid}
               />
+              ) : (
+                <BabyPanelHydrationPlaceholder />
+              )}
             </TabsContent>
             <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
-              <BabyPanel
+              {appHydrated ? (
+                <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
                 primaryActionMorph={{
                   stickyRef: primaryActionStickyRef,
@@ -691,6 +705,9 @@ export default function App() {
                 }
                 memberNameByUid={memberNameByUid}
               />
+              ) : (
+                <BabyPanelHydrationPlaceholder />
+              )}
             </TabsContent>
             </div>
           </Tabs>
