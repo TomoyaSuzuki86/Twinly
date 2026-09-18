@@ -34,6 +34,9 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
     let active = true;
     let revision = 0;
     let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshInFlight = false;
+    let refreshQueued = false;
     let finishBootstrapSync = beginBackgroundSync("family-access-bootstrap");
     const cachedAccess = readCachedFamilyAccess(key);
     publishFamilyAccessState({ key, access: cachedAccess, error: "" });
@@ -44,8 +47,23 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
       finishBootstrapSync = () => {};
     };
 
+    const scheduleRefresh = (delay = 80) => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = undefined;
+        refresh();
+      }, delay);
+    };
+
     const refresh = () => {
       finishInitialSync();
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+      }
+
+      refreshInFlight = true;
+      refreshQueued = false;
       const currentRevision = ++revision;
       const finishSync = beginBackgroundSync("family-access");
       getFamilyAccess()
@@ -67,14 +85,18 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
           });
           failFamilyAccessBootstrap(uid, familyId);
         })
-        .finally(finishSync);
+        .finally(() => {
+          refreshInFlight = false;
+          finishSync();
+          if (active && refreshQueued) scheduleRefresh();
+        });
     };
 
     const realtimeEnabled = canSubscribeFamilyAccessChanges();
     const stop = realtimeEnabled
       ? subscribeFamilyAccessChanges(
           familyId,
-          refresh,
+          () => scheduleRefresh(),
           () => {
             if (!active) return;
             finishInitialSync();
@@ -93,12 +115,13 @@ export function useFamilyAccess(uid?: string, familyId?: string) {
     // Fetch in the background while the cached access state remains visible.
     if (!realtimeEnabled) refresh();
 
-    const onFocus = () => { if (document.visibilityState !== "hidden") refresh(); };
+    const onFocus = () => { if (document.visibilityState !== "hidden") scheduleRefresh(); };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
       finishInitialSync();
       clearTimeout(expiryTimer);
+      clearTimeout(refreshTimer);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
       active = false;
