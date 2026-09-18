@@ -407,8 +407,18 @@ export class AppStore {
 
   recheck(reason: Exclude<SyncCheckReason, "start" | "listener-error" | "server-check-timeout">) {
     if (this.stopped) return;
+
+    // Browser lifecycle events (especially pageshow in an installed PWA) can fire
+    // immediately after startup. If the store is already checking the server, reconnecting
+    // here tears down and recreates every Firestore listener and causes a second render burst.
+    if (this.status.checking) {
+      this.logDiagnostic(`recheck-skipped:${reason}`);
+      void this.flush();
+      return;
+    }
+
     const now = Date.now();
-    if (this.status.checking && now - this.lastCheckStartedAt < 1_000) return;
+    if (now - this.lastCheckStartedAt < 1_000) return;
     this.lastCheckStartedAt = now;
     this.receiveError = null;
     this.status.checking = true;
