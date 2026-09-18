@@ -77,6 +77,16 @@ test('direct AI calls in free mode never contact provider',async()=>{
   await assert.rejects(services.twinlyAi.run(request({mode:'review'})),e=>e.code==='permission-denied');
 });
 
+test('production billing trial grants AI through production callable',async()=>{
+  process.env.TWINLY_AI_API_KEY='test-only';
+  process.env.TWINLY_BILLING_ENABLED='true';
+  const now=Date.now();
+  const {services}=setup({'families/f/services/access':{billingVersion:1,trialStartedAt:now-1000,trialEndsAt:now+7*86400000},'families/f/app/state':reviewState(now)});
+  global.fetch=async()=>geminiJson({observations:'trial works',checks:'ok'});
+  const result=await services.twinlyAi.run(request({mode:'review'}));
+  assert.equal(result.observations,'trial works');
+});
+
 test('development trial grants AI through development callable without granting production AI',async()=>{
   process.env.TWINLY_AI_API_KEY='test-only';
   process.env.TWINLY_BILLING_ENABLED='true';
