@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { accessFor } = require("./ai-policy");
+const { isMemberRoleOwner } = require("./access-policy");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 
 const inviteLifetimeMs = 24 * 60 * 60 * 1000;
@@ -132,7 +133,7 @@ module.exports = ({ admin, db, familyAccess, logger = console }) => {
     if (!familyId) throw new HttpsError("invalid-argument", "家族IDが必要です");
   
     const memberSnap = await db.collection("families").doc(familyId).collection("members").doc(uid).get();
-    if (!memberSnap.exists || memberSnap.data()?.status !== "active" || memberSnap.data()?.role !== "owner") {
+    if (!memberSnap.exists || !isMemberRoleOwner(memberSnap.data())) {
       throw new HttpsError("permission-denied", "管理者だけが家族を招待できます");
     }
   
