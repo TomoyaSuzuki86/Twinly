@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { iconGradients } from "@/lib/utils";
 import { buildMilkGauge } from "@/lib/care-gauges";
+import { adjustSharedDiaperStock } from "@/lib/diaper-stock";
 import {
   formatSleepDuration,
   getDefaultActivityLimitMinutes,
@@ -255,23 +256,7 @@ export function SettingsModal({
   };
 
   const handleDiaperStockChange = (size: string, amount: number) => {
-    setLocalProfiles((prev) => {
-      const nextProfiles = { ...prev };
-      const currentStock = nextProfiles.A.diaperStockBySize[size] ?? 0;
-      const nextStock = Math.max(0, currentStock + amount);
-
-      (Object.keys(nextProfiles) as BabyId[]).forEach((babyId) => {
-        nextProfiles[babyId] = {
-          ...nextProfiles[babyId],
-          diaperStockBySize: {
-            ...nextProfiles[babyId].diaperStockBySize,
-            [size]: nextStock,
-          },
-        };
-      });
-
-      return nextProfiles;
-    });
+    setLocalProfiles((prev) => adjustSharedDiaperStock(prev, size, amount));
   };
 
   const finalizeClose = () => {
