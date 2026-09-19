@@ -41,7 +41,6 @@ export function AiAdviceLauncher() {
   useEffect(() => {
     const state = access === null ? "loading" : access.features.aiReview ? "enabled" : "premium-required";
     document.documentElement.dataset.twinlyAiAdvice = state;
-    window.dispatchEvent(new CustomEvent("twinly-ai-advice-state", { detail: { state } }));
     return () => {
       if (document.documentElement.dataset.twinlyAiAdvice === state) {
         delete document.documentElement.dataset.twinlyAiAdvice;
@@ -120,8 +119,8 @@ export function AiAdviceLauncher() {
 
   useEffect(() => {
     const handleOpen = () => openAdvice();
-    window.addEventListener("twinly-ai-advice-open", handleOpen);
-    return () => window.removeEventListener("twinly-ai-advice-open", handleOpen);
+    window.addEventListener(TWINLY_WINDOW_EVENTS.aiAdviceOpen, handleOpen);
+    return () => window.removeEventListener(TWINLY_WINDOW_EVENTS.aiAdviceOpen, handleOpen);
   }, [access, consent, review]);
 
   const acceptAndLoad = () => {
