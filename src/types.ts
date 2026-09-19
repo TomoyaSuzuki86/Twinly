@@ -65,7 +65,9 @@ export type BabyProfile = {
   milkTargetMlOverride?: number | null;
   diaperGaugeWindowMinutes?: number;
   activityLimitMinutesOverride?: number | null;
+  activityLimitMinutesCustom?: number | null;
   sleepTargetHoursOverride?: number | null;
+  sleepTargetHoursCustom?: number | null;
 };
 
 export type AppState = {
