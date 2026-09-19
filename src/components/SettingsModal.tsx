@@ -136,7 +136,13 @@ export function SettingsModal({
   };
 
   const handleGaugeChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
-    setGaugeDraftProfiles((prev) => setSleepCustomValue(prev, babyId, kind, value));
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [babyId]: {
+        ...prev[babyId],
+        [field]: value,
+      },
+    }));
     setCopiedGaugeFrom(null);
     setGaugeSavedNotice(false);
   };
@@ -146,21 +152,7 @@ export function SettingsModal({
     kind: "activity" | "sleep",
     value: number
   ) => {
-    setGaugeDraftProfiles((prev) => ({
-      ...prev,
-      [babyId]: {
-        ...prev[babyId],
-        ...(kind === "activity"
-          ? {
-              activityLimitMinutesOverride: value,
-              activityLimitMinutesCustom: value,
-            }
-          : {
-              sleepTargetHoursOverride: value,
-              sleepTargetHoursCustom: value,
-            }),
-      },
-    }));
+    setGaugeDraftProfiles((prev) => setSleepCustomValue(prev, babyId, kind, value));
     setCopiedGaugeFrom(null);
     setGaugeSavedNotice(false);
   };
