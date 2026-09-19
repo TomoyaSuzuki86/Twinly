@@ -54,6 +54,17 @@ describe("SettingsModal", () => {
     expect(screen.getByText(/Freeでも設定は先に調整・保存でき/)).toBeInTheDocument();
   });
 
+  it("uses the same dimmed baby theme backgrounds as the main screen", () => {
+    renderSettings();
+
+    expect(screen.getByTestId("profile-settings-A").className).toContain("bg-violet-900/60");
+    expect(screen.getByTestId("profile-settings-B").className).toContain("bg-sky-900/60");
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    expect(screen.getByTestId("care-gauge-settings-A").className).toContain("bg-violet-900/60");
+    expect(screen.getByTestId("care-gauge-settings-B").className).toContain("bg-sky-900/60");
+  });
+
   it("shows the care gauge and notifications tabs for Premium users", () => {
     renderSettings(undefined, true);
     expect(screen.getByRole("tab", { name: "お世話ゲージ" })).toBeInTheDocument();
