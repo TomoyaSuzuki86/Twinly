@@ -1,3 +1,4 @@
+import { BillingPrompt } from "./components/BillingPrompt";
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -32,6 +33,7 @@ import { SnackbarUndo } from "./components/SnackbarUndo";
 import { iconGradients } from "./lib/utils";
 const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
 import { SkeletonLoader } from "./components/SkeletonLoader";
+import { BabyPanelHydrationPlaceholder, BabyTabHydrationPlaceholder } from "./components/AppHydrationPlaceholder";
 const DailyReportModal = lazy(() => import("./components/DailyReportModal").then((module) => ({ default: module.DailyReportModal })));
 const EventHistoryModal = lazy(() => import("./components/EventHistoryModal").then((module) => ({ default: module.EventHistoryModal })));
 const SleepHistoryModal = lazy(() => import("./components/SleepHistoryModal").then((module) => ({ default: module.SleepHistoryModal })));
@@ -44,6 +46,7 @@ import { createInitialAppState } from "./lib/app-state";
 import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
+import { readCachedAppState } from "./data/app-state-cache";
 import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
 import { RECENT_DAYS } from "./data/firestore-app-repository";
@@ -55,6 +58,7 @@ import {
   createFamilyInvite,
   joinFamilyWithInvite,
   loadFamilySession,
+  readCachedFamilySession,
   subscribeFamilyMembers,
   updateMemberProfile,
 } from "./lib/family";
@@ -130,23 +134,40 @@ export default function App() {
 
   const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
     setSessionError(null);
-    setFamily(null);
-    setFamilyMember(null);
-    setFamilyMembers([]);
-    setApp(createEmptyState());
     closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
     resetUndo();
 
     if (user) {
-      setAppLoading(true);
+      const cachedSession = readCachedFamilySession(user.uid);
+      const cachedApp = cachedSession
+        ? readCachedAppState(window.localStorage, user.uid, cachedSession.family.id)
+        : null;
+
+      if (cachedSession) {
+        // Restore the last usable dashboard synchronously. Authentication and server
+        // revalidation continue in the background and must not block interaction.
+        setFamily(cachedSession.family);
+        setFamilyMember(cachedSession.member);
+        setFamilyMembers([cachedSession.member]);
+        if (cachedApp) setApp((previous) => ({ ...cachedApp, ui: previous.ui }));
+        setAppLoading(false);
+      } else {
+        setFamily(null);
+        setFamilyMember(null);
+        setFamilyMembers([]);
+        setApp(createEmptyState());
+        setAppLoading(true);
+      }
+
       try {
         const session = await loadFamilySession(user);
         if (!context.isCurrent()) return;
         setFamily(session?.family ?? null);
         setFamilyMember(session?.member ?? null);
         if (session) {
+          setFamilyMembers((current) => current.length ? current : [session.member]);
           if (session.member.profileCompleted === false) setAccountModalOpen(true);
           void ensureNotificationSettingsDocument(user).catch(console.error);
         } else {
@@ -156,10 +177,12 @@ export default function App() {
       } catch (error) {
         console.error("Failed to load family session", error);
         if (!context.isCurrent()) return;
-        setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
-        setFamily(null);
-        setFamilyMember(null);
-        setFamilyMembers([]);
+        if (!cachedSession) {
+          setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
+          setFamily(null);
+          setFamilyMember(null);
+          setFamilyMembers([]);
+        }
         setAppLoading(false);
       }
       return;
@@ -198,7 +221,7 @@ export default function App() {
 
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
     new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
-  const { store, status: syncStatus, requestSync } = useAppStore(
+  const { store, status: syncStatus, requestSync, hydrated: appHydrated } = useAppStore(
     authUser?.uid,
     sharedAccessBlocked ? undefined : family?.id,
     allHistory,
@@ -454,7 +477,7 @@ export default function App() {
     );
   }
 
-  if (sharedAccessBlocked) return <AppContainer><div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-xl font-bold">家族共有は有料機能です</h1><p>{accessError || (familyAccess ? "無料モードの間は管理者だけが記録を利用できます。管理者がお試しをONにすると共有を再開します。" : "プランを確認中…")}</p><p>既存の記録とメンバー登録は保持しています。</p><Button onClick={handleSignOut}>ログアウト</Button></div></AppContainer>;
+  if (sharedAccessBlocked) return <AppContainer><div className="mx-auto max-w-md space-y-4 p-6"><h1 className="text-xl font-bold">家族共有は有料機能です</h1><p>{accessError || (familyAccess ? "無料モードの間は管理者だけが記録を利用できます。管理者が無料体験またはPremiumの契約を開始すると共有を再開します。" : "プランを確認中…")}</p><p>既存の記録とメンバー登録は保持しています。</p><Button onClick={handleSignOut}>ログアウト</Button></div></AppContainer>;
 
   if (sessionError || (syncStatus.error && authUser && family && !syncStatus.ready)) {
     return <AppContainer><div className="grid min-h-screen place-items-center p-6"><div className="max-w-md space-y-4 text-center">
@@ -572,14 +595,18 @@ export default function App() {
                   onPointerCancel={clearVoiceLongPress}
                   onContextMenu={(event) => event.preventDefault()}
                 >
-                <BabyTabTrigger
-                  profile={app.profiles.A}
-                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={dashboard.A.tabGaugePercents}
-                  activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && dashboard.A.sleeping}
-                  selected={selectedBabyTab === "A"}
-                />
+                {appHydrated ? (
+                  <BabyTabTrigger
+                    profile={app.profiles.A}
+                    gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                    gaugePercents={dashboard.A.tabGaugePercents}
+                    activityGaugeEnabled={app.sleepManagementEnabled}
+                    sleeping={app.sleepManagementEnabled && dashboard.A.sleeping}
+                    selected={selectedBabyTab === "A"}
+                  />
+                ) : (
+                  <BabyTabHydrationPlaceholder selected={selectedBabyTab === "A"} />
+                )}
                 </TabsTrigger>
                 <TabsTrigger
                   ref={tutorialAnchors.ref("baby-tab:B")}
@@ -592,14 +619,18 @@ export default function App() {
                   onPointerCancel={clearVoiceLongPress}
                   onContextMenu={(event) => event.preventDefault()}
                 >
-                <BabyTabTrigger
-                  profile={app.profiles.B}
-                  gaugesEnabled={Boolean(familyAccess?.features.gauges)}
-                  gaugePercents={dashboard.B.tabGaugePercents}
-                  activityGaugeEnabled={app.sleepManagementEnabled}
-                  sleeping={app.sleepManagementEnabled && dashboard.B.sleeping}
-                  selected={selectedBabyTab === "B"}
-                />
+                {appHydrated ? (
+                  <BabyTabTrigger
+                    profile={app.profiles.B}
+                    gaugesEnabled={Boolean(familyAccess?.features.gauges)}
+                    gaugePercents={dashboard.B.tabGaugePercents}
+                    activityGaugeEnabled={app.sleepManagementEnabled}
+                    sleeping={app.sleepManagementEnabled && dashboard.B.sleeping}
+                    selected={selectedBabyTab === "B"}
+                  />
+                ) : (
+                  <BabyTabHydrationPlaceholder selected={selectedBabyTab === "B"} />
+                )}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -612,7 +643,8 @@ export default function App() {
               }}
             >
             <TabsContent forceMount value="A" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
-              <BabyPanel
+              {appHydrated ? (
+                <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
                 primaryActionMorph={{
                   stickyRef: primaryActionStickyRef,
@@ -650,9 +682,13 @@ export default function App() {
                 }
                 memberNameByUid={memberNameByUid}
               />
+              ) : (
+                <BabyPanelHydrationPlaceholder />
+              )}
             </TabsContent>
             <TabsContent forceMount value="B" className="twinly-baby-tabs-content mt-1 data-[state=inactive]:hidden">
-              <BabyPanel
+              {appHydrated ? (
+                <BabyPanel
                 tutorialAnchorRef={tutorialAnchors.ref}
                 primaryActionMorph={{
                   stickyRef: primaryActionStickyRef,
@@ -690,6 +726,9 @@ export default function App() {
                 }
                 memberNameByUid={memberNameByUid}
               />
+              ) : (
+                <BabyPanelHydrationPlaceholder />
+              )}
             </TabsContent>
             </div>
           </Tabs>
@@ -845,6 +884,7 @@ export default function App() {
           return recordEventDrafts(eventDrafts);
         }} />}
       />
+      <BillingPrompt />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
         onOpenChange={setAccountModalOpen}
@@ -899,3 +939,4 @@ export default function App() {
     </AppContainer>
   );
 }
+

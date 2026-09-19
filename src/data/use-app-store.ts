@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "@/types";
 import { db } from "@/firebase";
 import { createInitialAppState } from "@/lib/app-state";
 import { loadPendingEvents, removePendingEvents, mergePendingEvents } from "@/lib/pending-events";
-import {
-  getFamilyAccessBootstrapState,
-  subscribeFamilyAccessBootstrap,
-} from "@/lib/family-access-bootstrap";
 import { AppStore, type StoreStatus } from "./app-store";
 import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
 import { applyAppStorePresentation } from "./app-store-presentation";
 import { createFirestoreAppRepository } from "./firestore-app-repository";
+import { readCachedAppState, scheduleCachedAppStateWrite } from "./app-state-cache";
 
 type HistoryMode = {
   identity: string;
@@ -24,8 +21,13 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   const [status, setStatus] = useState<StoreStatus>({ pending: 0, error: null, ready: false, fromCache: true, conflicts: [] });
   const identity = `${userId ?? ""}:${familyId ?? ""}`;
   const [historyMode, setHistoryMode] = useState<HistoryMode>({ identity, allHistory });
-  const initialLoadComplete = useRef(false);
-  const initialLoadIdentity = useRef("");
+  const visibleIdentity = useRef("");
+  const serverReadyIdentity = useRef("");
+  const [hydratedIdentity, setHydratedIdentity] = useState("");
+  const cachedForIdentity = useMemo(() => {
+    if (!userId || !familyId || typeof window === "undefined") return null;
+    return readCachedAppState(window.localStorage, userId, familyId);
+  }, [identity, userId, familyId]);
 
   const effectiveAllHistory = historyMode.identity === identity
     ? historyMode.allHistory || allHistory
@@ -47,48 +49,60 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     status.conflicts,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!db || !userId || !familyId) return;
 
-    const reuseVisibleState = initialLoadIdentity.current === identity && initialLoadComplete.current;
-    if (initialLoadIdentity.current !== identity) {
-      initialLoadIdentity.current = identity;
-      initialLoadComplete.current = false;
-      lastApp.current = createInitialAppState();
+    const reuseVisibleState = visibleIdentity.current === identity;
+    let initialHydrated = reuseVisibleState && hydratedIdentity === identity;
+    if (!reuseVisibleState) {
+      visibleIdentity.current = identity;
+      serverReadyIdentity.current = "";
+      const cached = cachedForIdentity;
+      lastApp.current = cached ?? createInitialAppState();
+      if (cached) {
+        initialHydrated = true;
+        setApp((previous) => ({ ...cached, ui: previous.ui }));
+        setHydratedIdentity(identity);
+      } else {
+        setHydratedIdentity("");
+      }
     }
+    const reuseServerReady = serverReadyIdentity.current === identity;
 
-    setLoading(!initialLoadComplete.current);
+    // The dashboard must not wait for family-access or server synchronization.
+    // Restore the last hydrated state first; otherwise render neutral placeholders until
+    // Firestore supplies the first local/server snapshot.
+    setLoading(false);
 
     let stopped = false;
     let migrated = false;
     let stop = () => {};
-    let latestStatus: StoreStatus = { pending: 0, error: null, ready: false, fromCache: true, conflicts: [] };
-    const syncBootstrapLoading = () => {
-      if (stopped) return;
-      if (initialLoadComplete.current) {
-        setLoading(false);
-        return;
-      }
-      const accessState = getFamilyAccessBootstrapState(userId, familyId);
-      const accessLoading = accessState === "idle" || accessState === "loading";
-      const loading = (!latestStatus.ready && !latestStatus.error) || accessLoading;
-      setLoading(loading);
-      if (!loading) initialLoadComplete.current = true;
-    };
-    const stopAccessBootstrap = subscribeFamilyAccessBootstrap(syncBootstrapLoading);
     try {
-      const initial = reuseVisibleState ? lastApp.current : createInitialAppState();
+      const initial = lastApp.current;
       const instance = new AppStore(createFirestoreAppRepository(db, familyId, userId, effectiveAllHistory),
         initial, localStorage, `twinly-outbox:${userId}:${familyId}`, (next, nextStatus) => {
           if (stopped) return;
-          latestStatus = nextStatus;
-          setApp((previous) => {
-            const merged = { ...next, ui: previous.ui };
-            lastApp.current = merged;
-            return merged;
-          });
-          setStatus(nextStatus);
-          syncBootstrapLoading();
+          if (nextStatus.ready) serverReadyIdentity.current = identity;
+          if (nextStatus.hydrated) {
+            lastApp.current = next;
+            scheduleCachedAppStateWrite(localStorage, userId, familyId, next);
+
+            const applyVisibleState = () => {
+              setApp((previous) => ({ ...next, ui: previous.ui }));
+            };
+
+            // Server-confirmed snapshots can be comparatively large. Treat them as
+            // non-urgent so tab changes and care actions can interrupt rendering.
+            if (nextStatus.ready && !nextStatus.fromCache && nextStatus.pending === 0) {
+              startTransition(applyVisibleState);
+            } else {
+              applyVisibleState();
+            }
+            setHydratedIdentity(identity);
+          }
+          // A network error before the first server-confirmed snapshot is non-fatal.
+          // Keep retry state visible through connection/checking while the local UI stays usable.
+          setStatus(nextStatus.ready ? nextStatus : { ...nextStatus, error: null });
           if (!migrated && nextStatus.ready && familyId === userId) {
             migrated = true;
             const pending = loadPendingEvents(userId);
@@ -97,14 +111,12 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
               removePendingEvents(userId, pending.map((event) => event.id));
             }
           }
-        }, { initialReady: reuseVisibleState });
+        }, { initialReady: reuseServerReady, initialHydrated });
       store.current = instance;
       stop = instance.start();
-      syncBootstrapLoading();
     } catch (error) {
-      latestStatus = { pending: 0, ready: false, fromCache: true, conflicts: [], error: error instanceof Error ? error.message : "端末の保存領域を利用できません。" };
-      setStatus(latestStatus);
-      initialLoadComplete.current = true;
+      const nextStatus = { pending: 0, ready: false, fromCache: true, conflicts: [], error: error instanceof Error ? error.message : "端末の保存領域を利用できません。" };
+      setStatus(nextStatus);
       setLoading(false);
     }
 
@@ -117,16 +129,17 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     return () => {
       stopped = true;
       stop();
-      stopAccessBootstrap();
       store.current = null;
       stopLifecycle();
     };
-  }, [userId, familyId, identity, effectiveAllHistory, setApp, setLoading]);
+  }, [userId, familyId, identity, effectiveAllHistory, cachedForIdentity, setApp, setLoading]);
 
   const requestSync = () => {
     store.current?.recheck("pageshow");
     void store.current?.flush();
   };
 
-  return { store, status, requestSync };
+  const hydrated = Boolean(userId && familyId && (hydratedIdentity === identity || cachedForIdentity));
+
+  return { store, status, requestSync, hydrated };
 }

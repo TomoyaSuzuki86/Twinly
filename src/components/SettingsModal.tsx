@@ -20,7 +20,6 @@ import {
   getDefaultActivityLimitMinutes,
   getDefaultSleepTargetHours,
 } from "@/lib/sleep";
-import { RotateCcw } from "lucide-react";
 import { DailySummaryEmailSettings } from "./DailySummaryEmailSettings";
 
 type SettingsModalProps = {
@@ -51,11 +50,46 @@ type SettingsModalProps = {
 
 type ResetRequest = {
   babyId: BabyId;
-  kind: "milkWindow" | "milkTarget" | "activityLimit" | "sleepTarget";
+  kind: "milkWindow" | "milkTarget" | "diaperWindow" | "activityLimit" | "sleepTarget";
   label: string;
 };
 
+type PendingGaugeExit =
+  | { type: "tab"; value: string }
+  | { type: "close" };
+
 const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
+
+const gaugeProfileSnapshot = (profile: BabyProfile) => ({
+  milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
+  milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+  activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
+  activityLimitMinutesCustom: profile.activityLimitMinutesCustom ?? null,
+  sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
+  sleepTargetHoursCustom: profile.sleepTargetHoursCustom ?? null,
+});
+
+const gaugeProfilesEqual = (
+  left: Record<BabyId, BabyProfile>,
+  right: Record<BabyId, BabyProfile>
+) =>
+  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(left[babyId]))) ===
+  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(right[babyId])));
+
+const applyGaugeProfiles = (
+  base: Record<BabyId, BabyProfile>,
+  source: Record<BabyId, BabyProfile>
+): Record<BabyId, BabyProfile> =>
+  Object.fromEntries(
+    BABY_DISPLAY_ORDER.map((babyId) => [
+      babyId,
+      {
+        ...base[babyId],
+        ...gaugeProfileSnapshot(source[babyId]),
+      },
+    ])
+  ) as Record<BabyId, BabyProfile>;
 
 export const shouldDisablePushEnable = (
   pushBusy: boolean,
@@ -93,15 +127,31 @@ export function SettingsModal({
     () => app.sleepManagementEnabled
   );
   const [resetRequest, setResetRequest] = useState<ResetRequest | null>(null);
+  const [copiedGaugeFrom, setCopiedGaugeFrom] = useState<BabyId | null>(null);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [gaugeDraftProfiles, setGaugeDraftProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
+  const [savedGaugeProfiles, setSavedGaugeProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
+  const [pendingGaugeExit, setPendingGaugeExit] = useState<PendingGaugeExit | null>(null);
+  const [gaugeSavedNotice, setGaugeSavedNotice] = useState(false);
+  const wasOpenRef = React.useRef(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setLocalProfiles(app.profiles);
+      setGaugeDraftProfiles(app.profiles);
+      setSavedGaugeProfiles(app.profiles);
       setLocalDiaperStockManagementEnabled(app.diaperStockManagementEnabled);
       setLocalSleepManagementEnabled(app.sleepManagementEnabled);
       setResetRequest(null);
+      setCopiedGaugeFrom(null);
+      setPendingGaugeExit(null);
+      setGaugeSavedNotice(false);
+      setActiveTab("profile");
     }
+    wasOpenRef.current = open;
   }, [open, app.profiles, app.diaperStockManagementEnabled, app.sleepManagementEnabled]);
+
+  const hasUnsavedGaugeChanges = !gaugeProfilesEqual(gaugeDraftProfiles, savedGaugeProfiles);
 
   const handleProfileChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
     setLocalProfiles((prev) => ({
@@ -111,6 +161,101 @@ export function SettingsModal({
         [field]: value,
       },
     }));
+  };
+
+  const handleGaugeChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [babyId]: {
+        ...prev[babyId],
+        [field]: value,
+      },
+    }));
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const handleSleepCustomChange = (
+    babyId: BabyId,
+    kind: "activity" | "sleep",
+    value: number
+  ) => {
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [babyId]: {
+        ...prev[babyId],
+        ...(kind === "activity"
+          ? {
+              activityLimitMinutesOverride: value,
+              activityLimitMinutesCustom: value,
+            }
+          : {
+              sleepTargetHoursOverride: value,
+              sleepTargetHoursCustom: value,
+            }),
+      },
+    }));
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const handleSleepModeChange = (
+    babyId: BabyId,
+    mode: "age" | "custom",
+    defaultActivityLimitMinutes: number,
+    defaultSleepTargetHours: number
+  ) => {
+    setGaugeDraftProfiles((prev) => {
+      const profile = prev[babyId];
+      if (mode === "age") {
+        return {
+          ...prev,
+          [babyId]: {
+            ...profile,
+            activityLimitMinutesCustom:
+              profile.activityLimitMinutesOverride ??
+              profile.activityLimitMinutesCustom ??
+              defaultActivityLimitMinutes,
+            sleepTargetHoursCustom:
+              profile.sleepTargetHoursOverride ??
+              profile.sleepTargetHoursCustom ??
+              defaultSleepTargetHours,
+            activityLimitMinutesOverride: null,
+            sleepTargetHoursOverride: null,
+          },
+        };
+      }
+
+      return {
+        ...prev,
+        [babyId]: {
+          ...profile,
+          activityLimitMinutesOverride:
+            profile.activityLimitMinutesCustom ??
+            profile.activityLimitMinutesOverride ??
+            defaultActivityLimitMinutes,
+          sleepTargetHoursOverride:
+            profile.sleepTargetHoursCustom ??
+            profile.sleepTargetHoursOverride ??
+            defaultSleepTargetHours,
+        },
+      };
+    });
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const copyGaugeSettingsToOtherBaby = (sourceBabyId: BabyId) => {
+    const targetBabyId: BabyId = sourceBabyId === "A" ? "B" : "A";
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [targetBabyId]: {
+        ...prev[targetBabyId],
+        ...gaugeProfileSnapshot(prev[sourceBabyId]),
+      },
+    }));
+    setCopiedGaugeFrom(sourceBabyId);
+    setGaugeSavedNotice(false);
   };
 
   const handleDiaperStockChange = (size: string, amount: number) => {
@@ -133,12 +278,11 @@ export function SettingsModal({
     });
   };
 
-  const handleClose = (isOpen: boolean) => {
+  const finalizeClose = () => {
     if (
-      !isOpen &&
-      (JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
-        localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled ||
-        localSleepManagementEnabled !== app.sleepManagementEnabled)
+      JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
+      localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled ||
+      localSleepManagementEnabled !== app.sleepManagementEnabled
     ) {
       setApp((prev) => ({
         ...prev,
@@ -147,19 +291,91 @@ export function SettingsModal({
         sleepManagementEnabled: localSleepManagementEnabled,
       }));
     }
-    onOpenChange(isOpen);
+    onOpenChange(false);
+  };
+
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      onOpenChange(true);
+      return;
+    }
+    if (hasUnsavedGaugeChanges) {
+      setPendingGaugeExit({ type: "close" });
+      return;
+    }
+    finalizeClose();
+  };
+
+  const handleTabChange = (value: string) => {
+    if (activeTab === "care-gauges" && value !== "care-gauges" && hasUnsavedGaugeChanges) {
+      setPendingGaugeExit({ type: "tab", value });
+      return;
+    }
+    setActiveTab(value);
+  };
+
+  const handleSaveGaugeSettings = () => {
+    const nextLocalProfiles = applyGaugeProfiles(localProfiles, gaugeDraftProfiles);
+    setLocalProfiles(nextLocalProfiles);
+    setSavedGaugeProfiles(gaugeDraftProfiles);
+    setApp((prev) => ({
+      ...prev,
+      profiles: applyGaugeProfiles(prev.profiles, gaugeDraftProfiles),
+    }));
+    setGaugeSavedNotice(true);
+  };
+
+  const handleRestoreSavedGaugeSettings = () => {
+    setGaugeDraftProfiles(savedGaugeProfiles);
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const discardGaugeChangesAndContinue = () => {
+    const pending = pendingGaugeExit;
+    setGaugeDraftProfiles(savedGaugeProfiles);
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+    setPendingGaugeExit(null);
+    if (pending?.type === "tab") {
+      setActiveTab(pending.value);
+    } else if (pending?.type === "close") {
+      finalizeClose();
+    }
   };
 
   const handleConfirmReset = () => {
     if (!resetRequest) return;
     if (resetRequest.kind === "milkWindow") {
-      handleProfileChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
+      handleGaugeChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
     } else if (resetRequest.kind === "milkTarget") {
-      handleProfileChange(resetRequest.babyId, "milkTargetMlOverride", null);
+      handleGaugeChange(resetRequest.babyId, "milkTargetMlOverride", null);
+    } else if (resetRequest.kind === "diaperWindow") {
+      handleGaugeChange(resetRequest.babyId, "diaperGaugeWindowMinutes", 120);
     } else if (resetRequest.kind === "activityLimit") {
-      handleProfileChange(resetRequest.babyId, "activityLimitMinutesOverride", null);
+      setGaugeDraftProfiles((prev) => ({
+        ...prev,
+        [resetRequest.babyId]: {
+          ...prev[resetRequest.babyId],
+          activityLimitMinutesCustom:
+            prev[resetRequest.babyId].activityLimitMinutesOverride ??
+            prev[resetRequest.babyId].activityLimitMinutesCustom,
+          activityLimitMinutesOverride: null,
+        },
+      }));
+      setGaugeSavedNotice(false);
     } else {
-      handleProfileChange(resetRequest.babyId, "sleepTargetHoursOverride", null);
+      setGaugeDraftProfiles((prev) => ({
+        ...prev,
+        [resetRequest.babyId]: {
+          ...prev[resetRequest.babyId],
+          sleepTargetHoursCustom:
+            prev[resetRequest.babyId].sleepTargetHoursOverride ??
+            prev[resetRequest.babyId].sleepTargetHoursCustom,
+          sleepTargetHoursOverride: null,
+        },
+      }));
+      setGaugeSavedNotice(false);
     }
     setResetRequest(null);
   };
@@ -170,21 +386,22 @@ export function SettingsModal({
 
   return (
     <>
-      <DialogComponents.Dialog open={open} onOpenChange={handleClose}>
+      <DialogComponents.Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogComponents.DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-lg">
           <DialogComponents.DialogHeader>
             <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
             <DialogComponents.DialogDescription>
               {premiumGaugesEnabled
-                ? "プロフィール、通知、データ、デザイン、料金とプランをまとめて管理できます。"
-                : "プロフィール、データ、デザイン、料金とプランをまとめて管理できます。"}
+                ? "プロフィール、お世話ゲージ、通知、データ、デザイン、料金とプランをまとめて管理できます。"
+                : "プロフィール、お世話ゲージ、データ、デザイン、料金とプランをまとめて管理できます。"}
             </DialogComponents.DialogDescription>
           </DialogComponents.DialogHeader>
           {onReplayTutorial && <Button variant="outline" className="w-full" onClick={onReplayTutorial}>使い方をもう一度見る</Button>}
 
-          <Tabs defaultValue="profile" className="py-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="py-4">
             <TabsList className="flex flex-wrap justify-between">
               <TabsTrigger value="profile">プロフィール</TabsTrigger>
+              <TabsTrigger value="care-gauges">お世話ゲージ</TabsTrigger>
               {premiumGaugesEnabled ? <TabsTrigger value="notifications">通知</TabsTrigger> : null}
               <TabsTrigger value="data">データ管理</TabsTrigger>
               <TabsTrigger value="design">デザイン</TabsTrigger>
@@ -195,18 +412,16 @@ export function SettingsModal({
               <div className="grid gap-6 md:grid-cols-2">
                 {BABY_DISPLAY_ORDER.map((babyId) => {
                   const profile = localProfiles[babyId];
-                  const calculatedMilkTarget = buildMilkGauge({
-                    events: app.events,
-                    babyId,
-                    now: new Date(),
-                    windowHours: profile.milkGaugeWindowHours ?? 3,
-                    targetMilkMlOverride: null,
-                  })?.targetMilkMl;
-                  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(profile.birthDate, new Date());
-                  const defaultSleepTargetHours = getDefaultSleepTargetHours(profile.birthDate, new Date());
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === profile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
 
                   return (
-                    <div key={babyId} className="space-y-4 rounded-lg border p-4">
+                    <div
+                      key={babyId}
+                      data-testid={`profile-settings-${babyId}`}
+                      className={`space-y-4 rounded-lg border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
                       <h3 className="font-semibold">赤ちゃん {babyId}</h3>
 
                       <div className="space-y-2">
@@ -257,176 +472,6 @@ export function SettingsModal({
                         />
                       </div>
 
-                      {premiumGaugesEnabled ? (
-                        <>
-                      <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-                        <Label htmlFor={`milk-window-${babyId}`}>ミルクゲージが空になる時間</Label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            id={`milk-window-${babyId}`}
-                            type="number"
-                            min="0.5"
-                            max="12"
-                            step="0.5"
-                            value={profile.milkGaugeWindowHours ?? 3}
-                            onChange={(event) =>
-                              handleProfileChange(
-                                babyId,
-                                "milkGaugeWindowHours",
-                                Math.max(0.5, Math.min(12, Number(event.target.value) || 3))
-                              )
-                            }
-                          />
-                          <span className="text-sm text-muted-foreground">時間</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 flex-shrink-0"
-                            disabled={(profile.milkGaugeWindowHours ?? 3) === 3}
-                            onClick={() =>
-                              setResetRequest({ babyId, kind: "milkWindow", label: "ミルクゲージの時間" })
-                            }
-                            aria-label="ミルクゲージの時間を初期値に戻す"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">初期値は3時間です。</p>
-                      </div>
-
-                      <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-                        <Label htmlFor={`milk-target-${babyId}`}>1回のミルク目安量</Label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            id={`milk-target-${babyId}`}
-                            type="number"
-                            min="1"
-                            max="999"
-                            value={profile.milkTargetMlOverride ?? ""}
-                            placeholder={calculatedMilkTarget ? `自動: ${Math.round(calculatedMilkTarget)}` : "自動計算"}
-                            onChange={(event) =>
-                              handleProfileChange(
-                                babyId,
-                                "milkTargetMlOverride",
-                                event.target.value === ""
-                                  ? null
-                                  : Math.max(1, Math.min(999, Number(event.target.value)))
-                              )
-                            }
-                          />
-                          <span className="text-sm text-muted-foreground">ml</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 flex-shrink-0"
-                            disabled={profile.milkTargetMlOverride == null}
-                            onClick={() => setResetRequest({ babyId, kind: "milkTarget", label: "ミルク目安量" })}
-                            aria-label="ミルク目安量を初期値に戻す"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {profile.milkTargetMlOverride == null
-                            ? `自動計算${calculatedMilkTarget ? `: ${Math.round(calculatedMilkTarget)}ml` : "中"}`
-                            : "手入力の値を使用中"}
-                        </p>
-                      </div>
-
-                      {localSleepManagementEnabled ? (
-                        <>
-                          <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-                            <Label htmlFor={`activity-limit-${babyId}`}>活動可能時間</Label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                id={`activity-limit-${babyId}`}
-                                type="number"
-                                min="30"
-                                max="720"
-                                step="10"
-                                value={profile.activityLimitMinutesOverride ?? ""}
-                                placeholder={`月齢目安: ${defaultActivityLimitMinutes}`}
-                                onChange={(event) =>
-                                  handleProfileChange(
-                                    babyId,
-                                    "activityLimitMinutesOverride",
-                                    event.target.value === ""
-                                      ? null
-                                      : Math.max(30, Math.min(720, Number(event.target.value)))
-                                  )
-                                }
-                              />
-                              <span className="text-sm text-muted-foreground">分</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 flex-shrink-0"
-                                disabled={profile.activityLimitMinutesOverride == null}
-                                onClick={() =>
-                                  setResetRequest({ babyId, kind: "activityLimit", label: "活動可能時間" })
-                                }
-                                aria-label="活動可能時間を初期値に戻す"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {profile.activityLimitMinutesOverride == null
-                                ? `月齢の目安を使用中: ${formatSleepDuration(defaultActivityLimitMinutes)}`
-                                : "手入力の値を使用中"}
-                            </p>
-                          </div>
-
-                          <div className="space-y-2 rounded-lg border bg-background/40 p-3">
-                            <Label htmlFor={`sleep-target-${babyId}`}>1日の必要睡眠時間</Label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                id={`sleep-target-${babyId}`}
-                                type="number"
-                                min="1"
-                                max="24"
-                                step="0.5"
-                                value={profile.sleepTargetHoursOverride ?? ""}
-                                placeholder={`月齢目安: ${defaultSleepTargetHours}`}
-                                onChange={(event) =>
-                                  handleProfileChange(
-                                    babyId,
-                                    "sleepTargetHoursOverride",
-                                    event.target.value === ""
-                                      ? null
-                                      : Math.max(1, Math.min(24, Number(event.target.value)))
-                                  )
-                                }
-                              />
-                              <span className="text-sm text-muted-foreground">時間</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 flex-shrink-0"
-                                disabled={profile.sleepTargetHoursOverride == null}
-                                onClick={() =>
-                                  setResetRequest({ babyId, kind: "sleepTarget", label: "1日の必要睡眠時間" })
-                                }
-                                aria-label="必要睡眠時間を初期値に戻す"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {profile.sleepTargetHoursOverride == null
-                                ? `月齢の目安を使用中: ${defaultSleepTargetHours}時間`
-                                : "手入力の値を使用中"}
-                            </p>
-                          </div>
-                        </>
-                      ) : null}
-                        </>
-                      ) : null}
-
                       {localDiaperStockManagementEnabled ? (
                         <div className="space-y-2">
                           <Label>おむつ購入リンク</Label>
@@ -440,6 +485,500 @@ export function SettingsModal({
                     </div>
                   );
                 })}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="care-gauges" className="mt-4 space-y-4">
+                <div className="rounded-lg border bg-background/40 p-4">
+                  <h3 className="font-semibold">お世話ゲージ</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    お世話ゲージはPremium専用機能です。{premiumGaugesEnabled
+                      ? "ここでゲージの目安を調整できます。"
+                      : "Freeでも設定は先に調整・保存でき、Premium利用時に反映されます。"}
+                  </p>
+                </div>
+
+                {BABY_DISPLAY_ORDER.map((babyId) => {
+                  const profile = gaugeDraftProfiles[babyId];
+                  const displayProfile = localProfiles[babyId];
+                  const otherBabyId: BabyId = babyId === "A" ? "B" : "A";
+                  const babyName = displayProfile.displayName || `赤ちゃん ${babyId}`;
+                  const otherBabyName = localProfiles[otherBabyId].displayName || `赤ちゃん ${otherBabyId}`;
+                  const calculatedMilkTarget = buildMilkGauge({
+                    events: app.events,
+                    babyId,
+                    now: new Date(),
+                    windowHours: profile.milkGaugeWindowHours ?? 3,
+                    targetMilkMlOverride: null,
+                  })?.targetMilkMl;
+                  const autoMilkTarget = calculatedMilkTarget ? Math.round(calculatedMilkTarget) : null;
+                  const milkTarget = profile.milkTargetMlOverride ?? autoMilkTarget;
+                  const milkWindowHours = profile.milkGaugeWindowHours ?? 3;
+                  const diaperWindowMinutes = profile.diaperGaugeWindowMinutes ?? 120;
+                  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(displayProfile.birthDate, new Date());
+                  const defaultSleepTargetHours = getDefaultSleepTargetHours(displayProfile.birthDate, new Date());
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === displayProfile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
+                  const activityLimitMinutes = profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes;
+                  const sleepTargetHours = profile.sleepTargetHoursOverride ?? defaultSleepTargetHours;
+                  const sleepUsesAgeDefaults =
+                    profile.activityLimitMinutesOverride == null && profile.sleepTargetHoursOverride == null;
+
+                  return (
+                    <section
+                      key={babyId}
+                      data-testid={`care-gauge-settings-${babyId}`}
+                      className={`space-y-4 rounded-xl border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            {displayProfile.iconEmoji ? <span aria-hidden>{displayProfile.iconEmoji}</span> : null}
+                            <h3 className="font-semibold">{babyName}</h3>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">ゲージを見たときの「次のお世話」の目安です。</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyGaugeSettingsToOtherBaby(babyId)}
+                          aria-label={`${babyName}のお世話ゲージ設定を${otherBabyName}にも反映`}
+                        >
+                          もう1人にも反映
+                        </Button>
+                      </div>
+
+                      {copiedGaugeFrom === babyId ? (
+                        <p className="rounded-md bg-muted px-3 py-2 text-xs">
+                          ✓ {otherBabyName}にも同じ設定を反映しました
+                        </p>
+                      ) : null}
+
+                      <div className="space-y-4 rounded-xl border bg-background/50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <h4 className="font-semibold">🍼 ミルク</h4>
+                            <p className="text-xs text-muted-foreground">ミルクを飲むとゲージが減り、時間がたつと少しずつ増えます。</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>1回の目安</Label>
+                            <div className="flex gap-1 rounded-lg bg-muted p-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={profile.milkTargetMlOverride == null ? "default" : "ghost"}
+                                className="h-7 px-2 text-xs"
+                                onClick={() => handleGaugeChange(babyId, "milkTargetMlOverride", null)}
+                              >
+                                おまかせ
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={profile.milkTargetMlOverride != null ? "default" : "ghost"}
+                                className="h-7 px-2 text-xs"
+                                disabled={milkTarget == null}
+                                onClick={() =>
+                                  handleGaugeChange(
+                                    babyId,
+                                    "milkTargetMlOverride",
+                                    Math.max(1, Math.min(999, milkTarget ?? 1))
+                                  )
+                                }
+                              >
+                                カスタム
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={milkTarget == null}
+                              aria-label={`${babyName}のミルク目安量を10ml減らす`}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "milkTargetMlOverride",
+                                  Math.max(1, (milkTarget ?? 10) - 10)
+                                )
+                              }
+                            >
+                              −
+                            </Button>
+                            <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                              <div className="text-lg font-semibold">
+                                {milkTarget == null ? "自動計算中" : `${Math.round(milkTarget)} ml`}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {profile.milkTargetMlOverride == null ? "最近の記録から自動調整" : "カスタム設定"}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={milkTarget == null}
+                              aria-label={`${babyName}のミルク目安量を10ml増やす`}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "milkTargetMlOverride",
+                                  Math.min(999, (milkTarget ?? 0) + 10)
+                                )
+                              }
+                            >
+                              ＋
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>次のミルクまで</Label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={milkWindowHours === 3}
+                              onClick={() =>
+                                setResetRequest({ babyId, kind: "milkWindow", label: "次のミルクまでの時間" })
+                              }
+                              aria-label="ミルクゲージの時間を初期値に戻す"
+                            >
+                              おすすめに戻す
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のミルク間隔を30分短くする`}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "milkGaugeWindowHours",
+                                  Math.max(0.5, Number((milkWindowHours - 0.5).toFixed(1)))
+                                )
+                              }
+                            >
+                              −
+                            </Button>
+                            <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                              <div className="text-lg font-semibold">
+                                {formatSleepDuration(Math.round(milkWindowHours * 60))}
+                              </div>
+                              <div className="text-xs text-muted-foreground">おすすめは3時間</div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のミルク間隔を30分長くする`}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "milkGaugeWindowHours",
+                                  Math.min(12, Number((milkWindowHours + 0.5).toFixed(1)))
+                                )
+                              }
+                            >
+                              ＋
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/60 p-3">
+                          <p className="text-sm font-medium">
+                            {milkTarget == null
+                              ? "記録がたまると1回量を自動で提案します"
+                              : `${Math.round(milkTarget)}mlを飲んだ直後はゲージが空になります`}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            設定時間内のミルク量と経過時間を反映し、飲まずに
+                            {formatSleepDuration(Math.round(milkWindowHours * 60))}
+                            たつとゲージが満タンになります。追加で飲むと、その分ゲージが減ります。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 rounded-xl border bg-background/50 p-4">
+                        <div>
+                          <h4 className="font-semibold">🧷 おむつ</h4>
+                          <p className="text-xs text-muted-foreground">
+                            おむつ交換の直後はゲージが空になり、時間がたつほど増えていきます。
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>次のおむつチェックまで</Label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={diaperWindowMinutes === 120}
+                              onClick={() =>
+                                setResetRequest({ babyId, kind: "diaperWindow", label: "次のおむつチェックまでの時間" })
+                              }
+                              aria-label="おむつゲージの時間を初期値に戻す"
+                            >
+                              おすすめに戻す
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のおむつ間隔を30分短くする`}
+                              disabled={diaperWindowMinutes <= 30}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "diaperGaugeWindowMinutes",
+                                  Math.max(30, diaperWindowMinutes - 30)
+                                )
+                              }
+                            >
+                              −
+                            </Button>
+                            <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                              <div className="text-lg font-semibold">{formatSleepDuration(diaperWindowMinutes)}</div>
+                              <div className="text-xs text-muted-foreground">おすすめは2時間</div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              aria-label={`${babyName}のおむつ間隔を30分長くする`}
+                              disabled={diaperWindowMinutes >= 720}
+                              onClick={() =>
+                                handleGaugeChange(
+                                  babyId,
+                                  "diaperGaugeWindowMinutes",
+                                  Math.min(720, diaperWindowMinutes + 30)
+                                )
+                              }
+                            >
+                              ＋
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                          <p>交換直後はゲージが空になります。</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            その後少しずつ増え、{formatSleepDuration(diaperWindowMinutes)}たつと満タンになります。
+                          </p>
+                        </div>
+                      </div>
+
+                      {localSleepManagementEnabled ? (
+                        <div className="space-y-4 rounded-xl border bg-background/50 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h4 className="font-semibold">🌙 睡眠</h4>
+                              <p className="text-xs text-muted-foreground">月齢に合わせた目安をそのまま使うことも、家庭に合わせて調整することもできます。</p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-1 rounded-lg bg-muted p-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={sleepUsesAgeDefaults ? "default" : "ghost"}
+                              className="flex-1"
+                              onClick={() =>
+                                handleSleepModeChange(
+                                  babyId,
+                                  "age",
+                                  defaultActivityLimitMinutes,
+                                  defaultSleepTargetHours
+                                )
+                              }
+                            >
+                              月齢に合わせる
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={!sleepUsesAgeDefaults ? "default" : "ghost"}
+                              className="flex-1"
+                              onClick={() =>
+                                handleSleepModeChange(
+                                  babyId,
+                                  "custom",
+                                  defaultActivityLimitMinutes,
+                                  defaultSleepTargetHours
+                                )
+                              }
+                            >
+                              カスタム
+                            </Button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <Label>起きていられる目安</Label>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={profile.activityLimitMinutesOverride == null}
+                                onClick={() =>
+                                  setResetRequest({ babyId, kind: "activityLimit", label: "起きていられる目安" })
+                                }
+                                aria-label="活動可能時間を初期値に戻す"
+                              >
+                                月齢目安に戻す
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={`${babyName}の活動可能時間を10分短くする`}
+                                onClick={() =>
+                                  handleSleepCustomChange(
+                                    babyId,
+                                    "activity",
+                                    Math.max(30, activityLimitMinutes - 10)
+                                  )
+                                }
+                              >
+                                −
+                              </Button>
+                              <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                                <div className="text-lg font-semibold">{formatSleepDuration(activityLimitMinutes)}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {profile.activityLimitMinutesOverride == null ? "月齢の目安" : "カスタム設定"}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={`${babyName}の活動可能時間を10分長くする`}
+                                onClick={() =>
+                                  handleSleepCustomChange(
+                                    babyId,
+                                    "activity",
+                                    Math.min(720, activityLimitMinutes + 10)
+                                  )
+                                }
+                              >
+                                ＋
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <Label>1日の睡眠目安</Label>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={profile.sleepTargetHoursOverride == null}
+                                onClick={() =>
+                                  setResetRequest({ babyId, kind: "sleepTarget", label: "1日の睡眠目安" })
+                                }
+                                aria-label="必要睡眠時間を初期値に戻す"
+                              >
+                                月齢目安に戻す
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={`${babyName}の1日の睡眠目安を30分短くする`}
+                                onClick={() =>
+                                  handleSleepCustomChange(
+                                    babyId,
+                                    "sleep",
+                                    Math.max(1, Number((sleepTargetHours - 0.5).toFixed(1)))
+                                  )
+                                }
+                              >
+                                −
+                              </Button>
+                              <div className="rounded-lg border bg-background px-3 py-2 text-center">
+                                <div className="text-lg font-semibold">{formatSleepDuration(Math.round(sleepTargetHours * 60))}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {profile.sleepTargetHoursOverride == null ? "月齢の目安" : "カスタム設定"}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                aria-label={`${babyName}の1日の睡眠目安を30分長くする`}
+                                onClick={() =>
+                                  handleSleepCustomChange(
+                                    babyId,
+                                    "sleep",
+                                    Math.min(24, Number((sleepTargetHours + 0.5).toFixed(1)))
+                                  )
+                                }
+                              >
+                                ＋
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg bg-muted/60 p-3 text-sm">
+                            <p>起床から約{formatSleepDuration(activityLimitMinutes)}で活動ゲージが満タンになります。</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              1日の睡眠目標は{formatSleepDuration(Math.round(sleepTargetHours * 60))}です。
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                          睡眠管理がオフです。データ管理からオンにすると睡眠ゲージを調整できます。
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              <div className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur">
+                <div className="min-w-0 text-xs text-muted-foreground">
+                  {gaugeSavedNotice
+                    ? "保存しました。"
+                    : hasUnsavedGaugeChanges
+                    ? "保存していない変更があります。"
+                    : "保存済みの設定です。"}
+                </div>
+                <div className="flex flex-shrink-0 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasUnsavedGaugeChanges}
+                    onClick={handleRestoreSavedGaugeSettings}
+                  >
+                    保存した設定に戻す
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!hasUnsavedGaugeChanges}
+                    onClick={handleSaveGaugeSettings}
+                  >
+                    保存
+                  </Button>
+                </div>
               </div>
             </TabsContent>
 
@@ -465,7 +1004,7 @@ export function SettingsModal({
                     ) : (
                       <>
                         <p className="text-sm text-muted-foreground">
-                          ミルク・おむつのゲージが空になると通知します。通知時刻が15分以内ならまとめて1通にします。
+                          ミルク・おむつのゲージが満タンになる頃に通知します。通知時刻が15分以内ならまとめて1通にします。
                         </p>
                         <p className="text-sm text-muted-foreground">
                           状態:{" "}
@@ -666,7 +1205,30 @@ export function SettingsModal({
           </DialogComponents.DialogFooter>
         </DialogComponents.DialogContent>
       </DialogComponents.Dialog>
+
+      <DialogComponents.Dialog
+        open={Boolean(pendingGaugeExit)}
+        onOpenChange={(isOpen) => !isOpen && setPendingGaugeExit(null)}
+      >
+        <DialogComponents.DialogContent className="sm:max-w-sm">
+          <DialogComponents.DialogHeader>
+            <DialogComponents.DialogTitle>お世話ゲージに編集中の値があります</DialogComponents.DialogTitle>
+            <DialogComponents.DialogDescription>
+              保存していない変更があります。保存せずに
+              {pendingGaugeExit?.type === "tab" ? "別のタブへ移動" : "設定画面を閉じる"}
+              と、最後に保存した設定に戻ります。
+            </DialogComponents.DialogDescription>
+          </DialogComponents.DialogHeader>
+          <DialogComponents.DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingGaugeExit(null)}>
+              編集を続ける
+            </Button>
+            <Button variant="destructive" onClick={discardGaugeChangesAndContinue}>
+              保存せずに{pendingGaugeExit?.type === "tab" ? "移動" : "閉じる"}
+            </Button>
+          </DialogComponents.DialogFooter>
+        </DialogComponents.DialogContent>
+      </DialogComponents.Dialog>
     </>
   );
 }
-

@@ -7,6 +7,8 @@ on:
       - master
     paths:
       - "src/**"
+      - "functions/**"
+      - "firestore.rules"
       - "tests/**"
       - "package.json"
       - "package-lock.json"
@@ -41,6 +43,12 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --fund=false
 
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions --prefer-offline --no-audit --fund=false
+
+      - name: Run Functions tests
+        run: npm test --prefix functions
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -49,3 +57,4 @@ jobs:
 
       - name: Build
         run: npm run build
+

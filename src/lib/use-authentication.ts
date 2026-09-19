@@ -75,13 +75,15 @@ export function useAuthentication({ inviteToken, onUserChanged }: Options) {
       if (cancelled) return;
       unsubscribe = onAuthStateChanged(currentAuth, (nextUser) => {
         const currentGeneration = ++generation;
-        setReady(false);
         setUser(nextUser);
+        // Auth readiness only means Firebase has resolved the signed-in user.
+        // Family/session refresh is deliberately background work so it cannot freeze the UI.
+        setReady(true);
         const context: AuthChangeContext = {
           isCurrent: () => !cancelled && currentGeneration === generation,
         };
-        void Promise.resolve(callbackRef.current(nextUser, context)).finally(() => {
-          if (context.isCurrent()) setReady(true);
+        void Promise.resolve(callbackRef.current(nextUser, context)).catch((error) => {
+          if (context.isCurrent()) console.error("Auth state follow-up failed", error);
         });
       });
     };

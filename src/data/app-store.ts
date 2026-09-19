@@ -21,6 +21,7 @@ export type StoreStatus = {
   checking?: boolean;
   connection?: SyncConnectionState;
   lastServerConfirmedAt?: number | null;
+  hydrated?: boolean;
   conflicts?: SyncConflict[];
 };
 
@@ -48,7 +49,7 @@ type ConfirmedRecord = {
   mutation: AppMutation;
   createdAt: number;
 };
-type AppStoreOptions = { initialReady?: boolean };
+type AppStoreOptions = { initialReady?: boolean; initialHydrated?: boolean };
 
 const SERVER_CHECK_TIMEOUT_MS = 12_000;
 const COMMIT_TIMEOUT_MS = 15_000;
@@ -118,6 +119,7 @@ export class AppStore {
     connection: "connecting",
     lastServerConfirmedAt: null,
     conflicts: [],
+    hydrated: false,
   };
 
   constructor(private repository: AppRepository, initial: AppState,
@@ -128,6 +130,7 @@ export class AppStore {
     this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();
     this.status.ready = Boolean(options.initialReady);
+    this.status.hydrated = Boolean(options.initialHydrated);
     if (!Array.isArray(this.queue) || this.queue.some((item) => !item.id || !Array.isArray(item.events) || !Array.isArray(item.settings))) {
       throw new Error("端末の未保存データを読み取れません。ブラウザのデータを消さずに再度お試しください。");
     }
@@ -308,6 +311,7 @@ export class AppStore {
         : await this.repository.loadAll();
       if (this.stopped || generation !== this.connectionGeneration) return;
       this.base = app;
+      this.status.hydrated = true;
       this.pruneConfirmed(app);
       this.receiveError = null;
       this.reconnectAttempt = 0;
@@ -350,6 +354,7 @@ export class AppStore {
       // Once a server-confirmed state has been shown, cache snapshots are advisory only.
       // Replacing the visible base with them can roll the UI backwards after a successful save.
       if (!snapshot.fromCache || !this.status.ready) this.base = snapshot.app;
+      this.status.hydrated = true;
       this.status.ready = this.status.ready || !snapshot.fromCache;
       this.status.fromCache = snapshot.fromCache;
       if (!snapshot.fromCache) {
@@ -402,8 +407,18 @@ export class AppStore {
 
   recheck(reason: Exclude<SyncCheckReason, "start" | "listener-error" | "server-check-timeout">) {
     if (this.stopped) return;
+
+    // Browser lifecycle events (especially pageshow in an installed PWA) can fire
+    // immediately after startup. If the store is already checking the server, reconnecting
+    // here tears down and recreates every Firestore listener and causes a second render burst.
+    if (this.status.checking) {
+      this.logDiagnostic(`recheck-skipped:${reason}`);
+      void this.flush();
+      return;
+    }
+
     const now = Date.now();
-    if (this.status.checking && now - this.lastCheckStartedAt < 1_000) return;
+    if (now - this.lastCheckStartedAt < 1_000) return;
     this.lastCheckStartedAt = now;
     this.receiveError = null;
     this.status.checking = true;
@@ -416,7 +431,6 @@ export class AppStore {
   }
 
   update(updater: (state: AppState) => AppState, options: { absoluteSettings?: boolean } = {}) {
-    if (!this.status.ready) throw new Error("記録を読み込んでいます。");
     this.queue = this.readQueue();
     this.confirmed = this.readConfirmedRecords();
     this.conflicts = this.readConflictRecords();

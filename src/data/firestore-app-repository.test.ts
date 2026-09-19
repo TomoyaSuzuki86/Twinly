@@ -4,7 +4,7 @@ import { createInitialAppState, toSharedAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
 import { createMutation, isCommitResult } from "./app-repository";
 
-const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[] }));
+const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }> }));
 vi.mock("firebase/firestore", () => {
   const ref = (...parts: any[]) => ({ path: parts.map((part) => typeof part === "string" ? part : part.path || "").filter(Boolean).join("/") });
   const snapshot = (path: string) => ({ id: path.split("/").pop(), exists: () => memory.docs.has(path),
@@ -18,7 +18,12 @@ vi.mock("firebase/firestore", () => {
     getDocs: async () => ({ docs: [], size: 0, metadata: { fromCache: false } }),
     getDocsFromServer: async () => ({ docs: [], size: 0, metadata: { fromCache: false } }),
     onSnapshot: (reference: any, options: any, listener?: any) => {
-      const callback = typeof options === "function" ? options : listener;
+      const hasOptions = typeof options !== "function";
+      const callback = hasOptions ? listener : options;
+      memory.subscriptions.push({
+        path: reference.path,
+        includeMetadataChanges: Boolean(hasOptions && options?.includeMetadataChanges),
+      });
       callback(reference.constraints ? { docs: [], metadata: { fromCache: false } } : snapshot(reference.path));
       return () => {};
     },
@@ -43,7 +48,7 @@ const statePath = "families/family/app/state";
 const eventPath = "families/family/events/event";
 const record = { id: "event", babyId: "A" as const, type: "milk" as const, timestamp: Date.now(), milkMl: 120 };
 const repository = () => createFirestoreAppRepository({} as Firestore, "family", "user");
-beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; });
+beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; });
 
 describe("Firestore adapter contract", () => {
   it("writes just one event and receipt in v2 without rewriting shared state", async () => {
@@ -116,6 +121,16 @@ describe("Firestore adapter contract", () => {
     const window = memory.queries.filter((q) => q.constraints.some((c: any) => c.kind === "where" && c.args[1] === ">="));
     expect(window).toHaveLength(1);
     expect(memory.queries.filter((q) => q.constraints.some((c: any) => c.kind === "limit" && c.value === 1))).toHaveLength(14);
+  });
+
+
+  it("uses metadata changes only for the shared state listener", () => {
+    memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
+    repository().subscribe(() => {}, () => {});
+
+    const metadataSubscriptions = memory.subscriptions.filter((item) => item.includeMetadataChanges);
+    expect(metadataSubscriptions).toEqual([{ path: statePath, includeMetadataChanges: true }]);
+    expect(memory.subscriptions).toHaveLength(16);
   });
 
   it("reconciles simultaneous consumption of the last diaper", async () => {

@@ -2,6 +2,7 @@ import { User } from "firebase/auth";
 import { collection, doc, getDoc, getDocFromServer, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/firebase";
+import { beginBackgroundSync } from "@/lib/background-sync";
 import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
 
 export const relationshipLabels: Record<FamilyRelationship, string> = {
@@ -29,15 +30,74 @@ type FamilyOnboardingInput =
   | { nickname: string; relationship: FamilyRelationship }
   | { migrateLegacyOnly: true };
 
+const FAMILY_SESSION_CACHE_PREFIX = "twinly-family-session:";
+
+class InvalidFamilySessionError extends Error {}
+
+const familySessionCacheKey = (uid: string) => `${FAMILY_SESSION_CACHE_PREFIX}${uid}`;
+
+const isFamilySession = (value: unknown, uid: string): value is FamilySession => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<FamilySession>;
+  return Boolean(
+    candidate.family &&
+    typeof candidate.family.id === "string" &&
+    candidate.family.id &&
+    typeof candidate.family.name === "string" &&
+    typeof candidate.family.ownerUid === "string" &&
+    candidate.member &&
+    candidate.member.uid === uid &&
+    typeof candidate.member.nickname === "string" &&
+    isFamilyRelationship(candidate.member.relationship) &&
+    (candidate.member.role === "owner" || candidate.member.role === "member") &&
+    candidate.member.status === "active"
+  );
+};
+
+export const readCachedFamilySession = (uid: string): FamilySession | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(familySessionCacheKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isFamilySession(parsed, uid)) {
+      window.localStorage.removeItem(familySessionCacheKey(uid));
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedFamilySession = (uid: string, session: FamilySession) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(familySessionCacheKey(uid), JSON.stringify(session));
+  } catch {
+    // Local cache is an optimization only. Firestore remains the source of truth.
+  }
+};
+
+const clearCachedFamilySession = (uid: string) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(familySessionCacheKey(uid));
+  } catch {
+    // Ignore storage failures.
+  }
+};
+
 const callCompleteFamilyOnboarding = async (input: FamilyOnboardingInput) => {
   if (!functions) throw new Error("Firebase Functions is not configured");
   const call = httpsCallable<FamilyOnboardingInput, FamilySetupResult>(functions, "completeFamilyOnboarding");
   return (await call(input)).data;
 };
 
-export const loadFamilySession = async (user: User): Promise<FamilySession | null> => {
+const loadFamilySessionFresh = async (user: User, forceServer: boolean): Promise<FamilySession | null> => {
   if (!db) return null;
-  const userSnap = await getDoc(doc(db, "users", user.uid));
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = forceServer ? await getDocFromServer(userRef) : await getDoc(userRef);
   let familyId = userSnap.data()?.activeFamilyId;
   let migratedLegacyUser = false;
   if (typeof familyId !== "string" || !familyId) {
@@ -47,16 +107,15 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
   }
   if (typeof familyId !== "string" || !familyId) return null;
 
+  const familyRef = doc(db, "families", familyId);
+  const memberRef = doc(db, "families", familyId, "members", user.uid);
+  const readServer = forceServer || migratedLegacyUser;
   const [familySnap, memberSnap] = await Promise.all([
-    migratedLegacyUser
-      ? getDocFromServer(doc(db, "families", familyId))
-      : getDoc(doc(db, "families", familyId)),
-    migratedLegacyUser
-      ? getDocFromServer(doc(db, "families", familyId, "members", user.uid))
-      : getDoc(doc(db, "families", familyId, "members", user.uid)),
+    readServer ? getDocFromServer(familyRef) : getDoc(familyRef),
+    readServer ? getDocFromServer(memberRef) : getDoc(memberRef),
   ]);
   if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") {
-    throw new Error("家族情報が見つからないか、アクセス権がありません。");
+    throw new InvalidFamilySessionError("家族情報が見つからないか、アクセス権がありません。");
   }
 
   return {
@@ -76,6 +135,52 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
       profileCompleted: memberSnap.data().profileCompleted !== false,
     },
   };
+};
+
+const refreshCachedFamilySession = (user: User, cached: FamilySession) => {
+  const finishSync = beginBackgroundSync("family-session");
+  void loadFamilySessionFresh(user, true)
+    .then((fresh) => {
+      if (!fresh) {
+        clearCachedFamilySession(user.uid);
+        if (typeof window !== "undefined") window.location.reload();
+        return;
+      }
+
+      writeCachedFamilySession(user.uid, fresh);
+      const familyChanged =
+        fresh.family.id !== cached.family.id ||
+        fresh.family.name !== cached.family.name ||
+        fresh.family.ownerUid !== cached.family.ownerUid;
+      if (familyChanged && typeof window !== "undefined") window.location.reload();
+    })
+    .catch((error) => {
+      if (error instanceof InvalidFamilySessionError) {
+        clearCachedFamilySession(user.uid);
+        if (typeof window !== "undefined") window.location.reload();
+        return;
+      }
+      console.warn("Failed to refresh cached family session", error);
+    })
+    .finally(finishSync);
+};
+
+export const loadFamilySession = async (user: User): Promise<FamilySession | null> => {
+  const cached = readCachedFamilySession(user.uid);
+  if (cached) {
+    refreshCachedFamilySession(user, cached);
+    return cached;
+  }
+
+  try {
+    const session = await loadFamilySessionFresh(user, false);
+    if (session) writeCachedFamilySession(user.uid, session);
+    else clearCachedFamilySession(user.uid);
+    return session;
+  } catch (error) {
+    clearCachedFamilySession(user.uid);
+    throw error;
+  }
 };
 
 export const subscribeFamilyMembers = (

@@ -87,6 +87,7 @@ export const buildDashboardSelectors = (
         now,
         milkWindowHours: profile.milkGaugeWindowHours ?? 3,
         milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+        diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
       });
       const hasDiaperRecord = babyEvents.some((event) => event.type === "diaper");
       const sleepAnalysis = analyzeSleepEvents(babyEvents, babyId);

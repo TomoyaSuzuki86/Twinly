@@ -10,7 +10,7 @@ const MILK_LOOKBACK_MS = 3 * DAY_MS;
 const DIAPER_LOOKBACK_MS = 7 * DAY_MS;
 const MILK_SESSION_GAP_MS = 30 * 60 * 1000;
 const MILK_TARGET_SAMPLE_COUNT = 3;
-const DIAPER_INTERVAL_MS = 2 * HOUR_MS;
+export const DEFAULT_DIAPER_GAUGE_WINDOW_MINUTES = 120;
 
 export type MilkGauge = {
   level: number;
@@ -110,10 +110,12 @@ export const buildDiaperGauge = ({
   events,
   babyId,
   now,
+  intervalMinutes = DEFAULT_DIAPER_GAUGE_WINDOW_MINUTES,
 }: {
   events: LogEvent[];
   babyId: BabyId;
   now: Date;
+  intervalMinutes?: number;
 }): DiaperGauge | null => {
   const nowMs = now.getTime();
   const cutoffMs = nowMs - DIAPER_LOOKBACK_MS;
@@ -130,10 +132,12 @@ export const buildDiaperGauge = ({
   if (diaperEvents.length === 0) return null;
 
   const elapsedMs = Math.max(0, nowMs - diaperEvents[diaperEvents.length - 1].timestamp);
+  const normalizedIntervalMinutes = Math.min(720, Math.max(30, intervalMinutes));
+  const intervalMs = normalizedIntervalMinutes * 60 * 1000;
 
   return {
-    level: clampLevel(1 - elapsedMs / DIAPER_INTERVAL_MS),
-    expectedIntervalMinutes: DIAPER_INTERVAL_MS / (60 * 1000),
+    level: clampLevel(1 - elapsedMs / intervalMs),
+    expectedIntervalMinutes: normalizedIntervalMinutes,
     elapsedMinutes: elapsedMs / (60 * 1000),
   };
 };
@@ -144,12 +148,14 @@ export const buildCareGauges = ({
   now,
   milkWindowHours,
   milkTargetMlOverride,
+  diaperWindowMinutes,
 }: {
   events: LogEvent[];
   babyId: BabyId;
   now: Date;
   milkWindowHours?: number;
   milkTargetMlOverride?: number | null;
+  diaperWindowMinutes?: number;
 }): CareGauges => ({
   milk: buildMilkGauge({
     events,
@@ -158,5 +164,5 @@ export const buildCareGauges = ({
     windowHours: milkWindowHours,
     targetMilkMlOverride: milkTargetMlOverride,
   }),
-  diaper: buildDiaperGauge({ events, babyId, now }),
+  diaper: buildDiaperGauge({ events, babyId, now, intervalMinutes: diaperWindowMinutes }),
 });

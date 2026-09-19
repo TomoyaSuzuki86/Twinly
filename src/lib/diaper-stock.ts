@@ -1,4 +1,4 @@
-import type { BabyId, BabyProfile, LogEvent } from "@/types";
+import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate } from "@/lib/utils";
 
 export type DiaperStockAlertLevel = "none" | "caution" | "warning" | "urgent" | "unknown";
@@ -23,7 +23,6 @@ type EstimateDiaperStockBySizeParams = {
   minimumEvents?: number;
 };
 
-const BABY_IDS: readonly BabyId[] = ["A", "B"];
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const addDays = (date: Date, days: number) => {
@@ -44,7 +43,11 @@ const getStoredStock = (profiles: BabyProfiles, size: string) =>
     ?.diaperStockBySize[size] ?? 0;
 
 const getBabyIdsUsingSize = (profiles: BabyProfiles, size: string) =>
-  new Set(BABY_IDS.filter((babyId) => profiles[babyId].diaperSize === size));
+  new Set(
+    (Object.entries(profiles) as [BabyId, BabyProfile][])
+      .filter(([, profile]) => profile.diaperSize === size)
+      .map(([babyId]) => babyId)
+  );
 
 const countRecentDiaperEvents = (
   events: LogEvent[],

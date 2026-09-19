@@ -10,6 +10,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { billingAction } from "@/lib/billing";
 import type { AiDraft } from "@/lib/ai";
 import {
   changeCurrentFamilyPreviewPlan,
@@ -43,7 +44,7 @@ const premiumBenefits = [
     icon: BellRing,
     title: "お世話タイミング通知",
     description:
-      "ミルク・おむつのゲージが空になるタイミングをプッシュ通知でお知らせ。Twinlyを開いていないときも“そろそろ”が届くので、次のお世話を頭の中で覚え続ける負担を減らせます。",
+      "ミルク・おむつのゲージが満タンになる頃をプッシュ通知でお知らせ。Twinlyを開いていないときも“そろそろ”が届くので、次のお世話を頭の中で覚え続ける負担を減らせます。",
   },
   {
     icon: PackageSearch,
@@ -113,7 +114,9 @@ export function AiTools({ embedded = false }: AiToolsProps) {
     setBusy(true);
     setError("");
     try {
-      await changeCurrentFamilyPreviewPlan(plan);
+      if (access.billing) {
+        await billingAction(access.billing.hasSubscription ? "createFamilyBillingPortal" : access.billing.canStartTrial ? "startFamilyTrial" : "createFamilyCheckout");
+      } else await changeCurrentFamilyPreviewPlan(plan);
     } catch (reason) {
       if (mounted.current) setError(reason instanceof Error ? reason.message : "プランを切り替えられませんでした。");
     } finally {
@@ -123,6 +126,8 @@ export function AiTools({ embedded = false }: AiToolsProps) {
   };
 
   const premium = access?.plan === "premium";
+  const billing = access?.billing;
+  const cta = busy ? "処理中…" : billing?.hasSubscription ? "契約・支払いを管理" : premium ? "Premiumを使用中" : billing && !billing.canStartTrial ? "支払いへ進む" : "7日間無料でPremiumを試す";
 
   const content = (
     <div className="w-full min-w-0 space-y-5 overflow-x-hidden">
@@ -135,21 +140,22 @@ export function AiTools({ embedded = false }: AiToolsProps) {
           記録するだけだったTwinlyが、次のお世話・最近の変化・買い足しまで先回りして支えます。
         </p>
         <div className="mt-5 flex items-end gap-2">
-          <span className="text-3xl font-bold">¥800</span>
+          <span className="text-3xl font-bold">¥200</span>
           <span className="pb-1 text-sm text-muted-foreground">/ 月</span>
         </div>
         <div className="mt-1 text-sm font-semibold text-primary">最初の7日間は無料</div>
         <Button
           className="mt-5 w-full"
           size="lg"
-          disabled={busy || premium || !access?.canPreview}
+          disabled={busy || (premium && !billing?.hasSubscription) || !access?.canPreview}
           onClick={() => void changePreviewPlan("premium")}
         >
-          {premium ? "Premiumを使用中" : busy ? "切り替え中…" : "7日間無料でPremiumを試す"}
+          {cta}
         </Button>
         {!premium ? <p className="mt-2 text-center text-[11px] text-muted-foreground">いつでも無料版へ戻せます。</p> : null}
       </section>
 
+      {billing && <p className="text-sm text-muted-foreground">{billing.complimentary ? "このファミリーは継続特典としてPremiumを期限なしで利用できます。お支払いは不要です。" : billing.status === "trialing" && billing.trialEndsAt ? `無料体験は${new Date(billing.trialEndsAt).toLocaleString("ja-JP")}まで。終了後はお支払いが必要です。` : billing.status === "expired" ? "無料体験は終了しました。Premiumを続けるにはお支払いへ進んでください。" : "体験中の請求はありません。お支払い後は月額200円で自動更新されます。"} {billing.cancelAtPeriodEnd ? "解約予約済みです。お支払い済みの期間終了まで利用できます。" : ""}</p>}
       <section className="min-w-0">
         <div className="mb-3">
           <h3 className="font-bold">Premiumでできること</h3>
@@ -200,7 +206,7 @@ export function AiTools({ embedded = false }: AiToolsProps) {
             />
           </figure>
           <p>
-            さらに、ミルクやおむつのゲージが空になるタイミングは通知でも届きます。Twinlyを開いて確認しにいかなくても、「そろそろ」の瞬間をスマホ側から知らせてくれるので、2人分のお世話の時間を頭の中でずっと覚えておく必要がありません。
+            さらに、ミルクやおむつのゲージが満タンになる頃は通知でも届きます。Twinlyを開いて確認しにいかなくても、「そろそろ」の瞬間をスマホ側から知らせてくれるので、2人分のお世話の時間を頭の中でずっと覚えておく必要がありません。
           </p>
           <p>
             ゲージで「見ればわかる」だけでなく、通知で「見なくてもわかる」。この組み合わせで、スマホを開くことすら意識せず、次に必要なお世話へ自然に動けるようになりました。
@@ -244,7 +250,7 @@ export function AiTools({ embedded = false }: AiToolsProps) {
           <div className="text-sm font-bold">双子育児を、少しでもラクに。</div>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">まずは7日間、すべてのPremium機能を試してみてください。</p>
           <Button className="mt-4 w-full" size="lg" disabled={busy || !access?.canPreview} onClick={() => void changePreviewPlan("premium")}>
-            7日間無料でPremiumを試す
+            {cta}
           </Button>
         </section>
       ) : (
@@ -254,7 +260,7 @@ export function AiTools({ embedded = false }: AiToolsProps) {
         </div>
       )}
 
-      {access?.canPreview ? (
+      {access?.canPreview && !billing ? (
         <div className="border-t pt-3 text-center">
           <p className="text-[11px] text-muted-foreground">現在は正式決済前の開発プレビューです。課金は発生しません。</p>
           {premium ? (

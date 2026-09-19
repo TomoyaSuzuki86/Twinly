@@ -6,6 +6,7 @@ const { accessFor, summarize, buildDailySummary } = require('./ai-policy');
 
 const key = defineSecret('TWINLY_AI_API_KEY');
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
+const fallbackModel = defineString('TWINLY_AI_FALLBACK_MODEL', { default: 'gemini-3.5-flash-lite' });
 const options = { region: 'asia-northeast1', maxInstances: 1, timeoutSeconds: 60, invoker: 'public' };
 const REVIEW_VERSION = 3;
 const DAY = 86400000;
@@ -13,12 +14,16 @@ const JST = 9 * 3600000;
 
 function replaceBabyLabels(text, summary) {
   let value = String(text);
-  for (const baby of summary) {
-    const id = baby.babyId;
+  const replacements = [];
+  summary.forEach((baby, index) => {
+    const id = String(baby.babyId || '').toUpperCase();
     const name = baby.name || id;
-    value = value.replace(new RegExp(`赤ちゃん${id}`, 'g'), name);
-    value = value.replace(new RegExp(`(^|[^A-Za-z0-9])${id}(?=[^A-Za-z0-9]|$)`, 'g'), (_match, prefix) => `${prefix}${name}`);
-  }
+    const token = `__TWINLY_CHILD_${index}__`;
+    value = value.replace(new RegExp(`赤ちゃん${id}`, 'gi'), token);
+    value = value.replace(new RegExp(`(^|[^A-Za-z0-9])${id}(?=[^A-Za-z0-9]|$)`, 'gi'), (_match, prefix) => `${prefix}${token}`);
+    replacements.push([token, name]);
+  });
+  for (const [token, name] of replacements) value = value.replaceAll(token, name);
   return value;
 }
 
@@ -131,7 +136,7 @@ function formatDailySummaryMail(summary) {
 }
 
 module.exports = function createAiServices(db) {
-  async function context(request) {
+  async function context(request, accessDocId = 'access') {
     if (!request.auth) throw new HttpsError('unauthenticated','ログインしてください');
     const uid = request.auth.uid;
     const user = await db.doc(`users/${uid}`).get();
@@ -143,48 +148,68 @@ module.exports = function createAiServices(db) {
       root.get(),
     ]);
     if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
-    const ref = root.collection('services').doc('access');
-    const snap = await ref.get();
+    const ref = root.collection('services').doc(accessDocId);
+    let snap = await ref.get();
+    if (process.env.TWINLY_BILLING_ENABLED === 'true' && snap.data()?.billingVersion !== 1) {
+      await ref.set({ billingVersion: 1 }, { merge: true });
+      snap = await ref.get();
+    }
     const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
 
   async function generate(system, data) {
-    const selectedModel = model.value() || 'gemini-3.6-flash';
-    if (!/^[a-zA-Z0-9.-]+$/.test(selectedModel)) throw new HttpsError('failed-precondition','AIモデル設定を確認してください');
-    let response;
-    try {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':key.value()},
-        signal:AbortSignal.timeout(40000),
-        body:JSON.stringify({
-          systemInstruction:{parts:[{text:system}]},
-          contents:[{role:'user',parts:[{text:JSON.stringify(data)}]}],
-          generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'minimal'}},
-        }),
-      });
-    } catch {
-      throw new HttpsError('unavailable','AIに接続できませんでした。入力は残っています');
+    const primaryModel = model.value() || 'gemini-3.6-flash';
+    const secondaryModel = fallbackModel.value() || 'gemini-3.5-flash-lite';
+    const candidates = [...new Set([primaryModel, secondaryModel])];
+    if (candidates.some(value => !/^[a-zA-Z0-9.-]+$/.test(value))) throw new HttpsError('failed-precondition','AIモデル設定を確認してください');
+    const body = JSON.stringify({
+      systemInstruction:{parts:[{text:system}]},
+      contents:[{role:'user',parts:[{text:JSON.stringify(data)}]}],
+      generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'minimal'}},
+    });
+    const transientStatus = status => status === 408 || status === 429 || status >= 500;
+
+    for (let index = 0; index < candidates.length; index += 1) {
+      const selectedModel = candidates[index];
+      let response;
+      try {
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-goog-api-key':key.value()},
+          signal:AbortSignal.timeout(40000),
+          body,
+        });
+      } catch (error) {
+        console.error('Gemini API connection failed',{model:selectedModel,fallback:index>0,message:error?.message});
+        if (index + 1 < candidates.length) continue;
+        throw new HttpsError('unavailable','AIに接続できませんでした。入力は残っています');
+      }
+
+      if (!response.ok) {
+        let details='';
+        try { if(typeof response.text==='function') details=(await response.text()).slice(0,1000); } catch {}
+        console.error('Gemini API request failed',{status:response.status,model:selectedModel,fallback:index>0,details});
+
+        if (transientStatus(response.status) && index + 1 < candidates.length) continue;
+        if(response.status===400) throw new HttpsError('failed-precondition','AIモデルへの送信設定が対応していません');
+        if(response.status===401||response.status===403) throw new HttpsError('permission-denied','Gemini APIキーまたは利用権限を確認してください');
+        if(response.status===404) throw new HttpsError('failed-precondition','指定したAIモデルを利用できません');
+        if(response.status===429) throw new HttpsError('resource-exhausted','Gemini APIの利用上限に達しました');
+        throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
+      }
+
+      try {
+        const result = await response.json();
+        const candidate = result.candidates?.[0];
+        if (candidate?.finishReason !== 'STOP') throw new Error('Incomplete');
+        return JSON.parse(candidate.content.parts.filter(p => !p.thought).map(p=>p.text || '').join(''));
+      } catch {
+        throw new HttpsError('data-loss','AIの結果を読み取れませんでした');
+      }
     }
-    if (!response.ok) {
-      let details='';
-      try { if(typeof response.text==='function') details=(await response.text()).slice(0,1000); } catch {}
-      console.error('Gemini API request failed',{status:response.status,model:selectedModel,details});
-      if(response.status===400) throw new HttpsError('failed-precondition','AIモデルへの送信設定が対応していません');
-      if(response.status===401||response.status===403) throw new HttpsError('permission-denied','Gemini APIキーまたは利用権限を確認してください');
-      if(response.status===404) throw new HttpsError('failed-precondition','指定したAIモデルを利用できません');
-      if(response.status===429) throw new HttpsError('resource-exhausted','Gemini APIの利用上限に達しました');
-      throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
-    }
-    try {
-      const body = await response.json();
-      const candidate = body.candidates?.[0];
-      if (candidate?.finishReason !== 'STOP') throw new Error('Incomplete');
-      return JSON.parse(candidate.content.parts.filter(p => !p.thought).map(p=>p.text || '').join(''));
-    } catch {
-      throw new HttpsError('data-loss','AIの結果を読み取れませんでした');
-    }
+
+    throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
   }
 
   async function reserve(ctx, feature, reserveOptions = {}) {
@@ -240,6 +265,7 @@ module.exports = function createAiServices(db) {
 
   const setFamilyPreviewPlan = onCall(options, async request => {
     const c=await context(request);
+    if (process.env.TWINLY_BILLING_ENABLED === 'true' || c.access.billing) throw new HttpsError('failed-precondition','料金とプランから無料体験・お支払いへ進んでください');
     if (!c.canPreview) throw new HttpsError('permission-denied','試用切替は家族のオーナーのみ利用できます');
     const previewPlan=request.data?.plan;
     if (!['free','premium'].includes(previewPlan)) throw new HttpsError('invalid-argument','プランが不正です');
@@ -275,8 +301,8 @@ module.exports = function createAiServices(db) {
     return { enabled, hourJst, recipients:await familyEmails(c.root), canEdit:true };
   });
 
-  const twinlyAi = onCall({...options,secrets:[key]},async request => {
-    const c=await context(request);
+  const createTwinlyAi = accessDocId => onCall({...options,secrets:[key]},async request => {
+    const c=await context(request, accessDocId);
     const mode=request.data?.mode;
     const feature=mode==='review'?'aiReview':mode==='ask'?'aiChat':null;
     if (!feature) throw new HttpsError('invalid-argument','操作が不正です');
@@ -311,7 +337,7 @@ module.exports = function createAiServices(db) {
         }
       );
       if(typeof result.answer!=='string' || !result.answer.trim() || result.answer.length>1600) throw new HttpsError('data-loss','AI回答の形式が不正です');
-      const latest=await context(request);
+      const latest=await context(request, accessDocId);
       if(!latest.access.features.aiChat) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
       await commitUsage(c,reservation);
       return {answer:replaceBabyLabels(result.answer,cachedData.summary),source:deep?'review+timeline':'review',generatedAt:now};
@@ -327,7 +353,7 @@ module.exports = function createAiServices(db) {
       summary
     );
     if(typeof result.observations!=='string'||typeof result.checks!=='string'||result.observations.length>1200||result.checks.length>1200) throw new HttpsError('data-loss','AIアドバイスの形式が不正です');
-    const latest=await context(request);
+    const latest=await context(request, accessDocId);
     if(!latest.access.features.aiReview) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
     const review={
       version:REVIEW_VERSION,
@@ -340,6 +366,9 @@ module.exports = function createAiServices(db) {
     await cache.set(review);
     return publicReview(review);
   });
+
+  const twinlyAi = createTwinlyAi('access');
+  const developmentTwinlyAi = createTwinlyAi('developmentAccess');
 
   const sendDailySummaryEmails = onSchedule(
     {schedule:'every 60 minutes',timeZone:'Asia/Tokyo',region:'asia-northeast1',maxInstances:1},
@@ -384,6 +413,8 @@ module.exports = function createAiServices(db) {
     getDailySummaryEmailSettings,
     setDailySummaryEmailSettings,
     twinlyAi,
+    developmentTwinlyAi,
     sendDailySummaryEmails,
   };
 };
+
