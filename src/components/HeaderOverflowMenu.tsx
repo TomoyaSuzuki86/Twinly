@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Ref } from "react";
+import { dispatchAiAdviceOpen } from "@/lib/app-events";
 import { HelpCircle, MoreVertical, Music, Pause, Settings, Sparkles } from "lucide-react";
 import type { FamilyAccess } from "@/lib/ai";
 import { Button } from "./ui/button";
@@ -14,39 +15,13 @@ type HeaderOverflowMenuProps = {
   access: FamilyAccess | null;
   onOpenHelp: () => void;
   onOpenSettings: () => void;
+  onOpenComfort: () => void;
   tutorialAnchorRef?: Ref<HTMLButtonElement>;
 };
 
 const stopHeaderGesture = (event: React.SyntheticEvent) => event.stopPropagation();
 
-export function useComfortHeaderState() {
-  const [state, setState] = useState<ComfortHeaderState>({
-    active: false,
-    paused: false,
-    trackId: "",
-    trackLabel: "",
-  });
-
-  useEffect(() => {
-    const handleState = (event: Event) => {
-      const detail = (event as CustomEvent<ComfortHeaderState>).detail;
-      if (detail) setState(detail);
-    };
-    window.addEventListener("twinly-comfort-state", handleState);
-    const timer = window.setTimeout(
-      () => window.dispatchEvent(new Event("twinly-comfort-state-request")),
-      100
-    );
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("twinly-comfort-state", handleState);
-    };
-  }, []);
-
-  return state;
-}
-
-export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, tutorialAnchorRef }: HeaderOverflowMenuProps) {
+export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, onOpenComfort, tutorialAnchorRef }: HeaderOverflowMenuProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -120,7 +95,7 @@ export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, tutoria
                 : "Premiumで利用できます"
           }
           className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-          onClick={closeAnd(() => window.dispatchEvent(new Event("twinly-ai-advice-open")))}
+          onClick={closeAnd(dispatchAiAdviceOpen)}
         >
           <Sparkles className="h-4 w-4" />
           <span>AIアドバイス</span>
@@ -134,7 +109,7 @@ export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, tutoria
           type="button"
           role="menuitem"
           className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold hover:bg-accent"
-          onClick={closeAnd(() => window.dispatchEvent(new Event("twinly-comfort-open")))}
+          onClick={closeAnd(onOpenComfort)}
         >
           <Music className="h-4 w-4" />
           <span>おやすみ音楽</span>
@@ -162,7 +137,15 @@ export function HeaderOverflowMenu({ access, onOpenHelp, onOpenSettings, tutoria
   );
 }
 
-export function ComfortMiniPlayer({ state }: { state: ComfortHeaderState }) {
+export function ComfortMiniPlayer({
+  state,
+  onOpen,
+  onTogglePause,
+}: {
+  state: ComfortHeaderState;
+  onOpen: () => void;
+  onTogglePause: () => void;
+}) {
   if (!state.active || state.paused) return null;
   const label = state.trackLabel || "おやすみ音楽";
 
@@ -177,7 +160,7 @@ export function ComfortMiniPlayer({ state }: { state: ComfortHeaderState }) {
         className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap border-0 bg-transparent text-left text-[10px] font-semibold"
         aria-label="おやすみ音楽を開く"
         title={label}
-        onClick={() => window.dispatchEvent(new Event("twinly-comfort-open"))}
+        onClick={onOpen}
       >
         <Music className="h-3 w-3 shrink-0" />
         <span className="truncate">{label}</span>
@@ -186,7 +169,7 @@ export function ComfortMiniPlayer({ state }: { state: ComfortHeaderState }) {
         type="button"
         className="grid h-[0.9rem] w-[2.6rem] shrink-0 place-items-center rounded-full bg-primary text-primary-foreground active:scale-95"
         aria-label="一時停止"
-        onClick={() => window.dispatchEvent(new Event("twinly-comfort-toggle-pause"))}
+        onClick={onTogglePause}
       >
         <Pause className="h-2 w-2" />
       </button>
