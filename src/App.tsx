@@ -44,7 +44,6 @@ import { ProfileSetup } from "./components/ProfileSetup";
 import { AccountModal } from "./components/AccountModal";
 import { VoiceCommandButton } from "./components/VoiceCommandButton";
 import { createInitialAppState } from "./lib/app-state";
-import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
 import { readCachedAppState } from "./data/app-state-cache";
@@ -71,6 +70,7 @@ import { useTutorialAnchors } from "./lib/tutorial-anchors";
 import { useAppClock } from "./lib/use-app-clock";
 import { useAppModalController } from "./lib/use-app-modal-controller";
 import { useEventOperations } from "./lib/use-event-operations";
+import { useBackupActions } from "./lib/use-backup-actions";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
 
 const createEmptyState = () => createInitialAppState(new Date());
@@ -363,40 +363,12 @@ export default function App() {
     await signOutUser();
   };
 
-  const handleExport = async () => {
-    try {
-      if (!store.current) throw new Error("記録を読み込んでいます。");
-      const complete = await store.current.exportAll();
-      const blob = new Blob([JSON.stringify(complete, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `twinly-backup-${fmtDate(new Date())}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (error) { alert(error instanceof Error ? error.message : "全履歴を書き出せませんでした。"); }
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから復元してください。"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const json = ev.target?.result as string;
-        const importedState = parseBackup(json);
-        if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
-        if (updateApp(() => importedState, { absoluteSettings: true })) {
-          setActiveDate(importedState.ui.lastViewedDate);
-          alert("復元内容を端末に保存しました。同期状況をご確認ください。");
-        }
-      } catch {
-        alert("ファイルの読み込みに失敗しました");
-      }
-    };
-    reader.readAsText(file);
-  };
+  const { handleExport, handleImport } = useBackupActions({
+    store,
+    status: syncStatus,
+    updateApp,
+    setActiveDate,
+  });
 
   const dashboard = useMemo(
     () => buildDashboardSelectors(app, activeDate, todayDate, now),
