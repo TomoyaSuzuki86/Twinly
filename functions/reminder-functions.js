@@ -8,7 +8,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const mergeWindowMinutes = 15;
 const mergeWindowMs = mergeWindowMinutes * 60 * 1000;
-const diaperGaugeWindowMinutes = 120;
+const defaultDiaperGaugeWindowMinutes = 120;
 const webPushPrivateKey = defineSecret("TWINLY_WEB_PUSH_PRIVATE_KEY");
 const publicKey = "BKEpEJv5umbr7E9b5dptGP0YgCV8EdVo13tDzYxUHrue90qhqIddPtzGjxv5eFuRnQgghz_G_9yOCZQV3QS8SQI";
 const subject = "mailto:no-reply@twinly.local";
@@ -34,10 +34,14 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
     const lastSent = lastSentByKey?.[reminderKey] ?? (kind === "milk" ? legacyLastSentByBaby?.[babyId] : null);
     if (lastSent?.eventId === latestEvent.id) return null;
   
+    const diaperWindowMinutes = Math.min(
+      720,
+      Math.max(30, Number(profiles[babyId]?.diaperGaugeWindowMinutes) || defaultDiaperGaugeWindowMinutes)
+    );
     const intervalMs =
       kind === "milk"
         ? resolveMilkWindowHours(profiles[babyId]?.milkGaugeWindowHours) * 60 * 60 * 1000
-        : diaperGaugeWindowMinutes * 60 * 1000;
+        : diaperWindowMinutes * 60 * 1000;
     const dueAt = latestEvent.timestamp + intervalMs;
   
     return {
@@ -191,7 +195,6 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
             careReminder: {
               enabled: true,
               mergeWindowMinutes,
-              diaperGaugeWindowMinutes,
               lastSentByKey: nextLastSentByKey,
             },
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),

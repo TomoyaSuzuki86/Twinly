@@ -46,8 +46,9 @@ describe("SettingsModal", () => {
     expect(screen.queryByRole("tab", { name: /Google Calendar/i })).toBeNull();
   });
 
-  it("shows the notifications tab for Premium users", () => {
+  it("shows the care gauge and notifications tabs for Premium users", () => {
     renderSettings(undefined, true);
+    expect(screen.getByRole("tab", { name: "お世話ゲージ" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "通知" })).toBeInTheDocument();
   });
 
@@ -56,15 +57,14 @@ describe("SettingsModal", () => {
     app.profiles.A.activityLimitMinutesOverride = 120;
     renderSettings(app, true);
 
-    const activityLimitInputs = screen.getAllByLabelText("活動可能時間") as HTMLInputElement[];
-    expect(activityLimitInputs[0].value).toBe("120");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    expect(screen.getAllByText("2時間").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole("button", { name: "活動可能時間を初期値に戻す" })[0]);
     expect(screen.getByText("初期値に戻しますか？")).toBeTruthy();
-    expect(activityLimitInputs[0].value).toBe("120");
 
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(activityLimitInputs[0].value).toBe("");
+    expect(screen.getAllByText("月齢の目安").length).toBeGreaterThan(0);
   });
 
   it("allows daily sleep targets to be overridden and restored to the age default", () => {
@@ -72,23 +72,51 @@ describe("SettingsModal", () => {
     app.profiles.A.sleepTargetHoursOverride = 14;
     renderSettings(app, true);
 
-    const sleepTargetInputs = screen.getAllByLabelText("1日の必要睡眠時間") as HTMLInputElement[];
-    expect(sleepTargetInputs[0].value).toBe("14");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    expect(screen.getByText("14時間")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "必要睡眠時間を初期値に戻す" })[0]);
     expect(screen.getByText("初期値に戻しますか？")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
-    expect(sleepTargetInputs[0].value).toBe("");
+    expect(screen.getAllByText("月齢の目安").length).toBeGreaterThan(0);
   });
 
-  it("moves sleep management to data management and hides sleep profile settings when disabled", () => {
-    renderSettings();
+  it("moves sleep management to data management and hides sleep gauge controls when disabled", () => {
+    renderSettings(undefined, true);
     fireEvent.mouseDown(screen.getByRole("tab", { name: "データ管理" }), { button: 0, ctrlKey: false });
     fireEvent.click(screen.getByRole("button", { name: "睡眠管理を切り替え" }));
 
     expect(screen.getByRole("button", { name: "睡眠管理を切り替え" })).toHaveTextContent("オフ");
-    expect(screen.queryByLabelText("活動可能時間")).toBeNull();
-    expect(screen.queryByLabelText("1日の必要睡眠時間")).toBeNull();
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    expect(screen.getAllByText(/睡眠管理がオフです/).length).toBe(2);
+    expect(screen.queryByRole("button", { name: /活動可能時間を10分/ })).toBeNull();
+  });
+
+  it("lets each baby customize the diaper gauge timing", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    app.profiles.A.displayName = "A";
+    renderSettings(app, true);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "Aのおむつ間隔を30分長くする" }));
+
+    expect(screen.getAllByText("2時間30分").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/交換直後はゲージが空になります/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/たつと満タンになります/).length).toBeGreaterThan(0);
+  });
+
+  it("can copy one baby's gauge settings to the other baby", () => {
+    const app = createInitialAppState(new Date("2026-04-18T09:00:00+09:00"));
+    app.profiles.A.displayName = "A";
+    app.profiles.B.displayName = "B";
+    app.profiles.A.milkGaugeWindowHours = 4;
+    renderSettings(app, true);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "お世話ゲージ" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("button", { name: "Aのお世話ゲージ設定をBにも反映" }));
+
+    expect(screen.getByText("✓ Bにも同じ設定を反映しました")).toBeInTheDocument();
   });
 
   it("keeps diaper stock management inside data management", () => {

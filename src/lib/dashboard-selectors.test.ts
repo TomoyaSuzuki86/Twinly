@@ -29,6 +29,19 @@ describe("buildDashboardSelectors split-layout invariants", () => {
     expect(dashboard.B.latestEvents.every((event) => event.babyId === "B")).toBe(true);
   });
 
+  it("uses each baby's configured diaper gauge interval", () => {
+    const now = new Date("2026-04-18T13:00:00+09:00");
+    const app = createInitialAppState(now);
+    app.profiles.A.diaperGaugeWindowMinutes = 240;
+    app.events = [
+      { id: "a-diaper", babyId: "A", type: "diaper", timestamp: at("12:00"), diaperKind: "pee" },
+    ];
+
+    const dashboard = buildDashboardSelectors(app, "2026-04-18", "2026-04-18", now);
+
+    expect(dashboard.A.tabGaugePercents.diaper).toBe(25);
+  });
+
   it("hides the activity tab gauge while the baby is sleeping", () => {
     const now = new Date("2026-04-18T10:20:00+09:00");
     const app = createInitialAppState(now);

@@ -109,7 +109,7 @@ describe("care gauges", () => {
     expect(gauge?.neededMl).toBe(0);
   });
 
-  it("reaches the fixed diaper replacement timing after two hours", () => {
+  it("reaches the default diaper check timing after two hours", () => {
     const events = [
       diaper("d1", "2026-04-08T06:00:00+09:00"),
       { ...diaper("d2", "2026-04-08T09:00:00+09:00"), diaperKind: "poop" as const },
@@ -132,15 +132,16 @@ describe("care gauges", () => {
     expect(due?.level).toBe(0);
   });
 
-  it("starts the two-hour diaper gauge from the first record", () => {
+  it("supports a custom diaper gauge interval", () => {
     const gauge = buildDiaperGauge({
       events: [diaper("only", "2026-04-08T12:00:00+09:00")],
       babyId: "A",
       now: new Date("2026-04-08T13:00:00+09:00"),
+      intervalMinutes: 180,
     });
 
-    expect(gauge?.expectedIntervalMinutes).toBe(120);
-    expect(gauge?.level).toBe(0.5);
+    expect(gauge?.expectedIntervalMinutes).toBe(180);
+    expect(gauge?.level).toBeCloseTo(2 / 3);
   });
 
   it("returns no estimate only when there are no records", () => {

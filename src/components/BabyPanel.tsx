@@ -244,6 +244,7 @@ export function BabyPanel({
     now,
     milkWindowHours: profile.milkGaugeWindowHours ?? 3,
     milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
   });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
   const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
@@ -869,4 +870,3 @@ export function BabyPanel({
     </Card>
   );
 }
-
