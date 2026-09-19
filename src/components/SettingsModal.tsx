@@ -30,16 +30,12 @@ type SettingsModalProps = {
   setApp: (updater: AppState | ((prev: AppState) => AppState)) => void;
   user: User | null;
   onSignIn: () => void | Promise<void>;
-  onSignOut: () => void | Promise<void>;
   pushPermission: NotificationPermission | "unsupported";
   pushSubscribed: boolean;
   pushBusy: boolean;
   webPushConfigured: boolean;
   onEnablePushNotifications: () => void | Promise<void>;
   onDisablePushNotifications: () => void | Promise<void>;
-  wearPairingToken: string | null;
-  wearPairingBusy: boolean;
-  onCreateWearPairingToken: () => void | Promise<void>;
   onExport: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onResetAll: () => void;
