@@ -1,10 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { HistoryDialogShell } from "./HistoryDialogShell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { analyzeSleepEvents, formatSleepDuration } from "@/lib/sleep";
 import { rangeDays, type TimeRange } from "@/lib/event-history";
@@ -26,7 +20,7 @@ import {
   toClockMinutes,
   type SleepHistoryEntry,
 } from "@/lib/sleep-history";
-import type { BabyProfile, LogEvent } from "@/types";
+import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { Moon } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -46,6 +40,7 @@ type SleepHistoryModalProps = {
   events: LogEvent[];
   profile: BabyProfile;
   now: Date;
+  onSwitchBaby?: (babyId: BabyId) => void;
 };
 
 export function SleepHistoryModal({
@@ -54,6 +49,7 @@ export function SleepHistoryModal({
   events,
   profile,
   now,
+  onSwitchBaby,
 }: SleepHistoryModalProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("1W");
   const analysis = useMemo(
@@ -185,17 +181,16 @@ export function SleepHistoryModal({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-w-2xl flex-col overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Moon className="h-5 w-5" />
-            <span>{profile.displayName}の睡眠履歴</span>
-          </DialogTitle>
-          <DialogDescription>
-            表示期間の睡眠リズムを確認できます。夜間は19:00〜翌6:00で集計します。
-          </DialogDescription>
-        </DialogHeader>
+    <HistoryDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      profile={profile}
+      titlePrefix={<Moon className="h-5 w-5" />}
+      title={`${profile.displayName}の睡眠履歴`}
+      description="表示期間の睡眠リズムを確認できます。夜間は19:00〜翌6:00で集計します。"
+      onSwitchBaby={onSwitchBaby}
+      className="flex h-[85vh] max-w-2xl flex-col overflow-y-auto"
+    >
 
         <div className="flex items-center justify-end">
           <Tabs value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
@@ -315,7 +310,6 @@ export function SleepHistoryModal({
             </ResponsiveContainer>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </HistoryDialogShell>
   );
 }
