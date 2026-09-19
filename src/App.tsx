@@ -21,6 +21,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools } from "./components/ComfortTools";
 import { ManualSyncButton } from "./components/ManualSyncButton";
+import { SyncStatusOverlay } from "./components/SyncStatusOverlay";
 import { ComfortMiniPlayer, HeaderOverflowMenu, useComfortHeaderState } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
@@ -878,6 +879,7 @@ export default function App() {
           return recordEventDrafts(eventDrafts);
         }} />}
       />
+      <SyncStatusOverlay status={syncStatus} resolver={store.current} />
       <BillingPrompt />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
