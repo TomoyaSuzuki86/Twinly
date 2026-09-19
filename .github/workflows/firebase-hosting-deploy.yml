@@ -163,6 +163,7 @@ jobs:
           TWINLY_AI_API_KEY: ${{ secrets.TWINLY_AI_API_KEY }}
           TWINLY_TRIAL_FAMILY_ID: ${{ vars.TWINLY_TRIAL_FAMILY_ID }}
           TWINLY_AI_MODEL: ${{ vars.TWINLY_AI_MODEL }}
+          TWINLY_AI_FALLBACK_MODEL: ${{ vars.TWINLY_AI_FALLBACK_MODEL }}
         run: node functions/scripts/configure-ai-ci.js
 
       - name: Configure billing
@@ -184,7 +185,7 @@ jobs:
         run: |
           selector="${{ steps.scope.outputs.function_selector }}"
           if [ "$selector" = "functions" ]; then
-            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails"
+            selector="functions:completeFamilyOnboarding,functions:createFamilyInvite,functions:joinFamily,functions:sendMilkReminderNotifications,functions:recordFromWear,functions:undoWearRecord,functions:latestMilkElapsedFromWear,functions:getFamilyAccess,functions:setFamilyPreviewPlan,functions:getDailySummaryEmailSettings,functions:setDailySummaryEmailSettings,functions:sendDailySummaryEmails,functions:developmentTwinlyAi"
             if [ "${{ steps.ai_config.outputs.ai_enabled }}" = "true" ]; then
               selector="$selector,functions:twinlyAi"
             fi
