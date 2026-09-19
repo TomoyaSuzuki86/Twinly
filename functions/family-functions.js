@@ -6,7 +6,7 @@ const inviteLifetimeMs = 24 * 60 * 60 * 1000;
 const validRelationships = new Set(["father", "mother", "grandfather", "grandmother", "other"]);
 const publicCallableOptions = { invoker: "public" };
 
-module.exports = ({ admin, db, familyAccess }) => {
+module.exports = ({ admin, db, familyAccess, logger = console }) => {
   const requireAuthUid = (request) => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "ログインが必要です");

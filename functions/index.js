@@ -9,7 +9,7 @@ const db = admin.firestore();
 const { familyAccess, getAppRefForUid } = require("./runtime-context")({ db, accessFor });
 
 Object.assign(exports, require("./ai-service")(db));
-Object.assign(exports, require("./family-functions")({ admin, db, familyAccess }));
+Object.assign(exports, require("./family-functions")({ admin, db, familyAccess, logger }));
 Object.assign(exports, require("./reminder-functions")({ admin, db, familyAccess, getAppRefForUid, logger }));
 Object.assign(exports, require("./wear-functions")({ admin, db, getAppRefForUid, logger }));
 
