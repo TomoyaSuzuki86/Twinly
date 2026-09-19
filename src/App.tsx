@@ -66,7 +66,6 @@ import { buildDashboardSelectors } from "./lib/dashboard-selectors";
 import { ensureNotificationSettingsDocument } from "./lib/notification-settings";
 import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/use-authentication";
 import { usePushNotifications } from "./lib/use-push-notifications";
-import { useWearPairing } from "./lib/use-wear-pairing";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
 import { useAppClock } from "./lib/use-app-clock";
 import { useAppModalController } from "./lib/use-app-modal-controller";
@@ -215,7 +214,6 @@ export default function App() {
     familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing
   );
   const pushNotifications = usePushNotifications(authUser);
-  const wearPairing = useWearPairing(authUser);
   const comfortHeaderState = useComfortHeaderState();
   const tutorialAnchors = useTutorialAnchors();
 
@@ -510,8 +508,7 @@ export default function App() {
           defaultNickname={authUser.displayName || ""}
           joiningFamily={Boolean(pendingInviteToken)}
           onSubmit={handleProfileSetup}
-          onSignOut={handleSignOut}
-        />
+          />
       </AppContainer>
     );
   }
@@ -826,9 +823,6 @@ export default function App() {
         webPushConfigured={pushNotifications.configured}
         onEnablePushNotifications={pushNotifications.enable}
         onDisablePushNotifications={pushNotifications.disable}
-        wearPairingToken={wearPairing.token}
-        wearPairingBusy={wearPairing.busy}
-        onCreateWearPairingToken={wearPairing.createPairingToken}
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}
