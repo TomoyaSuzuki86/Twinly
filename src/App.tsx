@@ -19,10 +19,10 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
-import { ComfortTools } from "./components/ComfortTools";
+import { ComfortTools, type ComfortState, type ComfortToolsHandle } from "./components/ComfortTools";
 import { ManualSyncButton } from "./components/ManualSyncButton";
 import { SyncStatusOverlay } from "./components/SyncStatusOverlay";
-import { ComfortMiniPlayer, HeaderOverflowMenu, useComfortHeaderState } from "./components/HeaderOverflowMenu";
+import { ComfortMiniPlayer, HeaderOverflowMenu } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
 import { AiTools } from "./components/AiTools";
@@ -215,7 +215,13 @@ export default function App() {
     familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing
   );
   const pushNotifications = usePushNotifications(authUser);
-  const comfortHeaderState = useComfortHeaderState();
+  const comfortToolsRef = useRef<ComfortToolsHandle | null>(null);
+  const [comfortHeaderState, setComfortHeaderState] = useState<ComfortState>({
+    active: false,
+    paused: false,
+    trackId: "",
+    trackLabel: "",
+  });
   const tutorialAnchors = useTutorialAnchors();
 
   const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
@@ -512,7 +518,7 @@ export default function App() {
 
                 <div className="flex items-center gap-1">
                   <ManualSyncButton status={syncStatus} onSync={requestSync} />
-                  <div className="hidden" aria-hidden="true"><ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/></div>
+                  <div className="hidden" aria-hidden="true"><ComfortTools ref={comfortToolsRef} key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id} onStateChange={setComfortHeaderState}/></div>
                   <VoiceCommandButton
                     ref={voiceButtonRef}
                     babyNames={voiceCommandBabyNames}
@@ -525,6 +531,7 @@ export default function App() {
                     access={familyAccess}
                     onOpenHelp={() => setHelpModalOpen(true)}
                     onOpenSettings={() => openModal("settings")}
+                    onOpenComfort={() => comfortToolsRef.current?.open()}
                   />
                   <button
                     type="button"
@@ -537,7 +544,11 @@ export default function App() {
                   </button>
                 </div>
               </header>
-              <ComfortMiniPlayer state={comfortHeaderState} />
+              <ComfortMiniPlayer
+                state={comfortHeaderState}
+                onOpen={() => comfortToolsRef.current?.open()}
+                onTogglePause={() => comfortToolsRef.current?.togglePause()}
+              />
               <p
                 className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
                 data-twinly-voice-hint="true"
