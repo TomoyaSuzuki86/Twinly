@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { accessFor, summarize } = require('./ai-policy');
+const { isActiveMember, isFamilyOwner } = require('./access-policy');
 
 const key = defineSecret('TWINLY_AI_API_KEY');
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
@@ -114,14 +115,14 @@ module.exports = function createAiServices(db) {
       root.collection('members').doc(uid).get(),
       root.get(),
     ]);
-    if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
+    if (!isActiveMember(member.data())) throw new HttpsError('permission-denied','家族へのアクセス権がありません');
     const ref = root.collection('services').doc(accessDocId);
     let snap = await ref.get();
     if (process.env.TWINLY_BILLING_ENABLED === 'true' && snap.data()?.billingVersion !== 1) {
       await ref.set({ billingVersion: 1 }, { merge: true });
       snap = await ref.get();
     }
-    const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
+    const isOwner = isFamilyOwner(member.data(), family.data(), uid);
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
 
