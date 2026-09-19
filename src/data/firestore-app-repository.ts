@@ -9,73 +9,27 @@ import { removeUndefined } from "@/lib/utils";
 import {
   applyMutation,
   reconcileStockConsumption,
-  sameValue,
   type AppMutation,
   type AppRepository,
   type CommitResult,
-  type EventChange,
   type SettingChange,
 } from "./app-repository";
+import { mergeEventChangeByServerOrder } from "./event-sync-policy";
+export { mergeEventChangeByServerOrder } from "./event-sync-policy";
 
 export const RECENT_DAYS = 30;
 const PAGE_SIZE = 400;
-const EVENT_FIELDS: (keyof LogEvent)[] = [
-  "babyId", "type", "timestamp", "milkMl", "milkMethod", "diaperKind", "diaperSizeUsed",
-  "temperature", "weight", "height", "note",
-];
-
 const decode = (data: Record<string, unknown> | undefined): AppState => {
   if (!data?.app) return createInitialAppState();
   const stored = data.app as AppState;
   return stripLegacyCalendarFields({ ...stored, events: stored.events ?? [], ui: createInitialAppState().ui });
 };
 
-const setEventValue = (event: LogEvent, field: keyof LogEvent, value: unknown) => {
-  const target = event as unknown as Record<string, unknown>;
-  if (value === undefined) delete target[field as string];
-  else target[field as string] = value;
-};
 const getPathValue = (state: AppState, path: string[]) => {
   let value: unknown = state;
   for (const key of path) value = (value as Record<string, unknown> | undefined)?.[key];
   return value;
 };
-
-// Firestore transactions serialize concurrent writes. We therefore resolve conflicts using
-// server processing order instead of device clocks: untouched remote fields are preserved,
-// fields changed by this mutation take the local value, and a later delete/edit wins.
-export function mergeEventChangeByServerOrder(change: EventChange, remote: LogEvent | undefined) {
-  const before = change.before;
-  const local = change.after;
-
-  if (!local) {
-    if (!remote) return {};
-    return { confirmed: { id: change.id, before: remote } satisfies EventChange };
-  }
-
-  if (!before) {
-    if (remote && sameValue(remote, local)) return {};
-    return { confirmed: { id: change.id, ...(remote ? { before: remote } : {}), after: local } satisfies EventChange };
-  }
-
-  if (!remote) {
-    return { confirmed: { id: change.id, after: local } satisfies EventChange };
-  }
-
-  const merged = structuredClone(remote);
-  let changed = false;
-  for (const field of EVENT_FIELDS) {
-    if (sameValue(before[field], local[field])) continue;
-    if (!sameValue(remote[field], local[field])) {
-      setEventValue(merged, field, local[field]);
-      changed = true;
-    }
-  }
-  if (!changed) return {};
-  if (local.updatedByUid !== undefined) merged.updatedByUid = local.updatedByUid;
-  if (local.updatedAt !== undefined) merged.updatedAt = local.updatedAt;
-  return { confirmed: { id: change.id, before: remote, after: merged } satisfies EventChange };
-}
 
 export function createFirestoreAppRepository(db: Firestore, familyId: string, userId: string, allHistory = false): AppRepository {
   const familyRef = doc(db, "families", familyId);
