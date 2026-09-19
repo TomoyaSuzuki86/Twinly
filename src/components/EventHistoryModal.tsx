@@ -1,12 +1,6 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { HistoryDialogShell } from "./HistoryDialogShell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BabyProfile, LogEvent } from "@/types";
+import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate, fmtTime } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,6 +42,7 @@ type EventHistoryModalProps = {
   profile: BabyProfile;
   activeDate: string;
   now: Date;
+  onSwitchBaby?: (babyId: BabyId) => void;
 };
 
 const strokeMap: Record<string, string> = {
@@ -235,6 +230,7 @@ export function EventHistoryModal({
   profile,
   activeDate,
   now,
+  onSwitchBaby,
 }: EventHistoryModalProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>(getDefaultHistoryRange(historyType));
   const [selectedPeriodKey, setSelectedPeriodKey] = useState<string | null>(null);
@@ -324,17 +320,16 @@ export function EventHistoryModal({
   const chartData = historyType === "milk" ? milkChartData : diaperChartData;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[75vh] max-w-4xl flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Icon className="h-5 w-5" />
-            <span>
-              {profile.displayName}の{formatHistoryTitle(historyType)}
-            </span>
-          </DialogTitle>
-          <DialogDescription>{formatHistoryDescription(historyType)}</DialogDescription>
-        </DialogHeader>
+    <HistoryDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      profile={profile}
+      titlePrefix={<Icon className="h-5 w-5" />}
+      title={`${profile.displayName}の${formatHistoryTitle(historyType)}`}
+      description={formatHistoryDescription(historyType)}
+      onSwitchBaby={onSwitchBaby}
+      className="flex h-[75vh] max-w-4xl flex-col overflow-hidden"
+    >
 
         <div className="grid flex-1 gap-4 overflow-y-auto md:min-h-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] md:overflow-hidden">
           <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
@@ -467,7 +462,6 @@ export function EventHistoryModal({
             </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </HistoryDialogShell>
   );
 }
