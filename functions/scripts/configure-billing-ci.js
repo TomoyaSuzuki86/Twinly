@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('GitHub Actions専用です');
+// Production billing is enabled only when the production environment explicitly opts in.
 const enabled = process.env.TWINLY_BILLING_ENABLED === 'true';
 const values = { TWINLY_BILLING_ENABLED: String(enabled) };
 if (enabled) {
