@@ -4,7 +4,6 @@ import {
   loadPendingEvents,
   mergePendingEvents,
   removePendingEvents,
-  storePendingEvents,
 } from "./pending-events";
 
 const event = (id: string, timestamp: number): LogEvent => ({
@@ -19,8 +18,7 @@ describe("pending events", () => {
   beforeEach(() => localStorage.clear());
 
   it("keeps unsynced events across page reloads until they are confirmed", () => {
-    storePendingEvents("user-1", [event("one", 100)]);
-    storePendingEvents("user-1", [event("two", 200)]);
+    localStorage.setItem("twinly-pending-events:user-1", JSON.stringify([event("one", 100), event("two", 200)]));
 
     expect(loadPendingEvents("user-1").map((item) => item.id)).toEqual(["one", "two"]);
 
