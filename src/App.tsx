@@ -508,7 +508,8 @@ export default function App() {
           defaultNickname={authUser.displayName || ""}
           joiningFamily={Boolean(pendingInviteToken)}
           onSubmit={handleProfileSetup}
-          />
+          onSignOut={handleSignOut}
+        />
       </AppContainer>
     );
   }
@@ -816,7 +817,6 @@ export default function App() {
         }}
         user={authUser}
         onSignIn={handleSignIn}
-        onSignOut={handleSignOut}
         pushPermission={pushNotifications.permission}
         pushSubscribed={pushNotifications.subscribed}
         pushBusy={pushNotifications.busy}
@@ -917,6 +917,9 @@ export default function App() {
           events={app.events}
           profile={app.profiles[historyModal.babyId]}
           now={now}
+          onSwitchBaby={(babyId) =>
+            setHistoryModal((current) => current ? { ...current, babyId } : current)
+          }
         />
       ) : historyModal ? (
         <EventHistoryModal
@@ -927,6 +930,9 @@ export default function App() {
           profile={app.profiles[historyModal.babyId]}
           activeDate={activeDate}
           now={now}
+          onSwitchBaby={(babyId) =>
+            setHistoryModal((current) => current ? { ...current, babyId } : current)
+          }
         />
       ) : null}
       </Suspense>
