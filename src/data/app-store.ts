@@ -1,4 +1,5 @@
 import type { AppState, LogEvent } from "@/types";
+import { USER_EVENT_FIELDS } from "./event-sync-policy";
 import {
   applyMutation,
   createMutation,
@@ -56,11 +57,6 @@ const COMMIT_TIMEOUT_MS = 15_000;
 const RECONNECT_MAX_MS = 30_000;
 const SAVE_RETRY_MAX_MS = 30_000;
 const DIAGNOSTIC_LIMIT = 80;
-const USER_EVENT_FIELDS: (keyof LogEvent)[] = [
-  "babyId", "type", "timestamp", "milkMl", "milkMethod", "diaperKind", "diaperSizeUsed",
-  "temperature", "weight", "height", "note",
-];
-
 const mutationHasChanges = (mutation: AppMutation | undefined) => Boolean(mutation && (mutation.events.length || mutation.settings.length));
 const setEventValue = (event: LogEvent, field: string, value: unknown) => {
   const target = event as unknown as Record<string, unknown>;
