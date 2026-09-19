@@ -1,4 +1,4 @@
-import { BabyId, BabyProfile, LogEvent } from "@/types";
+import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate } from "@/lib/utils";
 
 export type DiaperStockAlertLevel = "none" | "caution" | "warning" | "urgent" | "unknown";
@@ -12,7 +12,9 @@ export type DiaperStockEstimate = {
   level: DiaperStockAlertLevel;
 };
 
-type BabyProfiles = Record<BabyId, BabyProfile>;
+export type BabyProfiles = Record<BabyId, BabyProfile>;
+
+const BABY_IDS: readonly BabyId[] = ["A", "B"];
 
 type EstimateDiaperStockBySizeParams = {
   profiles: BabyProfiles;
@@ -38,16 +40,39 @@ const resolveAlertLevel = (daysRemaining: number): DiaperStockAlertLevel => {
   return "none";
 };
 
-const getStoredStock = (profiles: BabyProfiles, size: string) =>
-  Object.values(profiles).find((profile) => Object.prototype.hasOwnProperty.call(profile.diaperStockBySize, size))
+export const getSharedDiaperStock = (profiles: BabyProfiles, size: string) =>
+  BABY_IDS.map((babyId) => profiles[babyId])
+    .find((profile) => Object.prototype.hasOwnProperty.call(profile.diaperStockBySize, size))
     ?.diaperStockBySize[size] ?? 0;
 
+export const setSharedDiaperStock = (
+  profiles: BabyProfiles,
+  size: string,
+  stock: number
+): BabyProfiles => {
+  const nextStock = Math.max(0, stock);
+  return Object.fromEntries(
+    BABY_IDS.map((babyId) => [
+      babyId,
+      {
+        ...profiles[babyId],
+        diaperStockBySize: {
+          ...profiles[babyId].diaperStockBySize,
+          [size]: nextStock,
+        },
+      },
+    ])
+  ) as BabyProfiles;
+};
+
+export const adjustSharedDiaperStock = (
+  profiles: BabyProfiles,
+  size: string,
+  delta: number
+) => setSharedDiaperStock(profiles, size, getSharedDiaperStock(profiles, size) + delta);
+
 const getBabyIdsUsingSize = (profiles: BabyProfiles, size: string) =>
-  new Set(
-    (Object.entries(profiles) as [BabyId, BabyProfile][])
-      .filter(([, profile]) => profile.diaperSize === size)
-      .map(([babyId]) => babyId)
-  );
+  new Set(BABY_IDS.filter((babyId) => profiles[babyId].diaperSize === size));
 
 const countRecentDiaperEvents = (
   events: LogEvent[],
@@ -86,7 +111,7 @@ export const estimateDiaperStockBySize = ({
   lookbackDays = 7,
   minimumEvents = 3,
 }: EstimateDiaperStockBySizeParams): DiaperStockEstimate => {
-  const remaining = getStoredStock(profiles, size);
+  const remaining = getSharedDiaperStock(profiles, size);
 
   if (remaining <= 0) {
     return {
