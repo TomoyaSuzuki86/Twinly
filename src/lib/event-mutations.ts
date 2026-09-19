@@ -1,4 +1,5 @@
 import type { AppState, BabyId, LogEvent } from "@/types";
+import { adjustSharedDiaperStock, getSharedDiaperStock, setSharedDiaperStock } from "./diaper-stock";
 
 export function appendEvents(state: AppState, additions: LogEvent[]): AppState {
   const next = structuredClone(state);
@@ -8,10 +9,10 @@ export function appendEvents(state: AppState, additions: LogEvent[]): AppState {
     const event = { ...original };
     if (event.type === "diaper" && next.diaperStockManagementEnabled) {
       const size = event.diaperSizeUsed || next.profiles[event.babyId].diaperSize;
-      const stock = next.profiles[event.babyId].diaperStockBySize[size] ?? 0;
+      const stock = getSharedDiaperStock(next.profiles, size);
       event.diaperSizeUsed = size;
       event.diaperStockConsumed = Math.min(1, Math.max(0, stock));
-      for (const profile of Object.values(next.profiles)) profile.diaperStockBySize[size] = Math.max(0, stock - 1);
+      next.profiles = setSharedDiaperStock(next.profiles, size, stock - 1);
       next.profiles[event.babyId].diaperSize = size;
     }
     existing.add(event.id);
@@ -26,9 +27,11 @@ export function removeEvents(state: AppState, ids: Set<string>): AppState {
   for (const event of next.events) {
     if (!ids.has(event.id) || !event.diaperSizeUsed || !event.diaperStockConsumed) continue;
     // Use the original size even if the baby has since moved up a size.
-    for (const profile of Object.values(next.profiles)) {
-      profile.diaperStockBySize[event.diaperSizeUsed] = (profile.diaperStockBySize[event.diaperSizeUsed] ?? 0) + event.diaperStockConsumed;
-    }
+    next.profiles = adjustSharedDiaperStock(
+      next.profiles,
+      event.diaperSizeUsed,
+      event.diaperStockConsumed
+    );
   }
   next.events = next.events.filter((event) => !ids.has(event.id));
   return next;
@@ -71,27 +74,5 @@ export function updateSharedDiaperStock(
   size: string,
   stock: number
 ): AppState {
-  const nextStock = Math.max(0, stock);
-  const nextProfiles = { ...state.profiles };
-
-  nextProfiles[babyId] = {
-    ...nextProfiles[babyId],
-    diaperStockBySize: {
-      ...nextProfiles[babyId].diaperStockBySize,
-      [size]: nextStock,
-    },
-  };
-
-  (Object.keys(nextProfiles) as BabyId[]).forEach((otherBabyId) => {
-    if (otherBabyId === babyId) return;
-    nextProfiles[otherBabyId] = {
-      ...nextProfiles[otherBabyId],
-      diaperStockBySize: {
-        ...nextProfiles[otherBabyId].diaperStockBySize,
-        [size]: nextStock,
-      },
-    };
-  });
-
-  return { ...state, profiles: nextProfiles };
+  return { ...state, profiles: setSharedDiaperStock(state.profiles, size, stock) };
 }
