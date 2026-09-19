@@ -4,7 +4,6 @@ import {
   createDefaultMilkDraft,
   formatDateTimeLocalValue,
   parseDateTimeLocalValue,
-  stepMilkAmount,
 } from "./entry-drafts";
 import { LogEvent } from "@/types";
 
@@ -50,18 +49,6 @@ describe("createDefaultMilkDraft", () => {
 
     expect(draft.milkMl).toBe(140);
     expect(draft.timestamp).toBe(now.getTime());
-  });
-});
-
-describe("stepMilkAmount", () => {
-  it("changes milk amount in 5ml increments", () => {
-    expect(stepMilkAmount(50, 1)).toBe(55);
-    expect(stepMilkAmount(50, -1)).toBe(45);
-  });
-
-  it("clamps milk amount between 0 and 999", () => {
-    expect(stepMilkAmount(0, -1)).toBe(0);
-    expect(stepMilkAmount(997, 1)).toBe(999);
   });
 });
 
