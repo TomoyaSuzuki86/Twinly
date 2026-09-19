@@ -60,7 +60,9 @@ describe("stripLegacyCalendarFields", () => {
     expect(migrated.events[1]).not.toHaveProperty("calendarStatus");
     expect(migrated.profiles.A.diaperGaugeWindowMinutes).toBe(120);
     expect(migrated.profiles.A.activityLimitMinutesOverride).toBeNull();
+    expect(migrated.profiles.A.activityLimitMinutesCustom).toBeNull();
     expect(migrated.profiles.A.sleepTargetHoursOverride).toBe(15);
+    expect(migrated.profiles.A.sleepTargetHoursCustom).toBe(15);
     expect(migrated.sleepManagementEnabled).toBe(true);
   });
 });
@@ -76,7 +78,9 @@ describe("createInitialAppState", () => {
     expect(app.events).toEqual([]);
     expect(app.profiles.A.diaperGaugeWindowMinutes).toBe(120);
     expect(app.profiles.A.activityLimitMinutesOverride).toBeNull();
+    expect(app.profiles.A.activityLimitMinutesCustom).toBeNull();
     expect(app.profiles.A.sleepTargetHoursOverride).toBeNull();
+    expect(app.profiles.A.sleepTargetHoursCustom).toBeNull();
     expect(app.sleepManagementEnabled).toBe(true);
   });
 });
@@ -130,6 +134,7 @@ describe("shared app state helpers", () => {
     );
 
     expect(merged.profiles.A.sleepTargetHoursOverride).toBe(15);
+    expect(merged.profiles.A.sleepTargetHoursCustom).toBe(15);
     expect(merged.profiles.A.activityLimitMinutesOverride).toBeNull();
   });
 

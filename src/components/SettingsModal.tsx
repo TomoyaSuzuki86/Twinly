@@ -20,7 +20,6 @@ import {
   getDefaultActivityLimitMinutes,
   getDefaultSleepTargetHours,
 } from "@/lib/sleep";
-import { RotateCcw } from "lucide-react";
 import { DailySummaryEmailSettings } from "./DailySummaryEmailSettings";
 
 type SettingsModalProps = {
@@ -55,7 +54,42 @@ type ResetRequest = {
   label: string;
 };
 
+type PendingGaugeExit =
+  | { type: "tab"; value: string }
+  | { type: "close" };
+
 const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
+
+const gaugeProfileSnapshot = (profile: BabyProfile) => ({
+  milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
+  milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
+  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+  activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
+  activityLimitMinutesCustom: profile.activityLimitMinutesCustom ?? null,
+  sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
+  sleepTargetHoursCustom: profile.sleepTargetHoursCustom ?? null,
+});
+
+const gaugeProfilesEqual = (
+  left: Record<BabyId, BabyProfile>,
+  right: Record<BabyId, BabyProfile>
+) =>
+  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(left[babyId]))) ===
+  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(right[babyId])));
+
+const applyGaugeProfiles = (
+  base: Record<BabyId, BabyProfile>,
+  source: Record<BabyId, BabyProfile>
+): Record<BabyId, BabyProfile> =>
+  Object.fromEntries(
+    BABY_DISPLAY_ORDER.map((babyId) => [
+      babyId,
+      {
+        ...base[babyId],
+        ...gaugeProfileSnapshot(source[babyId]),
+      },
+    ])
+  ) as Record<BabyId, BabyProfile>;
 
 export const shouldDisablePushEnable = (
   pushBusy: boolean,
@@ -94,16 +128,30 @@ export function SettingsModal({
   );
   const [resetRequest, setResetRequest] = useState<ResetRequest | null>(null);
   const [copiedGaugeFrom, setCopiedGaugeFrom] = useState<BabyId | null>(null);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [gaugeDraftProfiles, setGaugeDraftProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
+  const [savedGaugeProfiles, setSavedGaugeProfiles] = useState<Record<BabyId, BabyProfile>>(() => app.profiles);
+  const [pendingGaugeExit, setPendingGaugeExit] = useState<PendingGaugeExit | null>(null);
+  const [gaugeSavedNotice, setGaugeSavedNotice] = useState(false);
+  const wasOpenRef = React.useRef(false);
 
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setLocalProfiles(app.profiles);
+      setGaugeDraftProfiles(app.profiles);
+      setSavedGaugeProfiles(app.profiles);
       setLocalDiaperStockManagementEnabled(app.diaperStockManagementEnabled);
       setLocalSleepManagementEnabled(app.sleepManagementEnabled);
       setResetRequest(null);
       setCopiedGaugeFrom(null);
+      setPendingGaugeExit(null);
+      setGaugeSavedNotice(false);
+      setActiveTab("profile");
     }
+    wasOpenRef.current = open;
   }, [open, app.profiles, app.diaperStockManagementEnabled, app.sleepManagementEnabled]);
+
+  const hasUnsavedGaugeChanges = !gaugeProfilesEqual(gaugeDraftProfiles, savedGaugeProfiles);
 
   const handleProfileChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
     setLocalProfiles((prev) => ({
@@ -116,24 +164,98 @@ export function SettingsModal({
   };
 
   const handleGaugeChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
-    handleProfileChange(babyId, field, value);
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [babyId]: {
+        ...prev[babyId],
+        [field]: value,
+      },
+    }));
     setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const handleSleepCustomChange = (
+    babyId: BabyId,
+    kind: "activity" | "sleep",
+    value: number
+  ) => {
+    setGaugeDraftProfiles((prev) => ({
+      ...prev,
+      [babyId]: {
+        ...prev[babyId],
+        ...(kind === "activity"
+          ? {
+              activityLimitMinutesOverride: value,
+              activityLimitMinutesCustom: value,
+            }
+          : {
+              sleepTargetHoursOverride: value,
+              sleepTargetHoursCustom: value,
+            }),
+      },
+    }));
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const handleSleepModeChange = (
+    babyId: BabyId,
+    mode: "age" | "custom",
+    defaultActivityLimitMinutes: number,
+    defaultSleepTargetHours: number
+  ) => {
+    setGaugeDraftProfiles((prev) => {
+      const profile = prev[babyId];
+      if (mode === "age") {
+        return {
+          ...prev,
+          [babyId]: {
+            ...profile,
+            activityLimitMinutesCustom:
+              profile.activityLimitMinutesOverride ??
+              profile.activityLimitMinutesCustom ??
+              defaultActivityLimitMinutes,
+            sleepTargetHoursCustom:
+              profile.sleepTargetHoursOverride ??
+              profile.sleepTargetHoursCustom ??
+              defaultSleepTargetHours,
+            activityLimitMinutesOverride: null,
+            sleepTargetHoursOverride: null,
+          },
+        };
+      }
+
+      return {
+        ...prev,
+        [babyId]: {
+          ...profile,
+          activityLimitMinutesOverride:
+            profile.activityLimitMinutesCustom ??
+            profile.activityLimitMinutesOverride ??
+            defaultActivityLimitMinutes,
+          sleepTargetHoursOverride:
+            profile.sleepTargetHoursCustom ??
+            profile.sleepTargetHoursOverride ??
+            defaultSleepTargetHours,
+        },
+      };
+    });
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
   };
 
   const copyGaugeSettingsToOtherBaby = (sourceBabyId: BabyId) => {
     const targetBabyId: BabyId = sourceBabyId === "A" ? "B" : "A";
-    setLocalProfiles((prev) => ({
+    setGaugeDraftProfiles((prev) => ({
       ...prev,
       [targetBabyId]: {
         ...prev[targetBabyId],
-        milkGaugeWindowHours: prev[sourceBabyId].milkGaugeWindowHours,
-        milkTargetMlOverride: prev[sourceBabyId].milkTargetMlOverride,
-        diaperGaugeWindowMinutes: prev[sourceBabyId].diaperGaugeWindowMinutes,
-        activityLimitMinutesOverride: prev[sourceBabyId].activityLimitMinutesOverride,
-        sleepTargetHoursOverride: prev[sourceBabyId].sleepTargetHoursOverride,
+        ...gaugeProfileSnapshot(prev[sourceBabyId]),
       },
     }));
     setCopiedGaugeFrom(sourceBabyId);
+    setGaugeSavedNotice(false);
   };
 
   const handleDiaperStockChange = (size: string, amount: number) => {
@@ -156,12 +278,11 @@ export function SettingsModal({
     });
   };
 
-  const handleClose = (isOpen: boolean) => {
+  const finalizeClose = () => {
     if (
-      !isOpen &&
-      (JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
-        localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled ||
-        localSleepManagementEnabled !== app.sleepManagementEnabled)
+      JSON.stringify(localProfiles) !== JSON.stringify(app.profiles) ||
+      localDiaperStockManagementEnabled !== app.diaperStockManagementEnabled ||
+      localSleepManagementEnabled !== app.sleepManagementEnabled
     ) {
       setApp((prev) => ({
         ...prev,
@@ -170,21 +291,91 @@ export function SettingsModal({
         sleepManagementEnabled: localSleepManagementEnabled,
       }));
     }
-    onOpenChange(isOpen);
+    onOpenChange(false);
+  };
+
+  const handleDialogOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      onOpenChange(true);
+      return;
+    }
+    if (hasUnsavedGaugeChanges) {
+      setPendingGaugeExit({ type: "close" });
+      return;
+    }
+    finalizeClose();
+  };
+
+  const handleTabChange = (value: string) => {
+    if (activeTab === "care-gauges" && value !== "care-gauges" && hasUnsavedGaugeChanges) {
+      setPendingGaugeExit({ type: "tab", value });
+      return;
+    }
+    setActiveTab(value);
+  };
+
+  const handleSaveGaugeSettings = () => {
+    const nextLocalProfiles = applyGaugeProfiles(localProfiles, gaugeDraftProfiles);
+    setLocalProfiles(nextLocalProfiles);
+    setSavedGaugeProfiles(gaugeDraftProfiles);
+    setApp((prev) => ({
+      ...prev,
+      profiles: applyGaugeProfiles(prev.profiles, gaugeDraftProfiles),
+    }));
+    setGaugeSavedNotice(true);
+  };
+
+  const handleRestoreSavedGaugeSettings = () => {
+    setGaugeDraftProfiles(savedGaugeProfiles);
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+  };
+
+  const discardGaugeChangesAndContinue = () => {
+    const pending = pendingGaugeExit;
+    setGaugeDraftProfiles(savedGaugeProfiles);
+    setCopiedGaugeFrom(null);
+    setGaugeSavedNotice(false);
+    setPendingGaugeExit(null);
+    if (pending?.type === "tab") {
+      setActiveTab(pending.value);
+    } else if (pending?.type === "close") {
+      finalizeClose();
+    }
   };
 
   const handleConfirmReset = () => {
     if (!resetRequest) return;
     if (resetRequest.kind === "milkWindow") {
-      handleProfileChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
+      handleGaugeChange(resetRequest.babyId, "milkGaugeWindowHours", 3);
     } else if (resetRequest.kind === "milkTarget") {
-      handleProfileChange(resetRequest.babyId, "milkTargetMlOverride", null);
+      handleGaugeChange(resetRequest.babyId, "milkTargetMlOverride", null);
     } else if (resetRequest.kind === "diaperWindow") {
-      handleProfileChange(resetRequest.babyId, "diaperGaugeWindowMinutes", 120);
+      handleGaugeChange(resetRequest.babyId, "diaperGaugeWindowMinutes", 120);
     } else if (resetRequest.kind === "activityLimit") {
-      handleProfileChange(resetRequest.babyId, "activityLimitMinutesOverride", null);
+      setGaugeDraftProfiles((prev) => ({
+        ...prev,
+        [resetRequest.babyId]: {
+          ...prev[resetRequest.babyId],
+          activityLimitMinutesCustom:
+            prev[resetRequest.babyId].activityLimitMinutesOverride ??
+            prev[resetRequest.babyId].activityLimitMinutesCustom,
+          activityLimitMinutesOverride: null,
+        },
+      }));
+      setGaugeSavedNotice(false);
     } else {
-      handleProfileChange(resetRequest.babyId, "sleepTargetHoursOverride", null);
+      setGaugeDraftProfiles((prev) => ({
+        ...prev,
+        [resetRequest.babyId]: {
+          ...prev[resetRequest.babyId],
+          sleepTargetHoursCustom:
+            prev[resetRequest.babyId].sleepTargetHoursOverride ??
+            prev[resetRequest.babyId].sleepTargetHoursCustom,
+          sleepTargetHoursOverride: null,
+        },
+      }));
+      setGaugeSavedNotice(false);
     }
     setResetRequest(null);
   };
@@ -195,22 +386,22 @@ export function SettingsModal({
 
   return (
     <>
-      <DialogComponents.Dialog open={open} onOpenChange={handleClose}>
+      <DialogComponents.Dialog open={open} onOpenChange={handleDialogOpenChange}>
         <DialogComponents.DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-lg">
           <DialogComponents.DialogHeader>
             <DialogComponents.DialogTitle>設定</DialogComponents.DialogTitle>
             <DialogComponents.DialogDescription>
               {premiumGaugesEnabled
                 ? "プロフィール、お世話ゲージ、通知、データ、デザイン、料金とプランをまとめて管理できます。"
-                : "プロフィール、データ、デザイン、料金とプランをまとめて管理できます。"}
+                : "プロフィール、お世話ゲージ、データ、デザイン、料金とプランをまとめて管理できます。"}
             </DialogComponents.DialogDescription>
           </DialogComponents.DialogHeader>
           {onReplayTutorial && <Button variant="outline" className="w-full" onClick={onReplayTutorial}>使い方をもう一度見る</Button>}
 
-          <Tabs defaultValue="profile" className="py-4">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="py-4">
             <TabsList className="flex flex-wrap justify-between">
               <TabsTrigger value="profile">プロフィール</TabsTrigger>
-              {premiumGaugesEnabled ? <TabsTrigger value="care-gauges">お世話ゲージ</TabsTrigger> : null}
+              <TabsTrigger value="care-gauges">お世話ゲージ</TabsTrigger>
               {premiumGaugesEnabled ? <TabsTrigger value="notifications">通知</TabsTrigger> : null}
               <TabsTrigger value="data">データ管理</TabsTrigger>
               <TabsTrigger value="design">デザイン</TabsTrigger>
@@ -221,9 +412,16 @@ export function SettingsModal({
               <div className="grid gap-6 md:grid-cols-2">
                 {BABY_DISPLAY_ORDER.map((babyId) => {
                   const profile = localProfiles[babyId];
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === profile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
 
                   return (
-                    <div key={babyId} className="space-y-4 rounded-lg border p-4">
+                    <div
+                      key={babyId}
+                      data-testid={`profile-settings-${babyId}`}
+                      className={`space-y-4 rounded-lg border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
                       <h3 className="font-semibold">赤ちゃん {babyId}</h3>
 
                       <div className="space-y-2">
@@ -290,19 +488,21 @@ export function SettingsModal({
               </div>
             </TabsContent>
 
-            {premiumGaugesEnabled ? (
-              <TabsContent value="care-gauges" className="mt-4 space-y-4">
+            <TabsContent value="care-gauges" className="mt-4 space-y-4">
                 <div className="rounded-lg border bg-background/40 p-4">
                   <h3 className="font-semibold">お世話ゲージ</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    難しい数値ではなく、実際のお世話の目安として調整できます。変更内容はホームのゲージに反映されます。
+                    お世話ゲージはPremium専用機能です。{premiumGaugesEnabled
+                      ? "ここでゲージの目安を調整できます。"
+                      : "Freeでも設定は先に調整・保存でき、Premium利用時に反映されます。"}
                   </p>
                 </div>
 
                 {BABY_DISPLAY_ORDER.map((babyId) => {
-                  const profile = localProfiles[babyId];
+                  const profile = gaugeDraftProfiles[babyId];
+                  const displayProfile = localProfiles[babyId];
                   const otherBabyId: BabyId = babyId === "A" ? "B" : "A";
-                  const babyName = profile.displayName || `赤ちゃん ${babyId}`;
+                  const babyName = displayProfile.displayName || `赤ちゃん ${babyId}`;
                   const otherBabyName = localProfiles[otherBabyId].displayName || `赤ちゃん ${otherBabyId}`;
                   const calculatedMilkTarget = buildMilkGauge({
                     events: app.events,
@@ -315,19 +515,26 @@ export function SettingsModal({
                   const milkTarget = profile.milkTargetMlOverride ?? autoMilkTarget;
                   const milkWindowHours = profile.milkGaugeWindowHours ?? 3;
                   const diaperWindowMinutes = profile.diaperGaugeWindowMinutes ?? 120;
-                  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(profile.birthDate, new Date());
-                  const defaultSleepTargetHours = getDefaultSleepTargetHours(profile.birthDate, new Date());
+                  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(displayProfile.birthDate, new Date());
+                  const defaultSleepTargetHours = getDefaultSleepTargetHours(displayProfile.birthDate, new Date());
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === displayProfile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
                   const activityLimitMinutes = profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes;
                   const sleepTargetHours = profile.sleepTargetHoursOverride ?? defaultSleepTargetHours;
                   const sleepUsesAgeDefaults =
                     profile.activityLimitMinutesOverride == null && profile.sleepTargetHoursOverride == null;
 
                   return (
-                    <section key={babyId} className="space-y-4 rounded-xl border p-4">
+                    <section
+                      key={babyId}
+                      data-testid={`care-gauge-settings-${babyId}`}
+                      className={`space-y-4 rounded-xl border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            {profile.iconEmoji ? <span aria-hidden>{profile.iconEmoji}</span> : null}
+                            {displayProfile.iconEmoji ? <span aria-hidden>{displayProfile.iconEmoji}</span> : null}
                             <h3 className="font-semibold">{babyName}</h3>
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">ゲージを見たときの「次のお世話」の目安です。</p>
@@ -589,10 +796,14 @@ export function SettingsModal({
                               size="sm"
                               variant={sleepUsesAgeDefaults ? "default" : "ghost"}
                               className="flex-1"
-                              onClick={() => {
-                                handleGaugeChange(babyId, "activityLimitMinutesOverride", null);
-                                handleGaugeChange(babyId, "sleepTargetHoursOverride", null);
-                              }}
+                              onClick={() =>
+                                handleSleepModeChange(
+                                  babyId,
+                                  "age",
+                                  defaultActivityLimitMinutes,
+                                  defaultSleepTargetHours
+                                )
+                              }
                             >
                               月齢に合わせる
                             </Button>
@@ -601,14 +812,14 @@ export function SettingsModal({
                               size="sm"
                               variant={!sleepUsesAgeDefaults ? "default" : "ghost"}
                               className="flex-1"
-                              onClick={() => {
-                                handleGaugeChange(
+                              onClick={() =>
+                                handleSleepModeChange(
                                   babyId,
-                                  "activityLimitMinutesOverride",
-                                  activityLimitMinutes
-                                );
-                                handleGaugeChange(babyId, "sleepTargetHoursOverride", sleepTargetHours);
-                              }}
+                                  "custom",
+                                  defaultActivityLimitMinutes,
+                                  defaultSleepTargetHours
+                                )
+                              }
                             >
                               カスタム
                             </Button>
@@ -637,9 +848,9 @@ export function SettingsModal({
                                 size="icon"
                                 aria-label={`${babyName}の活動可能時間を10分短くする`}
                                 onClick={() =>
-                                  handleGaugeChange(
+                                  handleSleepCustomChange(
                                     babyId,
-                                    "activityLimitMinutesOverride",
+                                    "activity",
                                     Math.max(30, activityLimitMinutes - 10)
                                   )
                                 }
@@ -658,9 +869,9 @@ export function SettingsModal({
                                 size="icon"
                                 aria-label={`${babyName}の活動可能時間を10分長くする`}
                                 onClick={() =>
-                                  handleGaugeChange(
+                                  handleSleepCustomChange(
                                     babyId,
-                                    "activityLimitMinutesOverride",
+                                    "activity",
                                     Math.min(720, activityLimitMinutes + 10)
                                   )
                                 }
@@ -693,9 +904,9 @@ export function SettingsModal({
                                 size="icon"
                                 aria-label={`${babyName}の1日の睡眠目安を30分短くする`}
                                 onClick={() =>
-                                  handleGaugeChange(
+                                  handleSleepCustomChange(
                                     babyId,
-                                    "sleepTargetHoursOverride",
+                                    "sleep",
                                     Math.max(1, Number((sleepTargetHours - 0.5).toFixed(1)))
                                   )
                                 }
@@ -714,9 +925,9 @@ export function SettingsModal({
                                 size="icon"
                                 aria-label={`${babyName}の1日の睡眠目安を30分長くする`}
                                 onClick={() =>
-                                  handleGaugeChange(
+                                  handleSleepCustomChange(
                                     babyId,
-                                    "sleepTargetHoursOverride",
+                                    "sleep",
                                     Math.min(24, Number((sleepTargetHours + 0.5).toFixed(1)))
                                   )
                                 }
@@ -741,8 +952,35 @@ export function SettingsModal({
                     </section>
                   );
                 })}
-              </TabsContent>
-            ) : null}
+              <div className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-xl border bg-background/95 p-3 shadow-sm backdrop-blur">
+                <div className="min-w-0 text-xs text-muted-foreground">
+                  {gaugeSavedNotice
+                    ? "保存しました。"
+                    : hasUnsavedGaugeChanges
+                    ? "保存していない変更があります。"
+                    : "保存済みの設定です。"}
+                </div>
+                <div className="flex flex-shrink-0 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasUnsavedGaugeChanges}
+                    onClick={handleRestoreSavedGaugeSettings}
+                  >
+                    保存した設定に戻す
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!hasUnsavedGaugeChanges}
+                    onClick={handleSaveGaugeSettings}
+                  >
+                    保存
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
 
             {premiumGaugesEnabled ? (
               <TabsContent value="notifications" className="mt-4 space-y-4">
@@ -964,6 +1202,30 @@ export function SettingsModal({
               <Button variant="ghost">キャンセル</Button>
             </DialogComponents.DialogClose>
             <Button onClick={handleConfirmReset}>OK</Button>
+          </DialogComponents.DialogFooter>
+        </DialogComponents.DialogContent>
+      </DialogComponents.Dialog>
+
+      <DialogComponents.Dialog
+        open={Boolean(pendingGaugeExit)}
+        onOpenChange={(isOpen) => !isOpen && setPendingGaugeExit(null)}
+      >
+        <DialogComponents.DialogContent className="sm:max-w-sm">
+          <DialogComponents.DialogHeader>
+            <DialogComponents.DialogTitle>お世話ゲージに編集中の値があります</DialogComponents.DialogTitle>
+            <DialogComponents.DialogDescription>
+              保存していない変更があります。保存せずに
+              {pendingGaugeExit?.type === "tab" ? "別のタブへ移動" : "設定画面を閉じる"}
+              と、最後に保存した設定に戻ります。
+            </DialogComponents.DialogDescription>
+          </DialogComponents.DialogHeader>
+          <DialogComponents.DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingGaugeExit(null)}>
+              編集を続ける
+            </Button>
+            <Button variant="destructive" onClick={discardGaugeChangesAndContinue}>
+              保存せずに{pendingGaugeExit?.type === "tab" ? "移動" : "閉じる"}
+            </Button>
           </DialogComponents.DialogFooter>
         </DialogComponents.DialogContent>
       </DialogComponents.Dialog>

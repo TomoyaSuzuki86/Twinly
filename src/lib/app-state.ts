@@ -49,7 +49,9 @@ const createBaseProfiles = (now: Date): AppState["profiles"] => ({
     milkTargetMlOverride: null,
     diaperGaugeWindowMinutes: 120,
     activityLimitMinutesOverride: null,
+    activityLimitMinutesCustom: null,
     sleepTargetHoursOverride: null,
+    sleepTargetHoursCustom: null,
   },
   B: {
     babyId: "B",
@@ -65,7 +67,9 @@ const createBaseProfiles = (now: Date): AppState["profiles"] => ({
     milkTargetMlOverride: null,
     diaperGaugeWindowMinutes: 120,
     activityLimitMinutesOverride: null,
+    activityLimitMinutesCustom: null,
     sleepTargetHoursOverride: null,
+    sleepTargetHoursCustom: null,
   },
 });
 
@@ -92,7 +96,11 @@ const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => ({
   milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
   diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
   activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
+  activityLimitMinutesCustom:
+    profile.activityLimitMinutesCustom ?? profile.activityLimitMinutesOverride ?? null,
   sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
+  sleepTargetHoursCustom:
+    profile.sleepTargetHoursCustom ?? profile.sleepTargetHoursOverride ?? null,
 });
 
 const normalizeProfiles = (profiles: AppState["profiles"]): AppState["profiles"] => ({
