@@ -17,6 +17,14 @@ import { iconGradients } from "@/lib/utils";
 import { buildMilkGauge } from "@/lib/care-gauges";
 import { adjustSharedDiaperStock } from "@/lib/diaper-stock";
 import {
+  applyGaugeProfiles,
+  copyGaugeSettings,
+  gaugeProfileSnapshot,
+  gaugeProfilesEqual,
+  setSleepCustomValue,
+  setSleepGaugeMode,
+} from "@/lib/settings-gauge-policy";
+import {
   formatSleepDuration,
   getDefaultActivityLimitMinutes,
   getDefaultSleepTargetHours,
@@ -54,39 +62,6 @@ type ResetRequest = {
 type PendingGaugeExit =
   | { type: "tab"; value: string }
   | { type: "close" };
-
-const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
-
-const gaugeProfileSnapshot = (profile: BabyProfile) => ({
-  milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
-  milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
-  activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
-  activityLimitMinutesCustom: profile.activityLimitMinutesCustom ?? null,
-  sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
-  sleepTargetHoursCustom: profile.sleepTargetHoursCustom ?? null,
-});
-
-const gaugeProfilesEqual = (
-  left: Record<BabyId, BabyProfile>,
-  right: Record<BabyId, BabyProfile>
-) =>
-  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(left[babyId]))) ===
-  JSON.stringify(BABY_DISPLAY_ORDER.map((babyId) => gaugeProfileSnapshot(right[babyId])));
-
-const applyGaugeProfiles = (
-  base: Record<BabyId, BabyProfile>,
-  source: Record<BabyId, BabyProfile>
-): Record<BabyId, BabyProfile> =>
-  Object.fromEntries(
-    BABY_DISPLAY_ORDER.map((babyId) => [
-      babyId,
-      {
-        ...base[babyId],
-        ...gaugeProfileSnapshot(source[babyId]),
-      },
-    ])
-  ) as Record<BabyId, BabyProfile>;
 
 export const shouldDisablePushEnable = (
   pushBusy: boolean,
@@ -161,13 +136,7 @@ export function SettingsModal({
   };
 
   const handleGaugeChange = <K extends keyof BabyProfile>(babyId: BabyId, field: K, value: BabyProfile[K]) => {
-    setGaugeDraftProfiles((prev) => ({
-      ...prev,
-      [babyId]: {
-        ...prev[babyId],
-        [field]: value,
-      },
-    }));
+    setGaugeDraftProfiles((prev) => setSleepCustomValue(prev, babyId, kind, value));
     setCopiedGaugeFrom(null);
     setGaugeSavedNotice(false);
   };
@@ -202,55 +171,21 @@ export function SettingsModal({
     defaultActivityLimitMinutes: number,
     defaultSleepTargetHours: number
   ) => {
-    setGaugeDraftProfiles((prev) => {
-      const profile = prev[babyId];
-      if (mode === "age") {
-        return {
-          ...prev,
-          [babyId]: {
-            ...profile,
-            activityLimitMinutesCustom:
-              profile.activityLimitMinutesOverride ??
-              profile.activityLimitMinutesCustom ??
-              defaultActivityLimitMinutes,
-            sleepTargetHoursCustom:
-              profile.sleepTargetHoursOverride ??
-              profile.sleepTargetHoursCustom ??
-              defaultSleepTargetHours,
-            activityLimitMinutesOverride: null,
-            sleepTargetHoursOverride: null,
-          },
-        };
-      }
-
-      return {
-        ...prev,
-        [babyId]: {
-          ...profile,
-          activityLimitMinutesOverride:
-            profile.activityLimitMinutesCustom ??
-            profile.activityLimitMinutesOverride ??
-            defaultActivityLimitMinutes,
-          sleepTargetHoursOverride:
-            profile.sleepTargetHoursCustom ??
-            profile.sleepTargetHoursOverride ??
-            defaultSleepTargetHours,
-        },
-      };
-    });
+    setGaugeDraftProfiles((prev) =>
+      setSleepGaugeMode(
+        prev,
+        babyId,
+        mode,
+        defaultActivityLimitMinutes,
+        defaultSleepTargetHours
+      )
+    );
     setCopiedGaugeFrom(null);
     setGaugeSavedNotice(false);
   };
 
   const copyGaugeSettingsToOtherBaby = (sourceBabyId: BabyId) => {
-    const targetBabyId: BabyId = sourceBabyId === "A" ? "B" : "A";
-    setGaugeDraftProfiles((prev) => ({
-      ...prev,
-      [targetBabyId]: {
-        ...prev[targetBabyId],
-        ...gaugeProfileSnapshot(prev[sourceBabyId]),
-      },
-    }));
+    setGaugeDraftProfiles((prev) => copyGaugeSettings(prev, sourceBabyId));
     setCopiedGaugeFrom(sourceBabyId);
     setGaugeSavedNotice(false);
   };
