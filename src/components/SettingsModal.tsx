@@ -412,9 +412,16 @@ export function SettingsModal({
               <div className="grid gap-6 md:grid-cols-2">
                 {BABY_DISPLAY_ORDER.map((babyId) => {
                   const profile = localProfiles[babyId];
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === profile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
 
                   return (
-                    <div key={babyId} className="space-y-4 rounded-lg border p-4">
+                    <div
+                      key={babyId}
+                      data-testid={`profile-settings-${babyId}`}
+                      className={`space-y-4 rounded-lg border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
                       <h3 className="font-semibold">赤ちゃん {babyId}</h3>
 
                       <div className="space-y-2">
@@ -510,13 +517,20 @@ export function SettingsModal({
                   const diaperWindowMinutes = profile.diaperGaugeWindowMinutes ?? 120;
                   const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(displayProfile.birthDate, new Date());
                   const defaultSleepTargetHours = getDefaultSleepTargetHours(displayProfile.birthDate, new Date());
+                  const babyDimmedBgColor =
+                    iconGradients.find((gradient) => gradient.value === displayProfile.iconGradient)?.dimmedBgColor ??
+                    "bg-background";
                   const activityLimitMinutes = profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes;
                   const sleepTargetHours = profile.sleepTargetHoursOverride ?? defaultSleepTargetHours;
                   const sleepUsesAgeDefaults =
                     profile.activityLimitMinutesOverride == null && profile.sleepTargetHoursOverride == null;
 
                   return (
-                    <section key={babyId} className="space-y-4 rounded-xl border p-4">
+                    <section
+                      key={babyId}
+                      data-testid={`care-gauge-settings-${babyId}`}
+                      className={`space-y-4 rounded-xl border border-border/60 p-4 ${babyDimmedBgColor}`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
