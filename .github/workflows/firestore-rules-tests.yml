@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: rules-contract-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   rules:
     runs-on: ubuntu-latest
