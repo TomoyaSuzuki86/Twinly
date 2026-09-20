@@ -2,13 +2,8 @@ import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { iconGradients } from "@/lib/utils";
-import { buildMilkGauge } from "@/lib/care-gauges";
-import {
-  formatSleepDuration,
-  getDefaultActivityLimitMinutes,
-  getDefaultSleepTargetHours,
-} from "@/lib/sleep";
-import { BABY_DISPLAY_ORDER } from "@/lib/settings-gauge-policy";
+import { formatSleepDuration } from "@/lib/sleep";
+import { BABY_DISPLAY_ORDER, buildCareGaugeSettingsModel } from "@/lib/settings-gauge-policy";
 
 export type GaugeResetRequest = {
   babyId: BabyId;
@@ -78,26 +73,26 @@ export function SettingsCareGaugesTab({
                   const otherBabyId: BabyId = babyId === "A" ? "B" : "A";
                   const babyName = displayProfile.displayName || `赤ちゃん ${babyId}`;
                   const otherBabyName = localProfiles[otherBabyId].displayName || `赤ちゃん ${otherBabyId}`;
-                  const calculatedMilkTarget = buildMilkGauge({
-                    events: events,
+                  const {
+                    autoMilkTarget,
+                    milkTarget,
+                    milkWindowHours,
+                    diaperWindowMinutes,
+                    defaultActivityLimitMinutes,
+                    defaultSleepTargetHours,
+                    activityLimitMinutes,
+                    sleepTargetHours,
+                    sleepUsesAgeDefaults,
+                  } = buildCareGaugeSettingsModel({
                     babyId,
+                    profile,
+                    displayProfile,
+                    events,
                     now: new Date(),
-                    windowHours: profile.milkGaugeWindowHours ?? 3,
-                    targetMilkMlOverride: null,
-                  })?.targetMilkMl;
-                  const autoMilkTarget = calculatedMilkTarget ? Math.round(calculatedMilkTarget) : null;
-                  const milkTarget = profile.milkTargetMlOverride ?? autoMilkTarget;
-                  const milkWindowHours = profile.milkGaugeWindowHours ?? 3;
-                  const diaperWindowMinutes = profile.diaperGaugeWindowMinutes ?? 120;
-                  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(displayProfile.birthDate, new Date());
-                  const defaultSleepTargetHours = getDefaultSleepTargetHours(displayProfile.birthDate, new Date());
+                  });
                   const babyDimmedBgColor =
                     iconGradients.find((gradient) => gradient.value === displayProfile.iconGradient)?.dimmedBgColor ??
                     "bg-background";
-                  const activityLimitMinutes = profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes;
-                  const sleepTargetHours = profile.sleepTargetHoursOverride ?? defaultSleepTargetHours;
-                  const sleepUsesAgeDefaults =
-                    profile.activityLimitMinutesOverride == null && profile.sleepTargetHoursOverride == null;
 
                   return (
                     <section
