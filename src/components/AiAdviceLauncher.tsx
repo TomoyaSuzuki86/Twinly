@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AiQuestionAnswer, AiReview } from "@/lib/ai";
-import { callService } from "@/lib/ai";
+import { requestAiQuestion, requestAiReview } from "@/lib/ai";
 import { useCurrentFamilyAccess } from "@/lib/family-access-state";
 import { TWINLY_WINDOW_EVENTS } from "@/lib/app-events";
 import { Button } from "./ui/button";
@@ -69,7 +69,7 @@ export function AiAdviceLauncher() {
     setBusyText("直近2週間を確認しています…");
     setError("");
     try {
-      const next = await callService<AiReview>("twinlyAi", { mode: "review" });
+      const next = await requestAiReview();
       if (familyAccessKeyRef.current !== requestKey) return;
       setReview(next);
       setAnswer(null);
@@ -95,7 +95,7 @@ export function AiAdviceLauncher() {
     setBusyText("AIが記録を確認しています…");
     setError("");
     try {
-      const next = await callService<AiQuestionAnswer>("twinlyAi", { mode: "ask", question: value });
+      const next = await requestAiQuestion(value);
       if (familyAccessKeyRef.current !== requestKey) return;
       setAnswer(next);
     } catch (e) {
