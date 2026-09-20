@@ -137,6 +137,7 @@ export const buildBabyPanelViewModel = ({
     previousSleepDuration,
     activityElapsed,
     currentSleepDuration,
+    sleepLogSummary,
     sleepLogTotal,
     averageActivityDuration,
     sleepDurationByWakeId,
