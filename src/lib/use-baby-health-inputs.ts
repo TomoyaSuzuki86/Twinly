@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SetStateAction } from "react";
 import type { BabyId, LogEvent } from "@/types";
 
 type AddEvent = (
@@ -38,12 +38,12 @@ export function useBabyHealthInputs({
     if (!heightDirty.current) setHeightState(lastHeight ? lastHeight.toFixed(1) : "");
   }, [lastHeight]);
 
-  const setWeight = (value: string) => {
+  const setWeight = (value: SetStateAction<string>) => {
     weightDirty.current = true;
     setWeightState(value);
   };
 
-  const setHeight = (value: string) => {
+  const setHeight = (value: SetStateAction<string>) => {
     heightDirty.current = true;
     setHeightState(value);
   };
