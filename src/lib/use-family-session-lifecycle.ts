@@ -114,6 +114,19 @@ export function useFamilySessionLifecycle({
     );
   }, [currentUser, family]);
 
+  const activateFamilySession = useCallback(async (user: AuthUser) => {
+    const session = await loadFamilySession(user);
+    if (!session) throw new Error("Family session was not created");
+    setCurrentUser(user);
+    setSessionError(null);
+    setFamily(session.family);
+    setFamilyMember(session.member);
+    setFamilyMembers([session.member]);
+    setAppLoading(true);
+    await ensureNotificationSettingsDocument(user);
+    return session;
+  }, [setAppLoading]);
+
   return {
     family,
     familyMember,
@@ -124,5 +137,6 @@ export function useFamilySessionLifecycle({
     setFamilyMembers,
     setSessionError,
     handleAuthUserChanged,
+    activateFamilySession,
   };
 }
