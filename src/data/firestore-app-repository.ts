@@ -6,6 +6,7 @@ import {
 import type { AppState, EventType, LogEvent } from "@/types";
 import { createInitialAppState, stripLegacyCalendarFields, toSharedAppState } from "@/lib/app-state";
 import { removeUndefined } from "@/lib/utils";
+import { RECENT_HISTORY_DAYS } from "@/lib/history-loading-policy";
 import {
   applyMutation,
   reconcileStockConsumption,
@@ -19,7 +20,6 @@ import {
 import { mergeEventChangeByServerOrder } from "./event-sync-policy";
 export { mergeEventChangeByServerOrder } from "./event-sync-policy";
 
-export const RECENT_DAYS = 30;
 const PAGE_SIZE = 400;
 const decode = (data: Record<string, unknown> | undefined): AppState => {
   if (!data?.app) return createInitialAppState();
@@ -68,7 +68,7 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
     const current = decode(snapshot.data());
     if (snapshot.data()?.schemaVersion !== 2) return current;
 
-    const since = Date.now() - RECENT_DAYS * 86400000;
+    const since = Date.now() - RECENT_HISTORY_DAYS * 86400000;
     const types: EventType[] = ["milk", "solidFood", "diaper", "sleepStart", "wake", "weight", "height"];
     const recentPromise = getDocsFromServer(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")));
     const seedPromises = (["A", "B"] as const).flatMap((babyId) => types.map((type) =>
@@ -124,7 +124,7 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
           }, onError);
           return;
         }
-        const since = Date.now() - RECENT_DAYS * 86400000;
+        const since = Date.now() - RECENT_HISTORY_DAYS * 86400000;
         const types: EventType[] = ["milk", "solidFood", "diaper", "sleepStart", "wake", "weight", "height"];
         const seedRows = new Map<string, LogEvent[]>();
         const stops: (() => void)[] = [];
