@@ -1,3 +1,5 @@
+import { WIDE_SPLIT_LAYOUT_QUERY } from "./appearance-preferences";
+
 type SwipeSession = {
   startX: number;
   startY: number;
@@ -30,7 +32,7 @@ const smoothstep = (value: number) => {
 
 const isSplitLayoutActive = () =>
   document.documentElement.dataset.twinlyLayout === "split" &&
-  window.matchMedia("(min-width: 1180px)").matches;
+  window.matchMedia(WIDE_SPLIT_LAYOUT_QUERY).matches;
 
 const getDirectTabs = (list: HTMLElement) =>
   Array.from(list.children).filter(
