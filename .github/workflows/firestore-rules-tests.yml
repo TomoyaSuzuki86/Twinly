@@ -1,0 +1,37 @@
+name: Firestore Rules Tests
+
+on:
+  pull_request:
+    branches:
+      - development
+      - master
+    paths:
+      - "firestore.rules"
+      - "firebase.json"
+      - "tests/firestore-rules-smoke.mjs"
+      - ".github/workflows/firestore-rules-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Install Rules test tooling
+        run: npm install --no-save --legacy-peer-deps @firebase/rules-unit-testing@3.0.3 firebase-tools@13.16.0
+
+      - name: Run Firestore Rules smoke contract
+        run: npx firebase emulators:exec --only firestore --project twinly-rules-ci "node tests/firestore-rules-smoke.mjs"
