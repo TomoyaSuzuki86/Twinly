@@ -1,7 +1,7 @@
 import type { BabyId, BabyProfile } from "@/types";
 
 export type BabyProfiles = Record<BabyId, BabyProfile>;
-const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
+export const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
 
 export const gaugeProfileSnapshot = (profile: BabyProfile) => ({
   milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
