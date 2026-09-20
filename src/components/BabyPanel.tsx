@@ -149,6 +149,7 @@ export function BabyPanel({
     previousSleepDuration,
     activityElapsed,
     currentSleepDuration,
+    sleepLogSummary,
     sleepLogTotal,
     averageActivityDuration,
     sleepDurationByWakeId,
