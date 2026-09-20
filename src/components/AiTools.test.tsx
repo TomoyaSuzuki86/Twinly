@@ -9,7 +9,12 @@ import {clearFamilyAccessState,publishFamilyAccessState} from '@/lib/family-acce
 const mock=vi.hoisted(()=>({call:vi.fn(),plan:vi.fn(),billing:vi.fn()}));
 vi.mock('@/lib/billing',()=>({billingAction:mock.billing}));
 vi.mock('@/firebase',()=>({db:null,functions:null}));
-vi.mock('@/lib/ai',async importOriginal=>({...await importOriginal<typeof import('@/lib/ai')>(),callService:mock.call}));
+vi.mock('@/lib/ai',async importOriginal=>({
+  ...await importOriginal<typeof import('@/lib/ai')>(),
+  callService:mock.call,
+  getDailySummaryNotificationSettings:()=>mock.call('getDailySummaryEmailSettings'),
+  setDailySummaryNotificationSettings:(settings:unknown)=>mock.call('setDailySummaryEmailSettings',settings),
+}));
 vi.mock('@/lib/family-access',async importOriginal=>({
   ...await importOriginal<typeof import('@/lib/family-access')>(),
   setFamilyPreviewPlan:mock.plan,

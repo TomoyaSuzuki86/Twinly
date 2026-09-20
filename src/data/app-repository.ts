@@ -8,9 +8,6 @@ export type AppSnapshot = {
   app: AppState;
   fromCache: boolean;
   completeHistory: boolean;
-  // Partial v2 listeners always cover every event on or after this timestamp. Absence of an
-  // older event is not authoritative unless completeHistory is true.
-  recentSince?: number;
 };
 
 export type SyncConflict = {

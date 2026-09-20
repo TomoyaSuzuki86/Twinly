@@ -1,14 +1,26 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { HistoryDialogShell } from "./HistoryDialogShell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { analyzeSleepEvents, formatSleepDuration } from "@/lib/sleep";
 import { rangeDays, type TimeRange } from "@/lib/event-history";
-import type { BabyProfile, LogEvent } from "@/types";
+import {
+  buildRangeEntries,
+  formatClockMinutes,
+  formatShortDate,
+  formatSleepComparison,
+  getAverageAwakeMinutes,
+  getAverageClockMinutes,
+  getNightRoutineWindowEndingOn,
+  getNightWindowEndingOn,
+  getOverlapMinutes,
+  getRangeDayStarts,
+  getRangeStart,
+  getSleepProgressComparison,
+  startOfDay,
+  toBedtimeClockMinutes,
+  toClockMinutes,
+  type SleepHistoryEntry,
+} from "@/lib/sleep-history";
+import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { Moon } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -28,221 +40,7 @@ type SleepHistoryModalProps = {
   events: LogEvent[];
   profile: BabyProfile;
   now: Date;
-};
-
-type SleepHistoryEntry = {
-  key: string;
-  start: number;
-  end: number;
-  complete: boolean;
-};
-
-type NightWindow = {
-  start: number;
-  end: number;
-};
-
-type SleepProgressComparison = {
-  currentMinutes: number;
-  trailingAverageMinutes: number;
-  differenceMinutes: number;
-  status: "higher" | "lower" | "same" | "no-history";
-};
-
-const NIGHT_START_HOUR = 19;
-const NIGHT_END_HOUR = 6;
-const NEXT_NIGHT_START_HOUR = 19;
-const MINUTE_MS = 60 * 1000;
-
-const startOfDay = (date: Date) => {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
-};
-
-const getRangeStart = (timeRange: TimeRange, now: Date) => {
-  const start = startOfDay(now);
-  start.setDate(start.getDate() - (rangeDays[timeRange] - 1));
-  return start.getTime();
-};
-
-const getRangeDayStarts = (timeRange: TimeRange, now: Date) => {
-  const start = new Date(getRangeStart(timeRange, now));
-  return Array.from({ length: rangeDays[timeRange] }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
-  });
-};
-
-const buildRangeEntries = (
-  analysis: ReturnType<typeof analyzeSleepEvents>,
-  rangeStart: number,
-  rangeEnd: number
-): SleepHistoryEntry[] => {
-  const completed = analysis.intervals.map((interval) => ({
-    key: interval.wakeEventId,
-    start: interval.start,
-    end: interval.end,
-    complete: true,
-  }));
-  const active = analysis.currentSleepStart
-    ? [
-        {
-          key: analysis.currentSleepStart.id,
-          start: analysis.currentSleepStart.timestamp,
-          end: rangeEnd,
-          complete: false,
-        },
-      ]
-    : [];
-
-  return [...completed, ...active]
-    .filter((entry) => entry.end > rangeStart && entry.start <= rangeEnd)
-    .sort((left, right) => right.start - left.start);
-};
-
-const getOverlapMinutes = (
-  entry: SleepHistoryEntry,
-  windowStart: number,
-  windowEnd: number
-) =>
-  Math.max(0, Math.min(entry.end, windowEnd) - Math.max(entry.start, windowStart)) /
-  MINUTE_MS;
-
-const sumSleepMinutes = (
-  analysis: ReturnType<typeof analyzeSleepEvents>,
-  windowStart: number,
-  windowEnd: number
-) =>
-  buildRangeEntries(analysis, windowStart, windowEnd).reduce(
-    (sum, entry) => sum + getOverlapMinutes(entry, windowStart, windowEnd),
-    0
-  );
-
-const getAverageAwakeMinutes = (entries: SleepHistoryEntry[]) => {
-  const chronological = [...entries].sort((left, right) => left.start - right.start);
-  const awakeMinutes: number[] = [];
-
-  for (let index = 1; index < chronological.length; index += 1) {
-    const previous = chronological[index - 1];
-    const current = chronological[index];
-    if (current.start > previous.end) {
-      awakeMinutes.push((current.start - previous.end) / MINUTE_MS);
-    }
-  }
-
-  if (awakeMinutes.length === 0) return null;
-  return awakeMinutes.reduce((sum, minutes) => sum + minutes, 0) / awakeMinutes.length;
-};
-
-const getNightWindowEndingOn = (day: Date, now: Date): NightWindow => {
-  const end = new Date(day);
-  end.setHours(NIGHT_END_HOUR, 0, 0, 0);
-
-  const start = new Date(day);
-  start.setDate(start.getDate() - 1);
-  start.setHours(NIGHT_START_HOUR, 0, 0, 0);
-
-  return {
-    start: start.getTime(),
-    end: Math.min(end.getTime(), now.getTime()),
-  };
-};
-
-const getNightRoutineWindowEndingOn = (day: Date) => {
-  const bedtimeStart = new Date(day);
-  bedtimeStart.setDate(bedtimeStart.getDate() - 1);
-  bedtimeStart.setHours(NIGHT_START_HOUR, 0, 0, 0);
-
-  const bedtimeEnd = new Date(day);
-  bedtimeEnd.setHours(NIGHT_END_HOUR, 0, 0, 0);
-
-  const wakeStart = new Date(day);
-  wakeStart.setHours(NIGHT_END_HOUR, 0, 0, 0);
-
-  const wakeEnd = new Date(day);
-  wakeEnd.setHours(NEXT_NIGHT_START_HOUR, 0, 0, 0);
-
-  return {
-    bedtimeStart: bedtimeStart.getTime(),
-    bedtimeEnd: bedtimeEnd.getTime(),
-    wakeStart: wakeStart.getTime(),
-    wakeEnd: wakeEnd.getTime(),
-  };
-};
-
-const getAverageClockMinutes = (values: number[]) => {
-  if (values.length === 0) return null;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-};
-
-const toBedtimeClockMinutes = (timestamp: number) => {
-  const date = new Date(timestamp);
-  const minutes = date.getHours() * 60 + date.getMinutes();
-  return date.getHours() < NIGHT_END_HOUR ? minutes + 24 * 60 : minutes;
-};
-
-const toClockMinutes = (timestamp: number) => {
-  const date = new Date(timestamp);
-  return date.getHours() * 60 + date.getMinutes();
-};
-
-const formatClockMinutes = (minutes: number | null) => {
-  if (minutes === null) return "—";
-  const rounded = Math.round(minutes) % (24 * 60);
-  const hours = Math.floor(rounded / 60);
-  const rest = rounded % 60;
-  return `${String(hours).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-};
-
-const getSleepProgressComparison = (
-  analysis: ReturnType<typeof analyzeSleepEvents>,
-  now: Date
-): SleepProgressComparison => {
-  const currentStart = startOfDay(now);
-  const currentEnd = now.getTime();
-  const currentMinutes = sumSleepMinutes(analysis, currentStart.getTime(), currentEnd);
-
-  const trailingDailyMinutes = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(currentStart);
-    day.setDate(day.getDate() - (index + 1));
-    const cutoff = new Date(day);
-    cutoff.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-    return sumSleepMinutes(analysis, day.getTime(), cutoff.getTime());
-  });
-
-  const trailingAverageMinutes =
-    trailingDailyMinutes.reduce((sum, minutes) => sum + minutes, 0) /
-    trailingDailyMinutes.length;
-  const differenceMinutes = currentMinutes - trailingAverageMinutes;
-  const hasHistory = trailingDailyMinutes.some((minutes) => minutes > 0);
-
-  return {
-    currentMinutes,
-    trailingAverageMinutes,
-    differenceMinutes,
-    status: !hasHistory
-      ? "no-history"
-      : Math.abs(differenceMinutes) < 0.5
-        ? "same"
-        : differenceMinutes > 0
-          ? "higher"
-          : "lower",
-  };
-};
-
-const formatSleepComparison = (differenceMinutes: number) => {
-  const rounded = Math.round(Math.abs(differenceMinutes));
-  if (rounded === 0) return "過去7日平均とほぼ同じペースです";
-  return differenceMinutes > 0
-    ? `過去7日平均より ${formatSleepDuration(rounded)} 多めです`
-    : `過去7日平均より ${formatSleepDuration(rounded)} 少なめです`;
-};
-
-const formatShortDate = (timestamp: number) => {
-  const date = new Date(timestamp);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  onSwitchBaby?: (babyId: BabyId) => void;
 };
 
 export function SleepHistoryModal({
@@ -251,6 +49,7 @@ export function SleepHistoryModal({
   events,
   profile,
   now,
+  onSwitchBaby,
 }: SleepHistoryModalProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("1W");
   const analysis = useMemo(
@@ -382,17 +181,16 @@ export function SleepHistoryModal({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-w-2xl flex-col overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Moon className="h-5 w-5" />
-            <span>{profile.displayName}の睡眠履歴</span>
-          </DialogTitle>
-          <DialogDescription>
-            表示期間の睡眠リズムを確認できます。夜間は19:00〜翌6:00で集計します。
-          </DialogDescription>
-        </DialogHeader>
+    <HistoryDialogShell
+      open={open}
+      onOpenChange={onOpenChange}
+      profile={profile}
+      titlePrefix={<Moon className="h-5 w-5" />}
+      title={`${profile.displayName}の睡眠履歴`}
+      description="表示期間の睡眠リズムを確認できます。夜間は19:00〜翌6:00で集計します。"
+      onSwitchBaby={onSwitchBaby}
+      className="flex h-[85vh] max-w-2xl flex-col overflow-y-auto"
+    >
 
         <div className="flex items-center justify-end">
           <Tabs value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
@@ -512,7 +310,6 @@ export function SleepHistoryModal({
             </ResponsiveContainer>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+    </HistoryDialogShell>
   );
 }

@@ -8,10 +8,6 @@ import type { AppSnapshot } from "./app-repository";
 
 const mock = vi.hoisted(() => ({ callbacks: [] as Array<(snapshot: AppSnapshot) => void> }));
 vi.mock("@/firebase", () => ({ db: {} }));
-vi.mock("@/lib/family-access-bootstrap", () => ({
-  getFamilyAccessBootstrapState: () => "ready",
-  subscribeFamilyAccessBootstrap: () => () => {},
-}));
 vi.mock("./firestore-app-repository", () => ({
   createFirestoreAppRepository: () => ({
     subscribe: (callback: (snapshot: AppSnapshot) => void) => { mock.callbacks.push(callback); return () => {}; },

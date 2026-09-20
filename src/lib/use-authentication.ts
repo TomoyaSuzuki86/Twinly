@@ -11,6 +11,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth, ensureAuthPersistence, isFirebaseConfigured } from "@/firebase";
+import { TWINLY_WINDOW_EVENTS, type AndroidGoogleIdTokenDetail } from "./app-events";
 
 declare global {
   interface Window {
@@ -100,7 +101,7 @@ export function useAuthentication({ inviteToken, onUserChanged }: Options) {
   useEffect(() => {
     const handleAndroidGoogleToken = async (event: Event) => {
       if (!auth) return;
-      const idToken = (event as CustomEvent<{ idToken?: string }>).detail?.idToken;
+      const idToken = (event as CustomEvent<AndroidGoogleIdTokenDetail>).detail?.idToken;
       if (!idToken) return;
       try {
         await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
@@ -110,8 +111,8 @@ export function useAuthentication({ inviteToken, onUserChanged }: Options) {
       }
     };
 
-    window.addEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
-    return () => window.removeEventListener("twinlyAndroidGoogleIdToken", handleAndroidGoogleToken);
+    window.addEventListener(TWINLY_WINDOW_EVENTS.androidGoogleIdToken, handleAndroidGoogleToken);
+    return () => window.removeEventListener(TWINLY_WINDOW_EVENTS.androidGoogleIdToken, handleAndroidGoogleToken);
   }, []);
 
   const signInGoogle = async () => {

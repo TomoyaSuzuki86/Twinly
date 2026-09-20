@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AiQuestionAnswer, AiReview } from "@/lib/ai";
-import { callService } from "@/lib/ai";
+import { requestAiQuestion, requestAiReview } from "@/lib/ai";
 import { useCurrentFamilyAccess } from "@/lib/family-access-state";
+import { TWINLY_WINDOW_EVENTS } from "@/lib/app-events";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { VoiceCommandButton } from "./VoiceCommandButton";
@@ -41,7 +42,6 @@ export function AiAdviceLauncher() {
   useEffect(() => {
     const state = access === null ? "loading" : access.features.aiReview ? "enabled" : "premium-required";
     document.documentElement.dataset.twinlyAiAdvice = state;
-    window.dispatchEvent(new CustomEvent("twinly-ai-advice-state", { detail: { state } }));
     return () => {
       if (document.documentElement.dataset.twinlyAiAdvice === state) {
         delete document.documentElement.dataset.twinlyAiAdvice;
@@ -69,7 +69,7 @@ export function AiAdviceLauncher() {
     setBusyText("直近2週間を確認しています…");
     setError("");
     try {
-      const next = await callService<AiReview>("twinlyAi", { mode: "review" });
+      const next = await requestAiReview();
       if (familyAccessKeyRef.current !== requestKey) return;
       setReview(next);
       setAnswer(null);
@@ -95,7 +95,7 @@ export function AiAdviceLauncher() {
     setBusyText("AIが記録を確認しています…");
     setError("");
     try {
-      const next = await callService<AiQuestionAnswer>("twinlyAi", { mode: "ask", question: value });
+      const next = await requestAiQuestion(value);
       if (familyAccessKeyRef.current !== requestKey) return;
       setAnswer(next);
     } catch (e) {
@@ -120,8 +120,8 @@ export function AiAdviceLauncher() {
 
   useEffect(() => {
     const handleOpen = () => openAdvice();
-    window.addEventListener("twinly-ai-advice-open", handleOpen);
-    return () => window.removeEventListener("twinly-ai-advice-open", handleOpen);
+    window.addEventListener(TWINLY_WINDOW_EVENTS.aiAdviceOpen, handleOpen);
+    return () => window.removeEventListener(TWINLY_WINDOW_EVENTS.aiAdviceOpen, handleOpen);
   }, [access, consent, review]);
 
   const acceptAndLoad = () => {

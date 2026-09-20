@@ -23,30 +23,20 @@ import { Input } from "./ui/input";
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
-import { buildCareGauges } from "@/lib/care-gauges";
-import { fmtTime, minutesSince } from "@/lib/utils";
 import type { TutorialAnchorRefFactory } from "@/lib/tutorial-anchors";
 import type { LayoutMode } from "@/lib/appearance-preferences";
 import { PrimaryActionMorph } from "./PrimaryActionMorph";
 import {
   adjustNumber,
-  formatDiaperEstimateSummary,
-  formatMilkProgressSummary,
-  roundMilkAmountUp,
-  summarizeBabyPanelLogEvents,
 } from "@/lib/baby-panel-presenters";
 import { EventCard } from "./EventCard";
 import { VoiceCommandButton } from "./VoiceCommandButton";
-import {
-  analyzeSleepEvents,
-  buildActivityGauge,
-  buildSleepGauge,
-  buildSleepLogSummary,
-  formatSleepDuration,
-  getAverageActivityMinutes,
-  getDefaultActivityLimitMinutes,
-  getDefaultSleepTargetHours,
-} from "@/lib/sleep";
+import { formatSleepDuration } from "@/lib/sleep";
+import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
+import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
+
+const SLEEP_LONG_PRESS_MS = 550;
+const SLEEP_TRANSITION_FEEDBACK_MS = 2000;
 
 type BabyPanelProps = {
   profile: BabyProfile;
@@ -123,133 +113,68 @@ export function BabyPanel({
   primaryActionMorph,
 }: BabyPanelProps) {
   const babyId = profile.babyId;
-  const [temperature, setTemperature] = useState("36.0");
-  const [weight, setWeight] = useState("");
-  const [height, setHeight] = useState("");
-  const [dailyNote, setDailyNote] = useState("");
   const [healthOpen, setHealthOpen] = useState(false);
+  const {
+    temperature,
+    setTemperature,
+    weight,
+    setWeight,
+    height,
+    setHeight,
+    dailyNote,
+    setDailyNote,
+    saveHealthRecord: handleSaveHealthRecord,
+    saveDailyNote: handleSaveDailyNote,
+  } = useBabyHealthInputs({ babyId, lastWeight, lastHeight, onAddEvent });
 
   useEffect(() => {
     setHealthOpen(false);
   }, [babyId]);
 
-  useEffect(() => {
-    setWeight(lastWeight ? lastWeight.toFixed(2) : "");
-  }, [lastWeight]);
-
-  useEffect(() => {
-    setHeight(lastHeight ? lastHeight.toFixed(1) : "");
-  }, [lastHeight]);
-
-  const formatElapsed = (timestamp: number | null) =>
-    timestamp ? `${minutesSince(timestamp, now)}分前` : "未記録";
-
-  const handleSaveHealthRecord = (type: "temperature" | "weight" | "height") => {
-    if (type === "temperature" && temperature) {
-      onAddEvent({
-        babyId,
-        type: "temperature",
-        temperature: parseFloat(temperature),
-      });
-      setTemperature("36.0");
-    }
-
-    if (type === "weight" && weight) {
-      onAddEvent({
-        babyId,
-        type: "weight",
-        weight: parseFloat(weight),
-      });
-    }
-
-    if (type === "height" && height) {
-      onAddEvent({
-        babyId,
-        type: "height",
-        height: parseFloat(height),
-      });
-    }
-  };
-
-  const handleSaveDailyNote = () => {
-    const note = dailyNote.trim();
-    if (!note) return;
-
-    onAddEvent({
-      babyId,
-      type: "daily",
-      note,
-    });
-    setDailyNote("");
-  };
-
-  const { milkTotal, milkCount, solidFoodCount, peeCount, poopCount, diaperCount } =
-    summarizeBabyPanelLogEvents(logEvents);
-  const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
-  const diaperEstimateSummary = diaperStockManagementEnabled && stockForecastEnabled ? formatDiaperEstimateSummary(diaperEstimate) : null;
-  const milkProgressSummary = formatMilkProgressSummary(milkProgress);
-  const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
-  const sleeping = Boolean(sleepAnalysis.currentSleepStart);
-  const averageGaugeActivityMinutes = getAverageActivityMinutes(sleepAnalysis, now);
-  const activityLimitMinutes =
-    profile.activityLimitMinutesOverride ??
-    averageGaugeActivityMinutes ??
-    getDefaultActivityLimitMinutes(profile.birthDate, now);
-  const activityGauge = buildActivityGauge(sleepAnalysis, now, activityLimitMinutes);
-  const sleepTargetHours =
-    profile.sleepTargetHoursOverride ?? getDefaultSleepTargetHours(profile.birthDate, now);
-  const sleepGauge = buildSleepGauge(sleepAnalysis, now, now, sleepTargetHours);
-  const sleepButtonGaugePercent = sleeping
-    ? sleepGauge.remainingPercent
-    : activityGauge.elapsedPercent;
-  const latestCompletedSleep = sleepAnalysis.intervals.reduce(
-    (latest, interval) => (!latest || interval.end > latest.end ? interval : latest),
-    null as (typeof sleepAnalysis.intervals)[number] | null
-  );
-  const previousSleepDuration = latestCompletedSleep
-    ? formatSleepDuration((latestCompletedSleep.end - latestCompletedSleep.start) / (60 * 1000))
-    : "未記録";
-  const activityElapsed = `活動 ${
-    latestCompletedSleep
-      ? `${formatSleepDuration(activityGauge.elapsedMinutes)} / ${formatSleepDuration(activityGauge.limitMinutes)}`
-      : "未記録"
-  }`;
-  const currentSleepDuration = sleepAnalysis.currentSleepStart
-    ? formatSleepDuration((now.getTime() - sleepAnalysis.currentSleepStart.timestamp) / (60 * 1000))
-    : null;
-  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
-  const sleepLogSummary = buildSleepLogSummary(sleepAnalysis, selectedLogDate, now);
-  const sleepLogTotal = formatSleepDuration(sleepLogSummary.totalMinutes);
-  const averageActivityDuration =
-    sleepLogSummary.averageActivityMinutes === null
-      ? "未記録"
-      : formatSleepDuration(sleepLogSummary.averageActivityMinutes);
-  const sleepDurationByWakeId = new Map(
-    sleepAnalysis.intervals.map((interval) => [
-      interval.wakeEventId,
-      (interval.end - interval.start) / (60 * 1000),
-    ])
-  );
-
-  const lastMilkEvent = latestEvents.find((event) => event.type === "milk") ?? null;
-  const lastMilkTime = lastMilkEvent ? fmtTime(new Date(lastMilkEvent.timestamp)) : "-";
-  const lastMilkElapsed = formatElapsed(lastMilkEvent?.timestamp ?? null);
-
-  const lastDiaperEvent = latestEvents.find((event) => event.type === "diaper") ?? null;
-  const lastDiaperTime = lastDiaperEvent ? fmtTime(new Date(lastDiaperEvent.timestamp)) : "-";
-  const lastDiaperElapsed = formatElapsed(lastDiaperEvent?.timestamp ?? null);
-  const careGauges = buildCareGauges({
-    events: latestEvents,
-    babyId,
+  const {
+    milkTotal,
+    milkCount,
+    solidFoodCount,
+    peeCount,
+    poopCount,
+    diaperCount,
+    remainingDiapers,
+    diaperEstimateSummary,
+    milkProgressSummary,
+    sleepAnalysis,
+    sleeping,
+    activityGauge,
+    sleepGauge,
+    sleepButtonGaugePercent,
+    previousSleepDuration,
+    activityElapsed,
+    currentSleepDuration,
+    sleepLogSummary,
+    sleepLogTotal,
+    averageActivityDuration,
+    sleepDurationByWakeId,
+    lastMilkEvent,
+    lastMilkTime,
+    lastMilkElapsed,
+    lastDiaperEvent,
+    lastDiaperTime,
+    lastDiaperElapsed,
+    milkGaugePercent,
+    milkNeededMl,
+    milkTargetMl,
+    diaperGaugePercent,
+  } = buildBabyPanelViewModel({
+    profile,
+    latestEvents,
+    logEvents,
+    logDate,
     now,
-    milkWindowHours: profile.milkGaugeWindowHours ?? 3,
-    milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+    diaperStockManagementEnabled,
+    stockForecastEnabled,
+    diaperEstimate,
+    milkProgress,
   });
-  const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
-  const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
-  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
-  const diaperGaugePercent = Math.round((1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100);
+
   const sleepLongPressTimerRef = useRef<number | null>(null);
   const sleepLongPressTriggeredRef = useRef(false);
   const [sleepTransition, setSleepTransition] = useState<'sleepStart'|'wake'|null>(null);
@@ -271,7 +196,7 @@ export function BabyPanel({
     sleepLongPressTimerRef.current = window.setTimeout(() => {
       sleepLongPressTriggeredRef.current = true;
       onOpenSleepTimeEditor({ babyId, type: sleeping ? "wake" : "sleepStart" });
-    }, 550);
+    }, SLEEP_LONG_PRESS_MS);
   };
 
   useEffect(() => () => clearSleepLongPressTimer(), []);
@@ -415,12 +340,12 @@ export function BabyPanel({
           return;
         }
         const next = sleeping ? "wake" : "sleepStart";
-        sleepTransitionUntil.current = Date.now() + 2000;
+        sleepTransitionUntil.current = Date.now() + SLEEP_TRANSITION_FEEDBACK_MS;
         setSleepTransition(next);
         sleepTransitionTimer.current = setTimeout(() => {
           sleepTransitionUntil.current = 0;
           setSleepTransition(null);
-        }, 2000);
+        }, SLEEP_TRANSITION_FEEDBACK_MS);
         const saved = onAddEvent({
           babyId,
           type: next,

@@ -1,5 +1,5 @@
 import { BabyId, DiaperKind, LogEvent } from "@/types";
-import { clamp, pad2 } from "./utils";
+import { pad2 } from "./utils";
 
 export type MilkDraft = {
   milkMl: number;
@@ -14,7 +14,6 @@ export type DiaperDraft = {
   timestamp: number;
 };
 
-export const stepMilkAmount = (current: number, direction: 1 | -1) => clamp(current + direction * 5, 0, 999);
 
 export const createDefaultMilkDraft = (
   events: LogEvent[],

@@ -5,7 +5,6 @@ import { createInitialAppState } from "@/lib/app-state";
 import { loadPendingEvents, removePendingEvents, mergePendingEvents } from "@/lib/pending-events";
 import { AppStore, type StoreStatus } from "./app-store";
 import { subscribeAppStoreLifecycle } from "./app-store-lifecycle";
-import { applyAppStorePresentation } from "./app-store-presentation";
 import { createFirestoreAppRepository } from "./firestore-app-repository";
 import { readCachedAppState, scheduleCachedAppStateWrite } from "./app-state-cache";
 
@@ -41,13 +40,6 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
     });
   }, [identity, allHistory]);
 
-  useEffect(() => applyAppStorePresentation(status, store.current), [
-    status.ready,
-    status.checking,
-    status.error,
-    status.pending,
-    status.conflicts,
-  ]);
 
   useLayoutEffect(() => {
     if (!db || !userId || !familyId) return;

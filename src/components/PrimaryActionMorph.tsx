@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
-import type { LayoutMode } from "@/lib/appearance-preferences";
+import { WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX, WIDE_SPLIT_LAYOUT_QUERY, type LayoutMode } from "@/lib/appearance-preferences";
 import "./primary-action-morph.css";
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -181,7 +181,7 @@ const restoreSources = (...buttons: Array<HTMLButtonElement | null>) => {
 
 const matchesMedia = (query: string) => {
   if (typeof window.matchMedia === "function") return window.matchMedia(query).matches;
-  if (query.includes("1180px")) return window.innerWidth >= 1180;
+  if (query === WIDE_SPLIT_LAYOUT_QUERY) return window.innerWidth >= WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX;
   return false;
 };
 
@@ -228,7 +228,7 @@ export function PrimaryActionMorph({
     let snapInProgress = false;
 
     const splitLayoutActive = () =>
-      layoutMode === "split" && matchesMedia("(min-width: 1180px)");
+      layoutMode === "split" && matchesMedia(WIDE_SPLIT_LAYOUT_QUERY);
     const enabled = () => selected || splitLayoutActive();
     const snapOwner = () => (splitLayoutActive() ? primaryInSplit : selected);
 

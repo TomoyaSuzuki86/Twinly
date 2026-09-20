@@ -124,13 +124,7 @@ jobs:
           node --check functions/app-storage.js
           node --check functions/ai-service.js
           node --check functions/daily-summary-push.js
-          node --test functions/test/migration.test.js
-          node --test functions/test/ai-policy.test.js
-          node --test functions/test/ai-service.test.js
-          node --test functions/test/stock-alerts.test.js
-          node --test functions/test/care-reminders.test.js
-          node --test functions/test/billing*.test.js
-          node --test functions/test/preserve-legacy-premium.test.js
+          npm test --prefix functions
 
       - name: Run full frontend test suite
         if: steps.scope.outputs.frontend == 'true'

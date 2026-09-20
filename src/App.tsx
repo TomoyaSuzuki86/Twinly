@@ -7,8 +7,6 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
-  FamilyInfo,
-  FamilyMember,
   FamilyRelationship,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
@@ -19,11 +17,13 @@ import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
 import { HelpModal } from "./components/HelpModal";
-import { ComfortTools } from "./components/ComfortTools";
+import { ComfortTools, type ComfortState, type ComfortToolsHandle } from "./components/ComfortTools";
 import { ManualSyncButton } from "./components/ManualSyncButton";
-import { ComfortMiniPlayer, HeaderOverflowMenu, useComfortHeaderState } from "./components/HeaderOverflowMenu";
+import { SyncStatusOverlay } from "./components/SyncStatusOverlay";
+import { ComfortMiniPlayer, HeaderOverflowMenu } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
+import { WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX } from "./lib/appearance-preferences";
 import { AiTools } from "./components/AiTools";
 import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
@@ -43,13 +43,10 @@ import { ProfileSetup } from "./components/ProfileSetup";
 import { AccountModal } from "./components/AccountModal";
 import { VoiceCommandButton } from "./components/VoiceCommandButton";
 import { createInitialAppState } from "./lib/app-state";
-import { parseBackup } from "./lib/backup";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
-import { readCachedAppState } from "./data/app-state-cache";
 import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
-import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames } from "./lib/voice-command";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
@@ -57,21 +54,19 @@ import {
   completeFamilyOnboarding,
   createFamilyInvite,
   joinFamilyWithInvite,
-  loadFamilySession,
-  readCachedFamilySession,
-  subscribeFamilyMembers,
   updateMemberProfile,
 } from "./lib/family";
 import { buildDashboardSelectors } from "./lib/dashboard-selectors";
-import { ensureNotificationSettingsDocument } from "./lib/notification-settings";
 import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/use-authentication";
 import { usePushNotifications } from "./lib/use-push-notifications";
-import { useWearPairing } from "./lib/use-wear-pairing";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
 import { useAppClock } from "./lib/use-app-clock";
 import { useAppModalController } from "./lib/use-app-modal-controller";
 import { useEventOperations } from "./lib/use-event-operations";
+import { useBackupActions } from "./lib/use-backup-actions";
+import { shouldLoadCompleteHistory } from "./lib/history-loading-policy";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
+import { useFamilySessionLifecycle } from "./lib/use-family-session-lifecycle";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
@@ -103,9 +98,6 @@ export default function App() {
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const { now, todayDate, refreshNow, resetClock } = useAppClock(setActiveDate);
-  const [family, setFamily] = useState<FamilyInfo | null>(null);
-  const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [appLoading, setAppLoading] = useState(true);
   const { modal, openModal, openSleepTime, closeModal } = useAppModalController();
@@ -130,72 +122,30 @@ export default function App() {
   } = useVoiceInteraction(setSelectedBabyTab);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
-  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const sessionBoundaryResetRef = useRef<() => void>(() => {});
+  const {
+    family,
+    familyMember,
+    familyMembers,
+    sessionError,
+    setFamilyMember,
+    handleAuthUserChanged: applyFamilySessionAuthChange,
+    activateFamilySession,
+  } = useFamilySessionLifecycle({
+    setApp,
+    setActiveDate,
+    setAppLoading,
+    resetClock,
+    onProfileIncomplete: () => setAccountModalOpen(true),
+  });
 
   const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
-    setSessionError(null);
     closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
-    resetUndo();
-
-    if (user) {
-      const cachedSession = readCachedFamilySession(user.uid);
-      const cachedApp = cachedSession
-        ? readCachedAppState(window.localStorage, user.uid, cachedSession.family.id)
-        : null;
-
-      if (cachedSession) {
-        // Restore the last usable dashboard synchronously. Authentication and server
-        // revalidation continue in the background and must not block interaction.
-        setFamily(cachedSession.family);
-        setFamilyMember(cachedSession.member);
-        setFamilyMembers([cachedSession.member]);
-        if (cachedApp) setApp((previous) => ({ ...cachedApp, ui: previous.ui }));
-        setAppLoading(false);
-      } else {
-        setFamily(null);
-        setFamilyMember(null);
-        setFamilyMembers([]);
-        setApp(createEmptyState());
-        setAppLoading(true);
-      }
-
-      try {
-        const session = await loadFamilySession(user);
-        if (!context.isCurrent()) return;
-        setFamily(session?.family ?? null);
-        setFamilyMember(session?.member ?? null);
-        if (session) {
-          setFamilyMembers((current) => current.length ? current : [session.member]);
-          if (session.member.profileCompleted === false) setAccountModalOpen(true);
-          void ensureNotificationSettingsDocument(user).catch(console.error);
-        } else {
-          setFamilyMembers([]);
-          setAppLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load family session", error);
-        if (!context.isCurrent()) return;
-        if (!cachedSession) {
-          setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
-          setFamily(null);
-          setFamilyMember(null);
-          setFamilyMembers([]);
-        }
-        setAppLoading(false);
-      }
-      return;
-    }
-
-    const nextState = createEmptyState();
-    setFamily(null);
-    setFamilyMember(null);
-    setFamilyMembers([]);
-    setApp(nextState);
-    setActiveDate(nextState.ui.lastViewedDate);
-    resetClock(nextState.ui.lastViewedDate);
-    setAppLoading(false);
+    sessionBoundaryResetRef.current();
+    await applyFamilySessionAuthChange(user, context);
   };
 
   const {
@@ -215,12 +165,26 @@ export default function App() {
     familyMember && familyMember.role !== "owner" && !familyAccess?.features.familySharing
   );
   const pushNotifications = usePushNotifications(authUser);
-  const wearPairing = useWearPairing(authUser);
-  const comfortHeaderState = useComfortHeaderState();
+  const comfortToolsRef = useRef<ComfortToolsHandle | null>(null);
+  const [comfortHeaderState, setComfortHeaderState] = useState<ComfortState>({
+    active: false,
+    paused: false,
+    trackId: "",
+    trackLabel: "",
+  });
   const tutorialAnchors = useTutorialAnchors();
 
-  const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
-    new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
+  const allHistory = shouldLoadCompleteHistory({
+    activeDate,
+    now,
+    overlays: {
+      chartOpen: chartModalOpen,
+      dailyReportOpen: dailyReportModalOpen,
+      timelineOpen: timelineModalOpen,
+      historyOpen: Boolean(historyModal),
+      settingsOpen: modal?.kind === "settings",
+    },
+  });
   const { store, status: syncStatus, requestSync, hydrated: appHydrated } = useAppStore(
     authUser?.uid,
     sharedAccessBlocked ? undefined : family?.id,
@@ -283,18 +247,7 @@ export default function App() {
     updateApp,
     retryVoiceInput: startVoiceInput,
   });
-
-  useEffect(() => {
-    if (!family) return;
-    return subscribeFamilyMembers(family.id, (members) => {
-      setFamilyMembers(members);
-      if (authUser) {
-        const currentMember = members.find((member) => member.uid === authUser.uid);
-        if (currentMember) setFamilyMember(currentMember);
-        else setSessionError("家族へのアクセス権を確認できません。再読み込みしてください。");
-      }
-    }, () => setSessionError("家族情報を取得できませんでした。再読み込みしてください。"));
-  }, [authUser, family]);
+  sessionBoundaryResetRef.current = resetUndo;
 
   useEffect(() => {
     setApp((prev) => {
@@ -329,15 +282,9 @@ export default function App() {
       await completeFamilyOnboarding(profile);
     }
 
-    const session = await loadFamilySession(authUser);
-    if (!session) throw new Error("Family session was not created");
+    await activateFamilySession(authUser);
     window.localStorage.removeItem(FAMILY_INVITE_KEY);
     setPendingInviteToken("");
-    setFamily(session.family);
-    setFamilyMember(session.member);
-    setFamilyMembers([session.member]);
-    setAppLoading(true);
-    await ensureNotificationSettingsDocument(authUser);
   };
 
   const handleSaveMemberProfile = async (profile: {
@@ -364,40 +311,12 @@ export default function App() {
     await signOutUser();
   };
 
-  const handleExport = async () => {
-    try {
-      if (!store.current) throw new Error("記録を読み込んでいます。");
-      const complete = await store.current.exportAll();
-      const blob = new Blob([JSON.stringify(complete, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `twinly-backup-${fmtDate(new Date())}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (error) { alert(error instanceof Error ? error.message : "全履歴を書き出せませんでした。"); }
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (syncStatus.fromCache || syncStatus.pending) { alert("通信が回復し、同期が完了してから復元してください。"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const json = ev.target?.result as string;
-        const importedState = parseBackup(json);
-        if (!confirm("現在の記録をバックアップの内容で置き換えますか？")) return;
-        if (updateApp(() => importedState, { absoluteSettings: true })) {
-          setActiveDate(importedState.ui.lastViewedDate);
-          alert("復元内容を端末に保存しました。同期状況をご確認ください。");
-        }
-      } catch {
-        alert("ファイルの読み込みに失敗しました");
-      }
-    };
-    reader.readAsText(file);
-  };
+  const { handleExport, handleImport } = useBackupActions({
+    store,
+    status: syncStatus,
+    updateApp,
+    setActiveDate,
+  });
 
   const dashboard = useMemo(
     () => buildDashboardSelectors(app, activeDate, todayDate, now),
@@ -541,7 +460,7 @@ export default function App() {
 
                 <div className="flex items-center gap-1">
                   <ManualSyncButton status={syncStatus} onSync={requestSync} />
-                  <div className="hidden" aria-hidden="true"><ComfortTools key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id}/></div>
+                  <div className="hidden" aria-hidden="true"><ComfortTools ref={comfortToolsRef} key={`comfort:${authUser.uid}:${family.id}`} access={familyAccess} app={app} familyId={family.id} onStateChange={setComfortHeaderState}/></div>
                   <VoiceCommandButton
                     ref={voiceButtonRef}
                     babyNames={voiceCommandBabyNames}
@@ -554,6 +473,7 @@ export default function App() {
                     access={familyAccess}
                     onOpenHelp={() => setHelpModalOpen(true)}
                     onOpenSettings={() => openModal("settings")}
+                    onOpenComfort={() => comfortToolsRef.current?.open()}
                   />
                   <button
                     type="button"
@@ -566,7 +486,11 @@ export default function App() {
                   </button>
                 </div>
               </header>
-              <ComfortMiniPlayer state={comfortHeaderState} />
+              <ComfortMiniPlayer
+                state={comfortHeaderState}
+                onOpen={() => comfortToolsRef.current?.open()}
+                onTogglePause={() => comfortToolsRef.current?.togglePause()}
+              />
               <p
                 className="overflow-hidden whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground"
                 data-twinly-voice-hint="true"
@@ -817,18 +741,14 @@ export default function App() {
             return nextApp;
           });
         }}
-        user={authUser}
+        signedIn={Boolean(authUser)}
         onSignIn={handleSignIn}
-        onSignOut={handleSignOut}
         pushPermission={pushNotifications.permission}
         pushSubscribed={pushNotifications.subscribed}
         pushBusy={pushNotifications.busy}
         webPushConfigured={pushNotifications.configured}
         onEnablePushNotifications={pushNotifications.enable}
         onDisablePushNotifications={pushNotifications.disable}
-        wearPairingToken={wearPairing.token}
-        wearPairingBusy={wearPairing.busy}
-        onCreateWearPairingToken={wearPairing.createPairingToken}
         onExport={handleExport}
         onImport={handleImport}
         onResetAll={resetAll}
@@ -854,7 +774,7 @@ export default function App() {
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">左右2人表示</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">横幅1180px以上で2人を同時表示。狭い画面では自動で1人表示</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">横幅{WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX}px以上で2人を同時表示。狭い画面では自動で1人表示</span>
                 </button>
               </div>
             </section>
@@ -884,11 +804,12 @@ export default function App() {
           return recordEventDrafts(eventDrafts);
         }} />}
       />
+      <SyncStatusOverlay status={syncStatus} resolver={store.current} />
       <BillingPrompt />
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
         onOpenChange={setAccountModalOpen}
-        user={authUser}
+        accountEmail={authUser.email}
         family={family}
         member={familyMember}
         members={familyMembers}
@@ -923,6 +844,9 @@ export default function App() {
           events={app.events}
           profile={app.profiles[historyModal.babyId]}
           now={now}
+          onSwitchBaby={(babyId) =>
+            setHistoryModal((current) => current ? { ...current, babyId } : current)
+          }
         />
       ) : historyModal ? (
         <EventHistoryModal
@@ -933,6 +857,9 @@ export default function App() {
           profile={app.profiles[historyModal.babyId]}
           activeDate={activeDate}
           now={now}
+          onSwitchBaby={(babyId) =>
+            setHistoryModal((current) => current ? { ...current, babyId } : current)
+          }
         />
       ) : null}
       </Suspense>

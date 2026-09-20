@@ -27,16 +27,6 @@ export const loadPendingEvents = (uid: string): LogEvent[] => {
   }
 };
 
-export const storePendingEvents = (uid: string, events: LogEvent[]) => {
-  try {
-    const byId = new Map(loadPendingEvents(uid).map((event) => [event.id, event]));
-    events.forEach((event) => byId.set(event.id, event));
-    localStorage.setItem(storageKey(uid), JSON.stringify([...byId.values()]));
-  } catch (error) {
-    console.warn("[Twinly] Failed to preserve pending events locally.", error);
-  }
-};
-
 export const removePendingEvents = (uid: string, eventIds: Iterable<string>) => {
   try {
     const removingIds = new Set(eventIds);

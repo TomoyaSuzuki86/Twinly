@@ -1,8 +1,8 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const { accessFor, summarize, buildDailySummary } = require('./ai-policy');
+const { accessFor, summarize } = require('./ai-policy');
+const { isActiveMember, isFamilyOwner } = require('./access-policy');
 
 const key = defineSecret('TWINLY_AI_API_KEY');
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
@@ -102,38 +102,6 @@ function compactTimeline(events, now) {
 }
 
 const jstDate = now => new Date(now + JST).toISOString().slice(0,10);
-const jstHour = now => Number(new Date(now + JST).toISOString().slice(11,13));
-
-const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const formatDuration = minutes => {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (!hours) return `${rest}分`;
-  return rest ? `${hours}時間${rest}分` : `${hours}時間`;
-};
-
-function formatDailySummaryMail(summary) {
-  const rows = summary.babies.map(baby => {
-    const sleeping = baby.isSleeping ? '（現在睡眠中）' : '';
-    return [
-      baby.name,
-      `ミルク ${baby.milkCount}回 / ${baby.milkMl}ml`,
-      `睡眠 ${formatDuration(baby.sleepMinutes)}${sleeping}`,
-      `おしっこ ${baby.peeCount}回 / うんち ${baby.poopCount}回`,
-      `離乳食 ${baby.solidFoodCount}回`,
-    ];
-  });
-  const time = new Date(summary.generatedAt).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'});
-  const text = [
-    `Twinly 今日のまとめ ${summary.date}`,
-    `${time}時点の記録です。`,
-    '',
-    ...rows.flatMap(row => [...row,'']),
-    '※ Twinlyに記録された内容を集計した日報です。医療上の診断ではありません。',
-  ].join('\n');
-  const html = `<h2>Twinly 今日のまとめ ${escapeHtml(summary.date)}</h2><p>${escapeHtml(time)}時点の記録です。</p>${rows.map(row => `<h3>${escapeHtml(row[0])}</h3><ul>${row.slice(1).map(value => `<li>${escapeHtml(value)}</li>`).join('')}</ul>`).join('')}<p><small>※ Twinlyに記録された内容を集計した日報です。医療上の診断ではありません。</small></p>`;
-  return { subject:`Twinly 今日のまとめ ${summary.date}`, text, html };
-}
 
 module.exports = function createAiServices(db) {
   async function context(request, accessDocId = 'access') {
@@ -147,14 +115,14 @@ module.exports = function createAiServices(db) {
       root.collection('members').doc(uid).get(),
       root.get(),
     ]);
-    if (member.data()?.status !== 'active') throw new HttpsError('permission-denied','家族へのアクセス権がありません');
+    if (!isActiveMember(member.data())) throw new HttpsError('permission-denied','家族へのアクセス権がありません');
     const ref = root.collection('services').doc(accessDocId);
     let snap = await ref.get();
     if (process.env.TWINLY_BILLING_ENABLED === 'true' && snap.data()?.billingVersion !== 1) {
       await ref.set({ billingVersion: 1 }, { merge: true });
       snap = await ref.get();
     }
-    const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
+    const isOwner = isFamilyOwner(member.data(), family.data(), uid);
     return { root, ref, uid, access: accessFor(snap.data(),true), canPreview: isOwner };
   }
 
@@ -250,14 +218,6 @@ module.exports = function createAiServices(db) {
     return (app?.events || []).filter(event => Number.isFinite(event.timestamp) && event.timestamp >= from && event.timestamp <= to);
   }
 
-  async function familyEmails(root) {
-    const members = await root.collection('members').where('status','==','active').get();
-    const uids = members.docs.map(doc => doc.id).slice(0,100);
-    if (!uids.length) return [];
-    const users = await admin.auth().getUsers(uids.map(uid => ({uid})));
-    return [...new Set(users.users.map(user => String(user.email || '').trim()).filter(Boolean))];
-  }
-
   const getFamilyAccess = onCall(options, async request => {
     const c=await context(request);
     return {...c.access,canPreview:c.canPreview};
@@ -271,34 +231,6 @@ module.exports = function createAiServices(db) {
     if (!['free','premium'].includes(previewPlan)) throw new HttpsError('invalid-argument','プランが不正です');
     await c.ref.set({previewPlan,features:accessFor({previewPlan},true).features,previewUpdatedAt:Date.now(),previewUpdatedBy:c.uid},{merge:true});
     return {...accessFor({previewPlan},true),canPreview:true};
-  });
-
-  const getDailySummaryEmailSettings = onCall(options, async request => {
-    const c = await context(request);
-    const settings = await c.root.collection('services').doc('dailySummaryEmail').get();
-    const recipients = await familyEmails(c.root);
-    return {
-      enabled: Boolean(settings.data()?.enabled),
-      hourJst: Number.isInteger(settings.data()?.hourJst) ? settings.data().hourJst : 21,
-      recipients,
-      canEdit: c.canPreview,
-    };
-  });
-
-  const setDailySummaryEmailSettings = onCall(options, async request => {
-    const c = await context(request);
-    if (!c.canPreview) throw new HttpsError('permission-denied','日次まとめメールは家族のオーナーが設定してください');
-    const enabled = request.data?.enabled === true;
-    const hourJst = Number(request.data?.hourJst);
-    if (!Number.isInteger(hourJst) || hourJst < 0 || hourJst > 23) throw new HttpsError('invalid-argument','送信時刻を確認してください');
-    if (enabled && !c.access.features.dailySummaryEmail) throw new HttpsError('permission-denied','日次まとめメールは有料限定です');
-    await c.root.collection('services').doc('dailySummaryEmail').set({
-      enabled,
-      hourJst,
-      updatedAt:admin.firestore.FieldValue.serverTimestamp(),
-      updatedBy:c.uid,
-    },{merge:true});
-    return { enabled, hourJst, recipients:await familyEmails(c.root), canEdit:true };
   });
 
   const createTwinlyAi = accessDocId => onCall({...options,secrets:[key]},async request => {
@@ -370,51 +302,11 @@ module.exports = function createAiServices(db) {
   const twinlyAi = createTwinlyAi('access');
   const developmentTwinlyAi = createTwinlyAi('developmentAccess');
 
-  const sendDailySummaryEmails = onSchedule(
-    {schedule:'every 60 minutes',timeZone:'Asia/Tokyo',region:'asia-northeast1',maxInstances:1},
-    async () => {
-      const now=Date.now();
-      const hour=jstHour(now);
-      const day=jstDate(now);
-      const settingsRows=await db.collectionGroup('services').where('enabled','==',true).get();
-      for(const settingsSnap of settingsRows.docs) {
-        if(settingsSnap.id!=='dailySummaryEmail' || settingsSnap.data()?.hourJst!==hour || settingsSnap.data()?.lastQueuedDate===day) continue;
-        const root=settingsSnap.ref.parent.parent;
-        if(!root) continue;
-        try {
-          const accessSnap=await root.collection('services').doc('access').get();
-          if(!accessFor(accessSnap.data(),true).features.dailySummaryEmail) continue;
-          const state=await root.collection('app').doc('state').get();
-          const app=state.data()?.app;
-          if(!app || state.data()?.migrationState==='copying') continue;
-          const from=Math.floor((now+JST)/DAY)*DAY-JST-DAY;
-          const events=await loadEvents(root,state,from,now+60000,1501);
-          const summary=buildDailySummary(events,now,app.profiles||{});
-          const recipients=await familyEmails(root);
-          if(!recipients.length) continue;
-          const message=formatDailySummaryMail(summary);
-          const mailRef=db.collection('mail').doc();
-          await db.runTransaction(async tx => {
-            const latestSettings=await tx.get(settingsSnap.ref);
-            if(latestSettings.data()?.lastQueuedDate===day || latestSettings.data()?.enabled!==true) return;
-            tx.create(mailRef,{to:recipients,message,createdAt:admin.firestore.FieldValue.serverTimestamp(),familyId:root.id,kind:'dailySummary'});
-            tx.set(settingsSnap.ref,{lastQueuedDate:day,lastQueuedAt:admin.firestore.FieldValue.serverTimestamp()},{merge:true});
-          });
-        } catch(error) {
-          console.error('Daily summary email queue failed',{familyId:root.id,message:error?.message});
-        }
-      }
-    }
-  );
-
   return {
     getFamilyAccess,
     setFamilyPreviewPlan,
-    getDailySummaryEmailSettings,
-    setDailySummaryEmailSettings,
     twinlyAi,
     developmentTwinlyAi,
-    sendDailySummaryEmails,
   };
 };
 

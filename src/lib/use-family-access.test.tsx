@@ -10,10 +10,6 @@ const mocks = vi.hoisted(() => ({
   publishFamilyAccessState: vi.fn(),
   readCachedFamilyAccess: vi.fn(),
   useCurrentFamilyAccess: vi.fn(),
-  beginFamilyAccessBootstrap: vi.fn(),
-  completeFamilyAccessBootstrap: vi.fn(),
-  failFamilyAccessBootstrap: vi.fn(),
-  resetFamilyAccessBootstrap: vi.fn(),
 }));
 
 vi.mock("./family-access", () => ({
@@ -30,12 +26,6 @@ vi.mock("./family-access-state", () => ({
   useCurrentFamilyAccess: mocks.useCurrentFamilyAccess,
 }));
 
-vi.mock("./family-access-bootstrap", () => ({
-  beginFamilyAccessBootstrap: mocks.beginFamilyAccessBootstrap,
-  completeFamilyAccessBootstrap: mocks.completeFamilyAccessBootstrap,
-  failFamilyAccessBootstrap: mocks.failFamilyAccessBootstrap,
-  resetFamilyAccessBootstrap: mocks.resetFamilyAccessBootstrap,
-}));
 
 import { useFamilyAccess } from "./use-family-access";
 
@@ -49,7 +39,7 @@ const access = {
   },
 };
 
-describe("useFamilyAccess bootstrap", () => {
+describe("useFamilyAccess", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     const state = { key: "user-1:family-1", access: null, error: "" };
@@ -92,14 +82,12 @@ describe("useFamilyAccess bootstrap", () => {
     }
   });
 
-  it("loads access and completes bootstrap even when realtime subscription is disabled", async () => {
+  it("loads access when realtime subscription is disabled", async () => {
     const { unmount } = renderHook(() => useFamilyAccess("user-1", "family-1"));
 
-    expect(mocks.beginFamilyAccessBootstrap).toHaveBeenCalledWith("user-1", "family-1");
     expect(mocks.subscribeFamilyAccessChanges).not.toHaveBeenCalled();
 
     await waitFor(() => expect(mocks.getFamilyAccess).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mocks.completeFamilyAccessBootstrap).toHaveBeenCalledWith("user-1", "family-1"));
     expect(mocks.publishFamilyAccessState).toHaveBeenCalledWith({
       key: "user-1:family-1",
       access,
@@ -107,6 +95,6 @@ describe("useFamilyAccess bootstrap", () => {
     });
 
     unmount();
-    expect(mocks.resetFamilyAccessBootstrap).toHaveBeenCalledWith("user-1", "family-1");
+    expect(mocks.clearFamilyAccessState).toHaveBeenCalledWith("user-1:family-1");
   });
 });

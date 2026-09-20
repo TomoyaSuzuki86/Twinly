@@ -1,3 +1,5 @@
+const { isActiveMember, isMemberRoleOwner } = require("./access-policy");
+
 const createRuntimeContext = ({ db, accessFor }) => {
   const familyAccess = async (familyId) => {
     const snap = await db.collection("families").doc(familyId).collection("services").doc("access").get();
@@ -10,8 +12,8 @@ const createRuntimeContext = ({ db, accessFor }) => {
     const familyId = userSnap.data()?.activeFamilyId;
     if (familyId) {
       const member = await db.collection("families").doc(familyId).collection("members").doc(uid).get();
-      if (!member.exists || member.data()?.status !== "active") throw new Error("Family access denied");
-      if (member.data()?.role !== "owner" && !(await familyAccess(familyId)).features.familySharing) throw new Error("Family sharing is locked");
+      if (!member.exists || !isActiveMember(member.data())) throw new Error("Family access denied");
+      if (!isMemberRoleOwner(member.data()) && !(await familyAccess(familyId)).features.familySharing) throw new Error("Family sharing is locked");
     }
     return familyId
       ? db.collection("families").doc(familyId).collection("app").doc("state")

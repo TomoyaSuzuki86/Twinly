@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { createSleepSound, sleepMusicDeadline } from '@/lib/sleep-music';
@@ -13,14 +13,29 @@ const tracks = [
   ['rain', 'やさしい雨'],
 ] as const;
 
-type ComfortState = {
+export type ComfortState = {
   active: boolean;
   paused: boolean;
   trackId: string;
   trackLabel: string;
 };
 
-export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app:AppState;familyId:string}) {
+export type ComfortToolsHandle = {
+  open: () => void;
+  togglePause: () => void;
+};
+
+type ComfortToolsProps = {
+  access: FamilyAccess | null;
+  app: AppState;
+  familyId: string;
+  onStateChange?: (state: ComfortState) => void;
+};
+
+export const ComfortTools = forwardRef<ComfortToolsHandle, ComfortToolsProps>(function ComfortTools(
+  { access, app, familyId, onStateChange },
+  ref
+) {
   const [open,setOpen]=useState(false), [playing,setPlaying]=useState(''), [paused,setPaused]=useState(false), [message,setMessage]=useState('');
   const [volume,setVolume]=useState(0.55);
   const player=useRef<{context:AudioContext;source:AudioBufferSourceNode;gain:GainNode;previewEnd:number|null}|null>(null);
@@ -29,16 +44,6 @@ export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app
   const latest=useRef({deadline,volume,premium:Boolean(access?.features.music)});
   latest.current={deadline,volume,premium:Boolean(access?.features.music)};
 
-  const emitState = (trackId = playing, isPaused = paused) => {
-    const track = tracks.find(([id]) => id === trackId);
-    const detail: ComfortState = {
-      active: Boolean(trackId),
-      paused: Boolean(trackId) && isPaused,
-      trackId,
-      trackLabel: track?.[1] ?? '',
-    };
-    window.dispatchEvent(new CustomEvent('twinly-comfort-state', { detail }));
-  };
 
   function stop(clearPlaying = true) {
     operation.current++;
@@ -99,43 +104,29 @@ export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app
     }
   }
 
-  function moveTrack(direction:number) {
-    if(!playing)return;
-    const index=tracks.findIndex(([id])=>id===playing);
-    const nextIndex=(Math.max(0,index)+direction+tracks.length)%tracks.length;
-    void play(tracks[nextIndex][0]);
-  }
+  useImperativeHandle(ref, () => ({
+    open: () => setOpen(true),
+    togglePause: () => { void togglePause(); },
+  }), [playing, paused]);
+
+
 
   useEffect(()=>{schedule();},[deadline,volume]);
   useEffect(()=>{if(!access?.features.music&&playing&&playing!=='white'&&player.current?.previewEnd===null){stop();setMessage('無料モードへ切り替えたため停止しました。12秒試聴できます');}},[access,playing]);
-  useEffect(()=>{emitState();},[playing,paused]);
+  useEffect(() => {
+    const track = tracks.find(([id]) => id === playing);
+    onStateChange?.({
+      active: Boolean(playing),
+      paused: Boolean(playing) && paused,
+      trackId: playing,
+      trackLabel: track?.[1] ?? '',
+    });
+  }, [onStateChange, paused, playing]);
   useEffect(()=>{
     const visible=()=>{if(document.visibilityState==='visible')schedule();};
     document.addEventListener('visibilitychange',visible);
     return()=>{document.removeEventListener('visibilitychange',visible);operation.current++;void player.current?.context.close();player.current=null;};
   },[]);
-  useEffect(()=>{
-    const openMusic=()=>setOpen(true);
-    const toggle=()=>{void togglePause();};
-    const previous=()=>moveTrack(-1);
-    const next=()=>moveTrack(1);
-    const stopMusic=()=>stop();
-    const stateRequest=()=>emitState();
-    window.addEventListener('twinly-comfort-open',openMusic);
-    window.addEventListener('twinly-comfort-toggle-pause',toggle);
-    window.addEventListener('twinly-comfort-previous',previous);
-    window.addEventListener('twinly-comfort-next',next);
-    window.addEventListener('twinly-comfort-stop',stopMusic);
-    window.addEventListener('twinly-comfort-state-request',stateRequest);
-    return()=>{
-      window.removeEventListener('twinly-comfort-open',openMusic);
-      window.removeEventListener('twinly-comfort-toggle-pause',toggle);
-      window.removeEventListener('twinly-comfort-previous',previous);
-      window.removeEventListener('twinly-comfort-next',next);
-      window.removeEventListener('twinly-comfort-stop',stopMusic);
-      window.removeEventListener('twinly-comfort-state-request',stateRequest);
-    };
-  },[playing,paused]);
 
   const currentTrack=tracks.find(([id])=>id===playing);
 
@@ -152,4 +143,4 @@ export function ComfortTools({access,app,familyId}:{access:FamilyAccess|null;app
       {message&&<p role="status">{message}</p>}
     </DialogContent></Dialog>
   </>;
-}
+});

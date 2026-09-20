@@ -1,197 +1,14 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { Baby, X } from "lucide-react"
+import { X } from "lucide-react"
 
-import { detectHorizontalSwipe, type SwipePoint } from "@/lib/horizontal-swipe"
 import { cn } from "@/lib/utils"
 import { useBrowserBackDismiss } from "@/lib/use-browser-back-dismiss"
 
 const Dialog = DialogPrimitive.Root
-
 const DialogTrigger = DialogPrimitive.Trigger
-
 const DialogPortal = DialogPrimitive.Portal
-
 const DialogClose = DialogPrimitive.Close
-
-let historyPreloadStarted = false
-
-const preloadHistoryModals = () => {
-  if (historyPreloadStarted || typeof window === "undefined") return
-  historyPreloadStarted = true
-  void Promise.all([
-    import("@/components/EventHistoryModal"),
-    import("@/components/SleepHistoryModal"),
-  ]).catch(() => {
-    historyPreloadStarted = false
-  })
-}
-
-const historyLabels = ["食事履歴", "おむつ履歴", "睡眠履歴"] as const
-
-type HistoryBabyVisual = {
-  babyId: "A" | "B"
-  emoji: string | null
-  gradientClassName: string
-}
-
-const getReactNodeText = (node: React.ReactNode): string => {
-  if (typeof node === "string" || typeof node === "number") return String(node)
-  if (Array.isArray(node)) return node.map(getReactNodeText).join("")
-  if (React.isValidElement(node)) {
-    return getReactNodeText((node.props as { children?: React.ReactNode }).children)
-  }
-  return ""
-}
-
-const getHeadingTextWithoutBabyMarker = (heading: HTMLElement | null) => {
-  if (!heading) return ""
-  return Array.from(heading.childNodes)
-    .filter(
-      (node) =>
-        !(node instanceof Element && node.hasAttribute("data-history-baby-marker"))
-    )
-    .map((node) => node.textContent ?? "")
-    .join("")
-    .trim()
-}
-
-const getHistoryHeadingContext = (dialogContent: HTMLElement) => {
-  const heading = dialogContent.querySelector<HTMLElement>(
-    "[role='heading'], h1, h2, h3"
-  )
-  const headingText = getHeadingTextWithoutBabyMarker(heading)
-  const historyLabel = historyLabels.find((label) => headingText.endsWith(label))
-  if (!heading || !historyLabel) return null
-
-  const buttons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(
-      `.twinly-baby-tabs-content button[aria-label$="の${historyLabel}を開く"]`
-    )
-  )
-  if (buttons.length < 2) return null
-
-  const currentIndex = buttons.findIndex((button) => {
-    const ariaLabel = button.getAttribute("aria-label") ?? ""
-    return ariaLabel.replace(/を開く$/, "") === headingText
-  })
-  if (currentIndex < 0) return null
-
-  return { heading, headingText, historyLabel, buttons, currentIndex }
-}
-
-const getHistoryBabyVisual = (titleText: string): HistoryBabyVisual | null => {
-  if (typeof document === "undefined") return null
-
-  const historyLabel = historyLabels.find((label) => titleText.endsWith(label))
-  if (!historyLabel) return null
-
-  const buttons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(
-      `.twinly-baby-tabs-content button[aria-label$="の${historyLabel}を開く"]`
-    )
-  )
-  const currentButton = buttons.find((button) => {
-    const ariaLabel = button.getAttribute("aria-label") ?? ""
-    return ariaLabel.replace(/を開く$/, "") === titleText
-  })
-
-  const panel = currentButton?.closest<HTMLElement>(".twinly-baby-tabs-content") ?? null
-  let source = panel?.querySelector<HTMLElement>("[data-twinly-baby-icon]") ?? null
-
-  if (!source) {
-    const suffix = `の${historyLabel}`
-    const babyName = titleText.endsWith(suffix)
-      ? titleText.slice(0, -suffix.length)
-      : ""
-    source = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-twinly-baby-icon]")
-    ).find((icon) => {
-      const trigger = icon.closest<HTMLElement>("button")
-      return Boolean(babyName && trigger?.textContent?.includes(babyName))
-    }) ?? null
-  }
-
-  let babyId = source?.dataset.twinlyBabyIcon
-  if (babyId !== "A" && babyId !== "B") {
-    const index = currentButton ? buttons.indexOf(currentButton) : -1
-    babyId = index === 0 ? "A" : index === 1 ? "B" : undefined
-  }
-  if (babyId !== "A" && babyId !== "B") return null
-
-  const gradientClassName = source
-    ? Array.from(source.classList)
-        .filter(
-          (className) =>
-            className === "bg-gradient-to-br" ||
-            className.startsWith("from-") ||
-            className.startsWith("via-") ||
-            className.startsWith("to-")
-        )
-        .join(" ")
-    : babyId === "A"
-      ? "bg-gradient-to-br from-violet-500 to-fuchsia-500"
-      : "bg-gradient-to-br from-sky-500 to-cyan-400"
-
-  const emoji = source?.querySelector<HTMLElement>("span")?.textContent?.trim() || null
-
-  return {
-    babyId,
-    emoji,
-    gradientClassName:
-      gradientClassName ||
-      (babyId === "A"
-        ? "bg-gradient-to-br from-violet-500 to-fuchsia-500"
-        : "bg-gradient-to-br from-sky-500 to-cyan-400"),
-  }
-}
-
-function HistoryBabyTitleMarker({ titleText }: { titleText: string }) {
-  const [visual, setVisual] = React.useState<HistoryBabyVisual | null>(() =>
-    getHistoryBabyVisual(titleText)
-  )
-
-  React.useLayoutEffect(() => {
-    setVisual(getHistoryBabyVisual(titleText))
-  }, [titleText])
-
-  const babyId = visual?.babyId
-  const gradientClassName =
-    visual?.gradientClassName ?? "bg-gradient-to-br from-slate-500 to-slate-700"
-
-  return (
-    <span
-      data-history-baby-marker={babyId ?? "unknown"}
-      aria-hidden="true"
-      className={cn(
-        "grid h-7 w-7 shrink-0 place-items-center rounded-full shadow-sm",
-        gradientClassName
-      )}
-    >
-      {visual?.emoji ? (
-        <span className="text-[17px] leading-none">{visual.emoji}</span>
-      ) : (
-        <Baby className="h-4 w-4 text-white" />
-      )}
-    </span>
-  )
-}
-
-const switchHistoryBabyFromSwipe = (
-  dialogContent: HTMLElement,
-  direction: "left" | "right"
-) => {
-  const context = getHistoryHeadingContext(dialogContent)
-  if (!context) return false
-
-  const targetIndex =
-    direction === "left" ? context.currentIndex + 1 : context.currentIndex - 1
-  const target = context.buttons[targetIndex]
-  if (!target) return false
-
-  target.click()
-  return true
-}
 
 function DialogOpeningSkeleton() {
   const [visible, setVisible] = React.useState(true)
@@ -243,50 +60,12 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onTouchStart, onTouchEnd, onTouchCancel, ...props }, ref) => {
-  const swipeStartRef = React.useRef<SwipePoint | null>(null)
+>(({ className, children, ...props }, ref) => {
   const browserBackCloseRef = React.useRef<HTMLButtonElement>(null)
 
   useBrowserBackDismiss(true, () => {
     browserBackCloseRef.current?.click()
   })
-
-  React.useEffect(() => {
-    const timerId = window.setTimeout(preloadHistoryModals, 0)
-    return () => window.clearTimeout(timerId)
-  }, [])
-
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    onTouchStart?.(event)
-    if (event.defaultPrevented) return
-    const touch = event.touches.item(0)
-    swipeStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null
-  }
-
-  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    onTouchEnd?.(event)
-    const start = swipeStartRef.current
-    swipeStartRef.current = null
-    if (event.defaultPrevented || !start) return
-    const touch = event.changedTouches.item(0)
-    if (!touch) return
-
-    const direction = detectHorizontalSwipe(start, {
-      x: touch.clientX,
-      y: touch.clientY,
-    })
-    if (!direction) return
-
-    if (switchHistoryBabyFromSwipe(event.currentTarget, direction)) {
-      event.preventDefault()
-      event.stopPropagation()
-    }
-  }
-
-  const handleTouchCancel = (event: React.TouchEvent<HTMLDivElement>) => {
-    swipeStartRef.current = null
-    onTouchCancel?.(event)
-  }
 
   return (
     <DialogPortal>
@@ -297,9 +76,6 @@ const DialogContent = React.forwardRef<
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] touch-pan-y gap-4 border bg-background text-foreground p-6 shadow-lg duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 sm:rounded-lg",
           className
         )}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchCancel}
         {...props}
       >
         <DialogOpeningSkeleton />
@@ -314,63 +90,26 @@ const DialogContent = React.forwardRef<
 })
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
-const DialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left",
-      className
-    )}
-    {...props}
-  />
+const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />
 )
 DialogHeader.displayName = "DialogHeader"
 
-const DialogFooter = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-      className
-    )}
-    {...props}
-  />
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
 )
 DialogFooter.displayName = "DialogFooter"
 
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, children, ...props }, ref) => {
-  const titleText = getReactNodeText(children).trim()
-  const isHistoryTitle = historyLabels.some((label) => titleText.endsWith(label))
-  const childArray = React.Children.toArray(children)
-  const marker = isHistoryTitle ? (
-    <HistoryBabyTitleMarker key="history-baby-marker" titleText={titleText} />
-  ) : null
-  const renderedChildren = marker
-    ? childArray.length > 1
-      ? [childArray[0], marker, ...childArray.slice(1)]
-      : [marker, ...childArray]
-    : childArray
-
-  return (
-    <DialogPrimitive.Title
-      ref={ref}
-      className={cn(
-        "text-lg font-semibold leading-none tracking-tight",
-        className
-      )}
-      {...props}
-    >
-      {renderedChildren}
-    </DialogPrimitive.Title>
-  )
-})
+>(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    {...props}
+  />
+))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
 const DialogDescription = React.forwardRef<

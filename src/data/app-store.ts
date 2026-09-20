@@ -1,4 +1,6 @@
 import type { AppState, LogEvent } from "@/types";
+import { USER_EVENT_FIELDS } from "./event-sync-policy";
+import { appendSyncDiagnostic } from "./app-store-diagnostics";
 import {
   applyMutation,
   createMutation,
@@ -26,18 +28,6 @@ export type StoreStatus = {
 };
 
 type SyncCheckReason = "start" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
-type DiagnosticEntry = {
-  at: number;
-  event: string;
-  connection: SyncConnectionState;
-  pending: number;
-  confirmedPending: number;
-  conflictCount: number;
-  pendingWaitMs: number;
-  fromCache: boolean;
-  checking: boolean;
-  lastServerConfirmedAt: number | null;
-};
 type ConflictRecord = {
   id: string;
   mutation: AppMutation;
@@ -55,12 +45,6 @@ const SERVER_CHECK_TIMEOUT_MS = 12_000;
 const COMMIT_TIMEOUT_MS = 15_000;
 const RECONNECT_MAX_MS = 30_000;
 const SAVE_RETRY_MAX_MS = 30_000;
-const DIAGNOSTIC_LIMIT = 80;
-const USER_EVENT_FIELDS: (keyof LogEvent)[] = [
-  "babyId", "type", "timestamp", "milkMl", "milkMethod", "diaperKind", "diaperSizeUsed",
-  "temperature", "weight", "height", "note",
-];
-
 const mutationHasChanges = (mutation: AppMutation | undefined) => Boolean(mutation && (mutation.events.length || mutation.settings.length));
 const setEventValue = (event: LogEvent, field: string, value: unknown) => {
   const target = event as unknown as Record<string, unknown>;
@@ -182,7 +166,7 @@ export class AppStore {
 
   private logDiagnostic(event: string) {
     const oldest = this.queue[0]?.queuedAt;
-    const entry: DiagnosticEntry = {
+    appendSyncDiagnostic(this.storage, this.key, {
       at: Date.now(),
       event,
       connection: this.status.connection ?? "connecting",
@@ -193,17 +177,7 @@ export class AppStore {
       fromCache: this.status.fromCache,
       checking: Boolean(this.status.checking),
       lastServerConfirmedAt: this.status.lastServerConfirmedAt ?? null,
-    };
-    try {
-      const diagnosticsKey = `${this.key}.diagnostics`;
-      const raw = this.storage.getItem(diagnosticsKey);
-      const previous = raw ? JSON.parse(raw) : [];
-      const entries = Array.isArray(previous) ? previous : [];
-      entries.push(entry);
-      this.storage.setItem(diagnosticsKey, JSON.stringify(entries.slice(-DIAGNOSTIC_LIMIT)));
-    } catch {
-      // Diagnostics must never block recording or synchronization.
-    }
+    });
   }
 
   refresh() {

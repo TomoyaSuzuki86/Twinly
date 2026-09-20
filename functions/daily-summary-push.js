@@ -4,6 +4,7 @@ const { defineSecret } = require('firebase-functions/params');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { accessFor, buildDailySummary } = require('./ai-policy');
+const { isActiveMember, isFamilyOwner } = require('./access-policy');
 const { readApp } = require('./app-storage');
 
 const db = admin.firestore();
@@ -50,8 +51,8 @@ async function context(request) {
     root.get(),
     root.collection('services').doc('access').get(),
   ]);
-  if (member.data()?.status !== 'active') throw new HttpsError('permission-denied', '家族へのアクセス権がありません');
-  const isOwner = member.data()?.role === 'owner' || family.data()?.ownerUid === uid;
+  if (!isActiveMember(member.data())) throw new HttpsError('permission-denied', '家族へのアクセス権がありません');
+  const isOwner = isFamilyOwner(member.data(), family.data(), uid);
   return { root, uid, isOwner, access: accessFor(accessSnap.data(), true) };
 }
 
