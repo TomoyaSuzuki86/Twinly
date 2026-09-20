@@ -46,7 +46,6 @@ import { VoiceCommandButton } from "./components/VoiceCommandButton";
 import { createInitialAppState } from "./lib/app-state";
 import { createDefaultDiaperDraft, createDefaultMilkDraft } from "./lib/entry-drafts";
 import { useAppStore } from "./data/use-app-store";
-import { readCachedAppState } from "./data/app-state-cache";
 import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
@@ -57,12 +56,9 @@ import {
   createFamilyInvite,
   joinFamilyWithInvite,
   loadFamilySession,
-  readCachedFamilySession,
-  subscribeFamilyMembers,
   updateMemberProfile,
 } from "./lib/family";
 import { buildDashboardSelectors } from "./lib/dashboard-selectors";
-import { ensureNotificationSettingsDocument } from "./lib/notification-settings";
 import { useAuthentication, type AuthChangeContext, type AuthUser } from "./lib/use-authentication";
 import { usePushNotifications } from "./lib/use-push-notifications";
 import { useTutorialAnchors } from "./lib/tutorial-anchors";
@@ -72,6 +68,7 @@ import { useEventOperations } from "./lib/use-event-operations";
 import { useBackupActions } from "./lib/use-backup-actions";
 import { shouldLoadCompleteHistory } from "./lib/history-loading-policy";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
+import { useFamilySessionLifecycle } from "./lib/use-family-session-lifecycle";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
@@ -103,9 +100,6 @@ export default function App() {
   const [app, setApp] = useState<AppState>(() => createEmptyState());
   const [activeDate, setActiveDate] = useState(() => createEmptyState().ui.lastViewedDate);
   const { now, todayDate, refreshNow, resetClock } = useAppClock(setActiveDate);
-  const [family, setFamily] = useState<FamilyInfo | null>(null);
-  const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
-  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [pendingInviteToken, setPendingInviteToken] = useState(readFamilyInvite);
   const [appLoading, setAppLoading] = useState(true);
   const { modal, openModal, openSleepTime, closeModal } = useAppModalController();
@@ -130,72 +124,31 @@ export default function App() {
   } = useVoiceInteraction(setSelectedBabyTab);
   const babyTabSwipeStartRef = useRef<SwipePoint | null>(null);
   const primaryActionStickyRef = useRef<HTMLDivElement | null>(null);
-  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const sessionBoundaryResetRef = useRef<() => void>(() => {});
+  const {
+    family,
+    familyMember,
+    familyMembers,
+    sessionError,
+    setFamily,
+    setFamilyMember,
+    setFamilyMembers,
+    handleAuthUserChanged: applyFamilySessionAuthChange,
+  } = useFamilySessionLifecycle({
+    setApp,
+    setActiveDate,
+    setAppLoading,
+    resetClock,
+    onProfileIncomplete: () => setAccountModalOpen(true),
+  });
 
   const handleAuthUserChanged = async (user: AuthUser | null, context: AuthChangeContext) => {
-    setSessionError(null);
     closeModal();
     setHelpModalOpen(false);
     setHistoryModal(null);
-    resetUndo();
-
-    if (user) {
-      const cachedSession = readCachedFamilySession(user.uid);
-      const cachedApp = cachedSession
-        ? readCachedAppState(window.localStorage, user.uid, cachedSession.family.id)
-        : null;
-
-      if (cachedSession) {
-        // Restore the last usable dashboard synchronously. Authentication and server
-        // revalidation continue in the background and must not block interaction.
-        setFamily(cachedSession.family);
-        setFamilyMember(cachedSession.member);
-        setFamilyMembers([cachedSession.member]);
-        if (cachedApp) setApp((previous) => ({ ...cachedApp, ui: previous.ui }));
-        setAppLoading(false);
-      } else {
-        setFamily(null);
-        setFamilyMember(null);
-        setFamilyMembers([]);
-        setApp(createEmptyState());
-        setAppLoading(true);
-      }
-
-      try {
-        const session = await loadFamilySession(user);
-        if (!context.isCurrent()) return;
-        setFamily(session?.family ?? null);
-        setFamilyMember(session?.member ?? null);
-        if (session) {
-          setFamilyMembers((current) => current.length ? current : [session.member]);
-          if (session.member.profileCompleted === false) setAccountModalOpen(true);
-          void ensureNotificationSettingsDocument(user).catch(console.error);
-        } else {
-          setFamilyMembers([]);
-          setAppLoading(false);
-        }
-      } catch (error) {
-        console.error("Failed to load family session", error);
-        if (!context.isCurrent()) return;
-        if (!cachedSession) {
-          setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
-          setFamily(null);
-          setFamilyMember(null);
-          setFamilyMembers([]);
-        }
-        setAppLoading(false);
-      }
-      return;
-    }
-
-    const nextState = createEmptyState();
-    setFamily(null);
-    setFamilyMember(null);
-    setFamilyMembers([]);
-    setApp(nextState);
-    setActiveDate(nextState.ui.lastViewedDate);
-    resetClock(nextState.ui.lastViewedDate);
-    setAppLoading(false);
+    sessionBoundaryResetRef.current();
+    await applyFamilySessionAuthChange(user, context);
   };
 
   const {
@@ -297,18 +250,7 @@ export default function App() {
     updateApp,
     retryVoiceInput: startVoiceInput,
   });
-
-  useEffect(() => {
-    if (!family) return;
-    return subscribeFamilyMembers(family.id, (members) => {
-      setFamilyMembers(members);
-      if (authUser) {
-        const currentMember = members.find((member) => member.uid === authUser.uid);
-        if (currentMember) setFamilyMember(currentMember);
-        else setSessionError("家族へのアクセス権を確認できません。再読み込みしてください。");
-      }
-    }, () => setSessionError("家族情報を取得できませんでした。再読み込みしてください。"));
-  }, [authUser, family]);
+  sessionBoundaryResetRef.current = resetUndo;
 
   useEffect(() => {
     setApp((prev) => {
