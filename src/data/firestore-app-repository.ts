@@ -9,9 +9,11 @@ import { removeUndefined } from "@/lib/utils";
 import {
   applyMutation,
   reconcileStockConsumption,
+  sameValue,
   type AppMutation,
   type AppRepository,
   type CommitResult,
+  type EventChange,
   type SettingChange,
 } from "./app-repository";
 import { mergeEventChangeByServerOrder } from "./event-sync-policy";
