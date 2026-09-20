@@ -750,7 +750,7 @@ export default function App() {
             return nextApp;
           });
         }}
-        user={authUser}
+        signedIn={Boolean(authUser)}
         onSignIn={handleSignIn}
         pushPermission={pushNotifications.permission}
         pushSubscribed={pushNotifications.subscribed}
@@ -818,7 +818,7 @@ export default function App() {
       <AccountModal sharingEnabled={Boolean(familyAccess?.features.familySharing)}
         open={accountModalOpen}
         onOpenChange={setAccountModalOpen}
-        user={authUser}
+        accountEmail={authUser.email}
         family={family}
         member={familyMember}
         members={familyMembers}
