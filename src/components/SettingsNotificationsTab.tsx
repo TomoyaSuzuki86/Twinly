@@ -1,5 +1,5 @@
 import { Button } from "./ui/button";
-import { DailySummaryEmailSettings } from "./DailySummaryEmailSettings";
+import { DailySummaryNotificationSettings } from "./DailySummaryEmailSettings";
 
 export const shouldDisablePushEnable = (
   pushBusy: boolean,
@@ -76,7 +76,7 @@ export function SettingsNotificationsTab({
           <Button onClick={onSignIn}>ログイン画面を開く</Button>
         )}
       </div>
-      {signedIn ? <DailySummaryEmailSettings /> : null}
+      {signedIn ? <DailySummaryNotificationSettings /> : null}
     </>
   );
 }
