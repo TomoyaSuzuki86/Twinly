@@ -15,12 +15,14 @@ export type AiDraft = {
 
 export type AiReview = { observations: string; checks: string; generatedAt: number };
 export type AiQuestionAnswer = { answer: string; source: 'review'|'review+timeline'; generatedAt: number };
-export type DailySummaryEmailSettings = {
+export type DailySummaryNotificationSettings = {
   enabled: boolean;
   hourJst: number;
   recipients: string[];
   canEdit: boolean;
 };
+// Public/internal compatibility alias. Cloud Function names remain unchanged.
+export type DailySummaryEmailSettings = DailySummaryNotificationSettings;
 export type DailySummaryEmailDeliveryStatus = {
   lastSentDate: string|null;
   lastSentAt: number|null;
@@ -36,6 +38,19 @@ export async function callService<T>(name: string, data: unknown = {}): Promise<
   if (!functions) throw new Error('サーバー設定がありません');
   return (await httpsCallable<unknown,T>(functions,resolveServiceName(name))(data)).data;
 }
+
+export const requestAiReview = () =>
+  callService<AiReview>('twinlyAi', { mode: 'review' });
+
+export const requestAiQuestion = (question: string) =>
+  callService<AiQuestionAnswer>('twinlyAi', { mode: 'ask', question });
+
+export const getDailySummaryNotificationSettings = () =>
+  callService<DailySummaryNotificationSettings>('getDailySummaryEmailSettings');
+
+export const setDailySummaryNotificationSettings = (
+  settings: Pick<DailySummaryNotificationSettings, 'enabled' | 'hourJst'>
+) => callService<DailySummaryNotificationSettings>('setDailySummaryEmailSettings', settings);
 
 export function validConfirmedDrafts(events: AiDraft[], now=Date.now()): boolean {
   return events.length>0 && events.length<=12 && events.every(e =>
