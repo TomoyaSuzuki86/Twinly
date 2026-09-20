@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BellRing, Crown, Smartphone } from "lucide-react";
-import type { DailySummaryEmailSettings as SummarySettings } from "@/lib/ai";
-import { callService } from "@/lib/ai";
+import type { DailySummaryNotificationSettings as SummarySettings } from "@/lib/ai";
+import { getDailySummaryNotificationSettings, setDailySummaryNotificationSettings } from "@/lib/ai";
 import { useCurrentFamilyAccess } from "@/lib/family-access-state";
 import { Button } from "./ui/button";
 
@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS: SummarySettings = {
   canEdit: false,
 };
 
-export function DailySummaryEmailSettings() {
+export function DailySummaryNotificationSettings() {
   const { access, error: accessError } = useCurrentFamilyAccess();
   const [settings, setSettings] = useState<SummarySettings>(DEFAULT_SETTINGS);
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -22,7 +22,7 @@ export function DailySummaryEmailSettings() {
 
   useEffect(() => {
     mounted.current = true;
-    callService<SummarySettings>("getDailySummaryEmailSettings")
+    getDailySummaryNotificationSettings()
       .then((nextSettings) => {
         if (mounted.current) setSettings(nextSettings);
       })
@@ -42,7 +42,7 @@ export function DailySummaryEmailSettings() {
     setBusy(true);
     setMessage("");
     try {
-      const next = await callService<SummarySettings>("setDailySummaryEmailSettings", {
+      const next = await setDailySummaryNotificationSettings({
         enabled: settings.enabled,
         hourJst: settings.hourJst,
       });
@@ -142,3 +142,5 @@ export function DailySummaryEmailSettings() {
     </section>
   );
 }
+
+export const DailySummaryEmailSettings = DailySummaryNotificationSettings;
