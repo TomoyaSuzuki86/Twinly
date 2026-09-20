@@ -1,34 +1,16 @@
 import * as DialogComponents from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "./ui/label";
 import React, { useEffect, useState } from "react";
 import { AppState, BabyId, BabyProfile } from "@/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { iconGradients } from "@/lib/utils";
-import { buildMilkGauge } from "@/lib/care-gauges";
 import { adjustSharedDiaperStock } from "@/lib/diaper-stock";
 import {
   applyGaugeProfiles,
-  BABY_DISPLAY_ORDER,
   copyGaugeSettings,
-  gaugeProfileSnapshot,
   gaugeProfilesEqual,
   setSleepCustomValue,
   setSleepGaugeMode,
 } from "@/lib/settings-gauge-policy";
-import {
-  formatSleepDuration,
-  getDefaultActivityLimitMinutes,
-  getDefaultSleepTargetHours,
-} from "@/lib/sleep";
 import { SettingsProfileTab } from "./SettingsProfileTab";
 import { SettingsNotificationsTab } from "./SettingsNotificationsTab";
 import { SettingsDataTab } from "./SettingsDataTab";
@@ -315,7 +297,7 @@ export function SettingsModal({
               />
             </TabsContent>
 
-            <TabsContent value="care-gauges" className=            <TabsContent value="care-gauges" className="mt-4 space-y-4">
+            <TabsContent value="care-gauges" className="mt-4 space-y-4">
               <SettingsCareGaugesTab
                 premiumGaugesEnabled={premiumGaugesEnabled}
                 events={app.events}
