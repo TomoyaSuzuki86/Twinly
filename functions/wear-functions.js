@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { readApp, writeApp, assertWritable } = require("./app-storage");
 const { onRequest } = require("firebase-functions/v2/https");
 const { parseVoiceTextWithRules, projectWearEvents } = require("./wear-parser");
+const { consumeWearDiaperStock, restoreWearDiaperStock } = require("./wear-stock");
 
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const geminiModel = process.env.GEMINI_MODEL || "gemini-3.6-flash";
@@ -111,28 +112,10 @@ module.exports = ({ admin, db, getAppRefForUid, logger }) => {
       };
   
       for (const event of events.filter((item) => item.type === "diaper")) {
-        if (nextAppState.diaperStockManagementEnabled === false) continue;
-        const profile = nextAppState.profiles?.[event.babyId];
-        const selectedSize = profile?.diaperSize;
-        const currentStock = selectedSize ? profile?.diaperStockBySize?.[selectedSize] ?? 0 : null;
-        if (selectedSize && currentStock !== null) {
-          event.diaperSizeUsed = selectedSize;
-          event.diaperStockConsumed = Math.min(1, Math.max(0, currentStock));
-          const nextProfiles = { ...nextAppState.profiles };
-          for (const id of ["A", "B"]) {
-            const currentProfile = nextProfiles[id];
-            if (!currentProfile) continue;
-            nextProfiles[id] = {
-              ...currentProfile,
-              diaperStockBySize: {
-                ...(currentProfile.diaperStockBySize || {}),
-                [selectedSize]: Math.max(0, currentStock - 1),
-              },
-            };
-          }
-          nextAppState.profiles = nextProfiles;
-        }
+        const projected = consumeWearDiaperStock(nextAppState, event);
+        nextAppState.profiles = projected.profiles;
       }
+
   
       writeApp(transaction, appRef, snap, nextAppState, events, [], admin.firestore.FieldValue, uid);
     });
@@ -162,28 +145,11 @@ module.exports = ({ admin, db, getAppRefForUid, logger }) => {
         ...appState,
         events: events.filter((event) => !targetIds.has(event.id)),
       };
-      const nextProfiles = { ...(nextAppState.profiles || {}) };
-  
       for (const event of deletingEvents.filter((item) => item.type === "diaper")) {
-        const profile = nextProfiles[event.babyId];
-        const selectedSize = event.diaperSizeUsed;
-        if (!selectedSize || !event.diaperStockConsumed) continue;
-        const currentStock = profile?.diaperStockBySize?.[selectedSize] ?? 0;
-  
-        for (const id of ["A", "B"]) {
-          const currentProfile = nextProfiles[id];
-          if (!currentProfile) continue;
-          nextProfiles[id] = {
-            ...currentProfile,
-            diaperStockBySize: {
-              ...(currentProfile.diaperStockBySize || {}),
-              [selectedSize]: currentStock + event.diaperStockConsumed,
-            },
-          };
-        }
+        const projected = restoreWearDiaperStock(nextAppState, event);
+        nextAppState.profiles = projected.profiles;
       }
-  
-      nextAppState.profiles = nextProfiles;
+
       deletedCount = deletingEvents.length;
   
       writeApp(transaction, appRef, snap, nextAppState, [], [...targetIds], admin.firestore.FieldValue, uid);
