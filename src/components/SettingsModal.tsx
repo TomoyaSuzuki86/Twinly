@@ -18,6 +18,7 @@ import { buildMilkGauge } from "@/lib/care-gauges";
 import { adjustSharedDiaperStock } from "@/lib/diaper-stock";
 import {
   applyGaugeProfiles,
+  BABY_DISPLAY_ORDER,
   copyGaugeSettings,
   gaugeProfileSnapshot,
   gaugeProfilesEqual,
