@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Crown, LogOut, UserRound, UsersRound } from "lucide-react";
-import type { User } from "firebase/auth";
 import * as DialogComponents from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ type AccountModalProps = {
   sharingEnabled?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: User;
+  accountEmail: string | null;
   family: FamilyInfo;
   member: FamilyMember;
   members: FamilyMember[];
@@ -28,7 +27,7 @@ export function AccountModal({
   sharingEnabled = false,
   open,
   onOpenChange,
-  user,
+  accountEmail,
   family,
   member,
   members,
@@ -176,7 +175,7 @@ export function AccountModal({
 
           <section className="space-y-3 rounded-xl border p-4">
             <p className="font-semibold">ログイン</p>
-            <p className="break-all text-sm text-muted-foreground">{user.email || "Googleアカウント"}</p>
+            <p className="break-all text-sm text-muted-foreground">{accountEmail || "Googleアカウント"}</p>
             <Button variant="outline" className="w-full" onClick={() => void onSignOut()}>
               <LogOut className="mr-2 h-4 w-4" />ログアウト
             </Button>
