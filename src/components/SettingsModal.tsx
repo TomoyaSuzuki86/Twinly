@@ -333,7 +333,10 @@ export function SettingsModal({
                 onRestoreSavedGaugeSettings={handleRestoreSavedGaugeSettings}
                 onSaveGaugeSettings={handleSaveGaugeSettings}
               />
-            </TabsContent>TabsContent value="notifications" className="mt-4 space-y-4">
+            </TabsContent>
+
+            {premiumGaugesEnabled ? (
+              <TabsContent value="notifications" className="mt-4 space-y-4">
                 <SettingsNotificationsTab
                   signedIn={signedIn}
                   webPushConfigured={webPushConfigured}
