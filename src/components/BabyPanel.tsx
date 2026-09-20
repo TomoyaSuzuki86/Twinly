@@ -35,6 +35,9 @@ import { formatSleepDuration } from "@/lib/sleep";
 import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
 import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
 
+const SLEEP_LONG_PRESS_MS = 550;
+const SLEEP_TRANSITION_FEEDBACK_MS = 2000;
+
 type BabyPanelProps = {
   profile: BabyProfile;
   events: LogEvent[];
@@ -192,7 +195,7 @@ export function BabyPanel({
     sleepLongPressTimerRef.current = window.setTimeout(() => {
       sleepLongPressTriggeredRef.current = true;
       onOpenSleepTimeEditor({ babyId, type: sleeping ? "wake" : "sleepStart" });
-    }, 550);
+    }, SLEEP_LONG_PRESS_MS);
   };
 
   useEffect(() => () => clearSleepLongPressTimer(), []);
@@ -336,12 +339,12 @@ export function BabyPanel({
           return;
         }
         const next = sleeping ? "wake" : "sleepStart";
-        sleepTransitionUntil.current = Date.now() + 2000;
+        sleepTransitionUntil.current = Date.now() + SLEEP_TRANSITION_FEEDBACK_MS;
         setSleepTransition(next);
         sleepTransitionTimer.current = setTimeout(() => {
           sleepTransitionUntil.current = 0;
           setSleepTransition(null);
-        }, 2000);
+        }, SLEEP_TRANSITION_FEEDBACK_MS);
         const saved = onAddEvent({
           babyId,
           type: next,
