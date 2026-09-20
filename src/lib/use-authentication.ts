@@ -11,6 +11,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth, ensureAuthPersistence, isFirebaseConfigured } from "@/firebase";
+import { TWINLY_WINDOW_EVENTS, type AndroidGoogleIdTokenDetail } from "./app-events";
 
 declare global {
   interface Window {
