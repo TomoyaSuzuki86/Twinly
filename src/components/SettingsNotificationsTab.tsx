@@ -1,4 +1,3 @@
-import type { User } from "firebase/auth";
 import { Button } from "./ui/button";
 import { DailySummaryEmailSettings } from "./DailySummaryEmailSettings";
 
@@ -9,7 +8,7 @@ export const shouldDisablePushEnable = (
 ) => pushBusy || pushSubscribed || !webPushConfigured;
 
 export function SettingsNotificationsTab({
-  user,
+  signedIn,
   webPushConfigured,
   pushPermission,
   pushSubscribed,
@@ -18,7 +17,7 @@ export function SettingsNotificationsTab({
   onDisablePushNotifications,
   onSignIn,
 }: {
-  user: User | null;
+  signedIn: boolean;
   webPushConfigured: boolean;
   pushPermission: NotificationPermission | "unsupported";
   pushSubscribed: boolean;
@@ -34,7 +33,7 @@ export function SettingsNotificationsTab({
           <h3 className="font-semibold">プッシュ通知</h3>
           <p className="mt-1 text-sm text-muted-foreground">この端末への育児リマインド通知を管理します。</p>
         </div>
-        {user ? (
+        {signedIn ? (
           !webPushConfigured ? (
             <p className="text-sm text-muted-foreground">
               通知用の公開鍵が未設定のため、この端末ではまだ通知を有効化できません。
@@ -77,7 +76,7 @@ export function SettingsNotificationsTab({
           <Button onClick={onSignIn}>ログイン画面を開く</Button>
         )}
       </div>
-      {user ? <DailySummaryEmailSettings /> : null}
+      {signedIn ? <DailySummaryEmailSettings /> : null}
     </>
   );
 }
