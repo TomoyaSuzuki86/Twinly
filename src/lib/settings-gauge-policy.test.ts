@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createInitialAppState } from "./app-state";
-import { copyGaugeSettings, gaugeProfilesEqual, setSleepGaugeMode } from "./settings-gauge-policy";
+import { buildCareGaugeSettingsModel, copyGaugeSettings, gaugeProfilesEqual, setSleepGaugeMode } from "./settings-gauge-policy";
 
 describe("settings gauge policy", () => {
   it("preserves custom values while switching to age mode and restores them", () => {
@@ -25,5 +25,18 @@ describe("settings gauge policy", () => {
     expect(copied.B.milkGaugeWindowHours).toBe(4);
     expect(copied.B.displayName).toBe("keep");
     expect(gaugeProfilesEqual(copied, { ...copied, B: { ...copied.B, displayName: "ignored" } })).toBe(true);
+  });
+  it("derives care gauge defaults outside the settings component", () => {
+    const app = createInitialAppState(new Date("2026-09-20T00:00:00+09:00"));
+    const model = buildCareGaugeSettingsModel({
+      babyId: "A",
+      profile: app.profiles.A,
+      displayProfile: app.profiles.A,
+      events: app.events,
+      now: new Date("2026-09-20T12:00:00+09:00"),
+    });
+    expect(model.milkWindowHours).toBe(3);
+    expect(model.diaperWindowMinutes).toBe(120);
+    expect(model.sleepUsesAgeDefaults).toBe(true);
   });
 });
