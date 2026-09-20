@@ -1,4 +1,6 @@
-import type { BabyId, BabyProfile } from "@/types";
+import type { BabyId, BabyProfile, LogEvent } from "@/types";
+import { buildMilkGauge } from "./care-gauges";
+import { getDefaultActivityLimitMinutes, getDefaultSleepTargetHours } from "./sleep";
 
 export type BabyProfiles = Record<BabyId, BabyProfile>;
 export const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
@@ -94,5 +96,44 @@ export const copyGaugeSettings = (
       ...profiles[targetBabyId],
       ...gaugeProfileSnapshot(profiles[sourceBabyId]),
     },
+  };
+};
+
+
+export const buildCareGaugeSettingsModel = ({
+  babyId,
+  profile,
+  displayProfile,
+  events,
+  now,
+}: {
+  babyId: BabyId;
+  profile: BabyProfile;
+  displayProfile: BabyProfile;
+  events: LogEvent[];
+  now: Date;
+}) => {
+  const calculatedMilkTarget = buildMilkGauge({
+    events,
+    babyId,
+    now,
+    windowHours: profile.milkGaugeWindowHours ?? 3,
+    targetMilkMlOverride: null,
+  })?.targetMilkMl;
+  const autoMilkTarget = calculatedMilkTarget ? Math.round(calculatedMilkTarget) : null;
+  const defaultActivityLimitMinutes = getDefaultActivityLimitMinutes(displayProfile.birthDate, now);
+  const defaultSleepTargetHours = getDefaultSleepTargetHours(displayProfile.birthDate, now);
+
+  return {
+    autoMilkTarget,
+    milkTarget: profile.milkTargetMlOverride ?? autoMilkTarget,
+    milkWindowHours: profile.milkGaugeWindowHours ?? 3,
+    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+    defaultActivityLimitMinutes,
+    defaultSleepTargetHours,
+    activityLimitMinutes: profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes,
+    sleepTargetHours: profile.sleepTargetHoursOverride ?? defaultSleepTargetHours,
+    sleepUsesAgeDefaults:
+      profile.activityLimitMinutesOverride == null && profile.sleepTargetHoursOverride == null,
   };
 };
