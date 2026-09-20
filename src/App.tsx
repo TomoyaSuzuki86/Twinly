@@ -25,6 +25,7 @@ import { SyncStatusOverlay } from "./components/SyncStatusOverlay";
 import { ComfortMiniPlayer, HeaderOverflowMenu } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
+import { WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX } from "./lib/appearance-preferences";
 import { AiTools } from "./components/AiTools";
 import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
@@ -783,7 +784,7 @@ export default function App() {
                   className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
                 >
                   <span className="block text-sm font-bold">左右2人表示</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">横幅1180px以上で2人を同時表示。狭い画面では自動で1人表示</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">横幅{WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX}px以上で2人を同時表示。狭い画面では自動で1人表示</span>
                 </button>
               </div>
             </section>
