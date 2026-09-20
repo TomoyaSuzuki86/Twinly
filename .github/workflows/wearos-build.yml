@@ -1,0 +1,31 @@
+name: Wear OS Build
+
+on:
+  pull_request:
+    branches:
+      - development
+      - master
+    paths:
+      - "wearos/**"
+      - ".github/workflows/wearos-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Build Wear and companion debug APKs
+        working-directory: wearos
+        run: ./gradlew :app:assembleDebug :mobile:assembleDebug --no-daemon
