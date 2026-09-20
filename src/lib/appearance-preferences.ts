@@ -1,5 +1,9 @@
 export type LayoutMode = "single" | "split";
 
+export const WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX = 1180;
+export const WIDE_SPLIT_LAYOUT_QUERY = `(min-width: ${WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX}px)`;
+// CSS media queries in theme-polish.css and primary-action-morph.css mirror this breakpoint.
+
 const LEGACY_THEME_ALIASES: Record<string, string> = {
   light: "milk",
   pink: "sakura",
