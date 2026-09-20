@@ -7,8 +7,6 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
-  FamilyInfo,
-  FamilyMember,
   FamilyRelationship,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
@@ -56,7 +54,6 @@ import {
   completeFamilyOnboarding,
   createFamilyInvite,
   joinFamilyWithInvite,
-  loadFamilySession,
   updateMemberProfile,
 } from "./lib/family";
 import { buildDashboardSelectors } from "./lib/dashboard-selectors";
@@ -132,10 +129,9 @@ export default function App() {
     familyMember,
     familyMembers,
     sessionError,
-    setFamily,
     setFamilyMember,
-    setFamilyMembers,
     handleAuthUserChanged: applyFamilySessionAuthChange,
+    activateFamilySession,
   } = useFamilySessionLifecycle({
     setApp,
     setActiveDate,
@@ -286,15 +282,9 @@ export default function App() {
       await completeFamilyOnboarding(profile);
     }
 
-    const session = await loadFamilySession(authUser);
-    if (!session) throw new Error("Family session was not created");
+    await activateFamilySession(authUser);
     window.localStorage.removeItem(FAMILY_INVITE_KEY);
     setPendingInviteToken("");
-    setFamily(session.family);
-    setFamilyMember(session.member);
-    setFamilyMembers([session.member]);
-    setAppLoading(true);
-    await ensureNotificationSettingsDocument(authUser);
   };
 
   const handleSaveMemberProfile = async (profile: {
