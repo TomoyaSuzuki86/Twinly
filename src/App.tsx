@@ -49,7 +49,6 @@ import { useAppStore } from "./data/use-app-store";
 import { readCachedAppState } from "./data/app-state-cache";
 import { updateSharedDiaperStock } from "./lib/event-mutations";
 import { type EventDraft } from "./lib/event-recording";
-import { RECENT_DAYS } from "./data/firestore-app-repository";
 import { detectHorizontalSwipe, SwipePoint } from "./lib/horizontal-swipe";
 import { createVoiceCommandBabyNames } from "./lib/voice-command";
 import { useScreenWakeLock } from "./lib/use-screen-wake-lock";
@@ -71,6 +70,7 @@ import { useAppClock } from "./lib/use-app-clock";
 import { useAppModalController } from "./lib/use-app-modal-controller";
 import { useEventOperations } from "./lib/use-event-operations";
 import { useBackupActions } from "./lib/use-backup-actions";
+import { shouldLoadCompleteHistory } from "./lib/history-loading-policy";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
 
 const createEmptyState = () => createInitialAppState(new Date());
@@ -224,8 +224,17 @@ export default function App() {
   });
   const tutorialAnchors = useTutorialAnchors();
 
-  const allHistory = chartModalOpen || dailyReportModalOpen || timelineModalOpen || Boolean(historyModal) || modal?.kind === "settings" ||
-    new Date(`${activeDate}T00:00:00`).getTime() < now.getTime() - (RECENT_DAYS - 4) * 86400000;
+  const allHistory = shouldLoadCompleteHistory({
+    activeDate,
+    now,
+    overlays: {
+      chartOpen: chartModalOpen,
+      dailyReportOpen: dailyReportModalOpen,
+      timelineOpen: timelineModalOpen,
+      historyOpen: Boolean(historyModal),
+      settingsOpen: modal?.kind === "settings",
+    },
+  });
   const { store, status: syncStatus, requestSync, hydrated: appHydrated } = useAppStore(
     authUser?.uid,
     sharedAccessBlocked ? undefined : family?.id,
