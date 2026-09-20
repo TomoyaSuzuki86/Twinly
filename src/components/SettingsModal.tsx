@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "./ui/label";
 import React, { useEffect, useState } from "react";
-import type { User } from "firebase/auth";
 import { AppState, BabyId, BabyProfile } from "@/types";
 import {
   Select,
@@ -42,7 +41,7 @@ type SettingsModalProps = {
   app: AppState;
   premiumGaugesEnabled?: boolean;
   setApp: (updater: AppState | ((prev: AppState) => AppState)) => void;
-  user: User | null;
+  signedIn: boolean;
   onSignIn: () => void | Promise<void>;
   pushPermission: NotificationPermission | "unsupported";
   pushSubscribed: boolean;
@@ -68,7 +67,7 @@ export function SettingsModal({
   app,
   premiumGaugesEnabled = false,
   setApp,
-  user,
+  signedIn,
   onSignIn,
   pushPermission,
   pushSubscribed,
@@ -336,7 +335,7 @@ export function SettingsModal({
               />
             </TabsContent>TabsContent value="notifications" className="mt-4 space-y-4">
                 <SettingsNotificationsTab
-                  user={user}
+                  signedIn={signedIn}
                   webPushConfigured={webPushConfigured}
                   pushPermission={pushPermission}
                   pushSubscribed={pushSubscribed}
