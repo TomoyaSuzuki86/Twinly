@@ -5,7 +5,10 @@ import {AiAdviceLauncher} from './AiAdviceLauncher';
 import {clearFamilyAccessState,publishFamilyAccessState} from '@/lib/family-access-state';
 
 const mock=vi.hoisted(()=>({service:vi.fn()}));
-vi.mock('@/lib/ai',()=>({callService:mock.service}));
+vi.mock('@/lib/ai',()=>({
+  requestAiReview:()=>mock.service('twinlyAi',{mode:'review'}),
+  requestAiQuestion:(question:string)=>mock.service('twinlyAi',{mode:'ask',question}),
+}));
 vi.mock('@/lib/family-access',()=>({setFamilyPreviewPlan:vi.fn()}));
 
 const premium={plan:'premium' as const,canPreview:true,features:{aiReview:true,aiChat:true,dailySummaryEmail:true}};
