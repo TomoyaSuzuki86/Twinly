@@ -33,6 +33,7 @@ import { EventCard } from "./EventCard";
 import { VoiceCommandButton } from "./VoiceCommandButton";
 import { formatSleepDuration } from "@/lib/sleep";
 import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
+import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
 
 type BabyPanelProps = {
   profile: BabyProfile;
@@ -109,62 +110,23 @@ export function BabyPanel({
   primaryActionMorph,
 }: BabyPanelProps) {
   const babyId = profile.babyId;
-  const [temperature, setTemperature] = useState("36.0");
-  const [weight, setWeight] = useState("");
-  const [height, setHeight] = useState("");
-  const [dailyNote, setDailyNote] = useState("");
   const [healthOpen, setHealthOpen] = useState(false);
+  const {
+    temperature,
+    setTemperature,
+    weight,
+    setWeight,
+    height,
+    setHeight,
+    dailyNote,
+    setDailyNote,
+    saveHealthRecord: handleSaveHealthRecord,
+    saveDailyNote: handleSaveDailyNote,
+  } = useBabyHealthInputs({ babyId, lastWeight, lastHeight, onAddEvent });
 
   useEffect(() => {
     setHealthOpen(false);
   }, [babyId]);
-
-  useEffect(() => {
-    setWeight(lastWeight ? lastWeight.toFixed(2) : "");
-  }, [lastWeight]);
-
-  useEffect(() => {
-    setHeight(lastHeight ? lastHeight.toFixed(1) : "");
-  }, [lastHeight]);
-
-  const handleSaveHealthRecord = (type: "temperature" | "weight" | "height") => {
-    if (type === "temperature" && temperature) {
-      onAddEvent({
-        babyId,
-        type: "temperature",
-        temperature: parseFloat(temperature),
-      });
-      setTemperature("36.0");
-    }
-
-    if (type === "weight" && weight) {
-      onAddEvent({
-        babyId,
-        type: "weight",
-        weight: parseFloat(weight),
-      });
-    }
-
-    if (type === "height" && height) {
-      onAddEvent({
-        babyId,
-        type: "height",
-        height: parseFloat(height),
-      });
-    }
-  };
-
-  const handleSaveDailyNote = () => {
-    const note = dailyNote.trim();
-    if (!note) return;
-
-    onAddEvent({
-      babyId,
-      type: "daily",
-      note,
-    });
-    setDailyNote("");
-  };
 
   const {
     milkTotal,
