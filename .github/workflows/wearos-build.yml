@@ -28,4 +28,6 @@ jobs:
 
       - name: Build Wear and companion debug APKs
         working-directory: wearos
-        run: ./gradlew :app:assembleDebug :mobile:assembleDebug --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug :mobile:assembleDebug --no-daemon
