@@ -73,6 +73,8 @@ self.addEventListener("push", (event) => {
     tag: payload.tag || "twinly-notification",
     data: {
       url: payload.url || "/",
+      careReminder: payload.careReminder || null,
+      careReminders: Array.isArray(payload.careReminders) ? payload.careReminders : [],
     },
   };
 

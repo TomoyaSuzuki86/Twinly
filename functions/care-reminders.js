@@ -162,6 +162,13 @@ const lineForCandidate = (candidate, nowMs) => {
 
 const kindPriority = { milk: 0, sleep: 1, diaper: 2 };
 
+const toCareReminderData = (candidate) => ({
+  babyId: candidate.babyId,
+  kind: candidate.kind,
+  eventId: candidate.eventId,
+  occurredAt: candidate.occurredAt,
+});
+
 const buildCareNotificationPayload = (group, nowMs = Date.now()) => {
   const visibleGroup = prioritizeNotificationGroup(group);
   if (!visibleGroup.length) return null;
@@ -176,8 +183,9 @@ const buildCareNotificationPayload = (group, nowMs = Date.now()) => {
     return {
       title: titleForCandidate(candidate),
       body: bodyForCandidate(candidate, nowMs),
-      tag: `care-reminder-${candidate.babyId}-${candidate.kind}-${candidate.eventId}`,
+      tag: `care-reminder-${candidate.babyId}-${candidate.kind}`,
       url: "/",
+      careReminder: toCareReminderData(candidate),
     };
   }
 
@@ -195,6 +203,7 @@ const buildCareNotificationPayload = (group, nowMs = Date.now()) => {
     body: ordered.map((candidate) => lineForCandidate(candidate, nowMs)).join("\n"),
     tag: `care-reminder-${ordered.map((candidate) => `${candidate.babyId}-${candidate.kind}`).join("-")}`,
     url: "/",
+    careReminders: ordered.map(toCareReminderData),
   };
 };
 

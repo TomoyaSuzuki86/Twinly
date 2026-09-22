@@ -26,6 +26,13 @@ test("milk reminder uses natural action-oriented copy", () => {
 
   assert.equal(payload.title, "奏汰、そろそろミルクの時間です");
   assert.equal(payload.body, "前回 09:00 ・ 3時間経過");
+  assert.equal(payload.tag, "care-reminder-A-milk");
+  assert.deepEqual(payload.careReminder, {
+    babyId: "A",
+    kind: "milk",
+    eventId: "event-1",
+    occurredAt: candidate().occurredAt,
+  });
 });
 
 test("diaper reminder uses check wording instead of gauge wording", () => {
@@ -41,6 +48,7 @@ test("diaper reminder uses check wording instead of gauge wording", () => {
 
   assert.equal(payload.title, "奏汰、そろそろおむつチェック");
   assert.equal(payload.body, "前回交換 09:00 ・ 2時間経過");
+  assert.equal(payload.tag, "care-reminder-A-diaper");
 });
 
 test("milk suppresses a simultaneous diaper notification for the same baby", () => {

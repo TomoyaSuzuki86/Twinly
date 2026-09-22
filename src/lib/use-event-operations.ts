@@ -4,6 +4,7 @@ import type { AppModal } from "./use-app-modal-controller";
 import { createEventRecordingController, isCareEventType } from "./event-recording-controller";
 import { editEventGroup, removeEventGroup, removeEvents } from "./event-mutations";
 import type { EventDraft } from "./event-recording";
+import { reconcileDisplayedCareNotifications } from "./care-notification-reconciler";
 import {
   expandVoiceCommandTargets,
   toVoiceLogPayload,
@@ -83,6 +84,10 @@ export const useEventOperations = ({
     },
     []
   );
+
+  useEffect(() => {
+    void reconcileDisplayedCareNotifications(app.events);
+  }, [app.events]);
 
   const {
     recordEventDrafts,
