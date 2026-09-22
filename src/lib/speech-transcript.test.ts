@@ -24,13 +24,28 @@ describe("speech transcript cumulative results", () => {
     ).toBe("ひなた ミルク飲み中 とてもニコニコしていて可愛い");
   });
 
+  it("collapses a long exact two-copy Android Chrome artifact", () => {
+    expect(
+      collapseRepeatedTranscriptPrefix("起きてすぐ ミルクを飲んでて 起きてすぐ ミルクを飲んでて")
+    ).toBe("起きてすぐ ミルクを飲んでて");
+  });
+
+  it("deduplicates an exact repeated result before appending a later continuation", () => {
+    expect(
+      mergeTranscriptSegments([
+        "起きてすぐ ミルクを飲んでて 起きてすぐ ミルクを飲んでて",
+        "結構グビグビ 飲んでるあと 手の動きが可愛い",
+      ])
+    ).toBe("起きてすぐ ミルクを飲んでて 結構グビグビ 飲んでるあと 手の動きが可愛い");
+  });
+
   it("keeps ordinary non-duplicated speech unchanged", () => {
     expect(collapseRepeatedTranscriptPrefix("ひなた ミルク飲み中 とてもニコニコしていて可愛い")).toBe(
       "ひなた ミルク飲み中 とてもニコニコしていて可愛い"
     );
   });
 
-  it("keeps an intentional exact phrase repetition", () => {
+  it("keeps an intentional short exact phrase repetition", () => {
     expect(collapseRepeatedTranscriptPrefix("とてもかわいい とてもかわいい")).toBe(
       "とてもかわいい とてもかわいい"
     );
