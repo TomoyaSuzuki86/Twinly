@@ -11,18 +11,23 @@ const rawOffsetForCompactIndex = (value: string, compactIndex: number) => {
   return value.length;
 };
 
+const LONG_EXACT_REPEAT_MIN_COMPACT_LENGTH = 10;
+
 export const collapseRepeatedTranscriptPrefix = (rawValue: string) => {
   const value = rawValue.trim().replace(/\s+/g, " ");
   const compact = compactText(value);
   if (compact.length < 12) return value;
 
-  // Android Chrome can occasionally return one alternative as
-  // "prefix + prefix + continuation". Prefer the second, more complete copy.
-  // Do not collapse an exact two-times repetition because that can be intentional speech.
+  // Android Chrome can occasionally return one alternative as either
+  // "prefix + prefix" or "prefix + prefix + continuation".
+  // Keep short exact repetitions because they are commonly intentional speech,
+  // but collapse long duplicated phrases because they are recognition artifacts.
   for (let prefixLength = Math.floor(compact.length / 2); prefixLength >= 6; prefixLength -= 1) {
     const prefix = compact.slice(0, prefixLength);
     if (!compact.slice(prefixLength).startsWith(prefix)) continue;
-    if (compact.length <= prefixLength * 2) continue;
+
+    const exactTwoCopies = compact.length === prefixLength * 2;
+    if (exactTwoCopies && prefixLength < LONG_EXACT_REPEAT_MIN_COMPACT_LENGTH) continue;
 
     const secondCopyOffset = rawOffsetForCompactIndex(value, prefixLength);
     const deduped = value.slice(secondCopyOffset).trim();
