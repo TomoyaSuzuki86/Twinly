@@ -35,7 +35,45 @@ export const isCareReminderResolved = (
   );
 };
 
-const getCareReminderMarkers = (notification: Notification): CareReminderMarker[] => {
+const LEGACY_GROUP_TAG =
+  /^care-reminder-(?:A|B)-(?:milk|diaper|sleep)-(?:A|B)-(?:milk|diaper|sleep)(?:-|$)/;
+const LEGACY_SINGLE_TAG = /^care-reminder-(A|B)-(milk|diaper|sleep)-(.+)$/;
+
+export const careReminderFromLegacyTag = (
+  tag: string,
+  events: LogEvent[]
+): CareReminderMarker | null => {
+  if (LEGACY_GROUP_TAG.test(tag)) return null;
+  const match = tag.match(LEGACY_SINGLE_TAG);
+  if (!match) return null;
+
+  const [, babyId, kind, eventId] = match as [
+    string,
+    BabyId,
+    CareReminderKind,
+    string,
+  ];
+  const sourceType = kind === "sleep" ? "wake" : kind;
+  const sourceEvent = events.find(
+    (event) =>
+      event.id === eventId &&
+      event.babyId === babyId &&
+      event.type === sourceType
+  );
+  if (!sourceEvent) return null;
+
+  return {
+    babyId,
+    kind,
+    eventId,
+    occurredAt: sourceEvent.timestamp,
+  };
+};
+
+const getCareReminderMarkers = (
+  notification: Notification,
+  events: LogEvent[]
+): CareReminderMarker[] => {
   const data = notification.data as
     | {
         careReminder?: unknown;
@@ -44,8 +82,13 @@ const getCareReminderMarkers = (notification: Notification): CareReminderMarker[
     | undefined;
 
   if (isCareReminderMarker(data?.careReminder)) return [data.careReminder];
-  if (!Array.isArray(data?.careReminders)) return [];
-  return data.careReminders.filter(isCareReminderMarker);
+  if (Array.isArray(data?.careReminders)) {
+    const reminders = data.careReminders.filter(isCareReminderMarker);
+    if (reminders.length > 0) return reminders;
+  }
+
+  const legacyReminder = careReminderFromLegacyTag(notification.tag, events);
+  return legacyReminder ? [legacyReminder] : [];
 };
 
 export const reconcileDisplayedCareNotifications = async (events: LogEvent[]) => {
@@ -56,7 +99,7 @@ export const reconcileDisplayedCareNotifications = async (events: LogEvent[]) =>
     const notifications = await registration.getNotifications();
 
     for (const notification of notifications) {
-      const reminders = getCareReminderMarkers(notification);
+      const reminders = getCareReminderMarkers(notification, events);
       if (reminders.length > 0 && reminders.every((reminder) => isCareReminderResolved(reminder, events))) {
         notification.close();
       }
