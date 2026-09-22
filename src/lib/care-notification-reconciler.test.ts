@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LogEvent } from "@/types";
 import {
+  careReminderFromLegacyTag,
   isCareReminderResolved,
   type CareReminderMarker,
 } from "./care-notification-reconciler";
@@ -39,6 +40,21 @@ describe("care notification reconciliation", () => {
     expect(isCareReminderResolved(reminder(), events)).toBe(true);
     expect(isCareReminderResolved(reminder({ babyId: "B" }), [event()])).toBe(false);
     expect(isCareReminderResolved(reminder({ kind: "diaper" }), [event()])).toBe(false);
+  });
+
+  it("recovers metadata from legacy single-reminder tags without misreading grouped tags", () => {
+    const source = event({ id: "legacy-event", timestamp: 1_500 });
+    expect(
+      careReminderFromLegacyTag("care-reminder-A-milk-legacy-event", [source])
+    ).toEqual({
+      babyId: "A",
+      kind: "milk",
+      eventId: "legacy-event",
+      occurredAt: 1_500,
+    });
+    expect(
+      careReminderFromLegacyTag("care-reminder-A-milk-B-diaper", [source])
+    ).toBeNull();
   });
 
   it("resolves a sleep reminder only when sleep starts after the wake that triggered it", () => {
