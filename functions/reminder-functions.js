@@ -1,5 +1,9 @@
 const { stockAlerts } = require("./stock-alerts");
-const { buildCareNotificationPayload, buildSleepReminderCandidate } = require("./care-reminders");
+const {
+  buildCareNotificationPayload,
+  buildSleepReminderCandidate,
+  prioritizeNotificationGroup,
+} = require("./care-reminders");
 const { resolveMilkWindowHours } = require("./milk-window-policy");
 const { readApp } = require("./app-storage");
 const webpush = require("web-push");
@@ -172,8 +176,13 @@ module.exports = ({ admin, db, familyAccess, getAppRefForUid, logger }) => {
   
       if (!devices.length) continue;
   
-      const payload = buildCareNotificationPayload(notificationGroup, nowMs);
-      const sent = await sendPushToDevices(uid, devices, payload);
+      const visibleNotificationGroup = prioritizeNotificationGroup(notificationGroup);
+      const deliveryResults = await Promise.all(
+        visibleNotificationGroup.map((candidate) =>
+          sendPushToDevices(uid, devices, buildCareNotificationPayload([candidate], nowMs))
+        )
+      );
+      const sent = deliveryResults.length > 0 && deliveryResults.every(Boolean);
   
       if (!sent) continue;
   
