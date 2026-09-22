@@ -20,12 +20,15 @@ export const useVoiceInteraction = (
   };
 
   const startVoiceInput = () => {
-    voiceButtonRef.current?.startListening();
+    voiceButtonRef.current?.startListening("both");
   };
 
   const startVoiceInputForBabyTab = (babyId: BabyId) => {
+    // Claim the baby-specific voice session synchronously. Deferring this by one
+    // event-loop turn allowed another targetless start to win first and lock the
+    // session to "both" in split layout.
+    voiceButtonRef.current?.startListening(babyId);
     setSelectedBabyTab(babyId);
-    window.setTimeout(() => voiceButtonRef.current?.startListening(babyId), 0);
   };
 
   const clearVoiceLongPress = () => {
