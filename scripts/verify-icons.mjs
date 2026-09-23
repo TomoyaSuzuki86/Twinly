@@ -61,7 +61,10 @@ function validatePng(path, expectedSize) {
 const icons = [
   ["icon-192-v5.png", 192],
   ["icon-512-v5.png", 512],
+  ["icon-192-maskable-v6.png", 192],
+  ["icon-512-maskable-v6.png", 512],
   ["apple-touch-icon-v5.png", 180],
+  ["apple-touch-icon-v6.png", 180],
   ["favicon-32-v5.png", 32],
 ];
 for (const [name, size] of icons) {
@@ -70,15 +73,25 @@ for (const [name, size] of icons) {
 
 const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
 assert(manifest.id === "/" && manifest.display === "standalone");
-for (const [name, size] of icons.slice(0, 2)) {
+for (const [name, size] of icons.filter(([name]) => /(?:icon-192-v5|icon-512-v5)\.png/.test(name))) {
   assert(manifest.icons.some((icon) =>
     icon.src === `/icons/${name}` &&
     icon.sizes === `${size}x${size}` &&
-    icon.type === "image/png"
+    icon.type === "image/png" &&
+    icon.purpose === "any"
   ), `Manifest is missing valid ${size}px PNG`);
+}
+for (const size of [192, 512]) {
+  const asset = `icon-${size}-maskable-v6.png`;
+  assert(manifest.icons.some((icon) =>
+    icon.src === `/icons/${asset}` &&
+    icon.sizes === `${size}x${size}` &&
+    icon.type === "image/png" &&
+    icon.purpose === "maskable"
+  ), `Missing ${size}px Android maskable PNG`);
 }
 const login = readFileSync("src/components/LoginScreen.tsx", "utf8");
 const html = readFileSync("index.html", "utf8");
 assert(login.includes("/icons/icon-192-v5.png"), "Login does not use verified icon");
-assert(html.includes("/icons/apple-touch-icon-v5.png"), "Missing iOS touch icon");
+assert(html.includes("/icons/apple-touch-icon-v6.png"), "Missing iOS touch icon");
 console.log("Manifest and UI icon references verified");

@@ -1,4 +1,4 @@
-const SHELL_CACHE = "twinly-shell-v10";
+const SHELL_CACHE = "twinly-shell-v11";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -7,7 +7,9 @@ self.addEventListener("install", (event) => {
         "/manifest.webmanifest",
         "/icons/icon-192-v5.png",
         "/icons/icon-512-v5.png",
-        "/icons/apple-touch-icon-v5.png",
+        "/icons/icon-192-maskable-v6.png",
+        "/icons/icon-512-maskable-v6.png",
+        "/icons/apple-touch-icon-v6.png",
         "/icons/favicon-32-v5.png"
       ])
     )
