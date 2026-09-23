@@ -36,7 +36,7 @@ export function LoginScreen({ onSendEmailLink, onGoogleSignIn }: LoginScreenProp
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 text-card-foreground shadow-xl sm:p-8">
         <div className="space-y-3 text-center">
           <img
-            src="/icons/icon-192-v5.png"
+            src="/icons/icon-512-v7.png"
             alt="Twinly"
             className="mx-auto h-24 w-24 rounded-2xl object-contain"
           />

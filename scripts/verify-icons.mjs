@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 
 const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
 
@@ -58,40 +59,45 @@ function validatePng(path, expectedSize) {
   console.log(`Verified ${path}: ${width}x${height}, decoded ${pixels.length} bytes`);
 }
 
-const icons = [
-  ["icon-192-v5.png", 192],
-  ["icon-512-v5.png", 512],
-  ["icon-192-maskable-v6.png", 192],
-  ["icon-512-maskable-v6.png", 512],
-  ["apple-touch-icon-v5.png", 180],
-  ["apple-touch-icon-v6.png", 180],
-  ["favicon-32-v5.png", 32],
-];
-for (const [name, size] of icons) {
-  validatePng(`public/icons/${name}`, size);
-}
 
+const expectedAssets = {
+  "icon-192-v7.png": [192, "e0b381dba4d732320bcc4bd37366a3216db159af6d486ed6716dcd099e8112a0"],
+  "icon-512-v7.png": [512, "8e00b56913c8fb339dbfc0cf306ed4f7b5341bbdcb2a3fb62d0d6ed4dfddd4f7"],
+  "icon-192-maskable-v7.png": [192, "e0b381dba4d732320bcc4bd37366a3216db159af6d486ed6716dcd099e8112a0"],
+  "icon-512-maskable-v7.png": [512, "8e00b56913c8fb339dbfc0cf306ed4f7b5341bbdcb2a3fb62d0d6ed4dfddd4f7"],
+  "apple-touch-icon-v7.png": [180, "517000bbcb5c6666f57c2132dc0bf342e086e6aa1813c2125476202060d5939b"],
+  "favicon-32-v7.png": [32, "d1e1a53c63b7e6455416ed2cd0e5f974ae69b1929955659415b7a1f3dfb3a835"],
+};
+const checksum = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
+assert.equal(checksum("public/icons/source-twinly-512-v7.webp"),
+  "ef228ee999c501d9e5091a5460f0484e92e256cd119eb9967f9dfadb981964bb",
+  "Unexpected or missing user-supplied high-quality source image");
+for (const [name, [size, hash]] of Object.entries(expectedAssets)) {
+  const path = `public/icons/${name}`;
+  validatePng(path, size);
+  assert.equal(checksum(path), hash, `Icon asset ${name} is not from the verified high-quality source`);
+}
 const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
-assert(manifest.id === "/" && manifest.display === "standalone");
-for (const [name, size] of icons.filter(([name]) => /(?:icon-192-v5|icon-512-v5)\.png/.test(name))) {
-  assert(manifest.icons.some((icon) =>
-    icon.src === `/icons/${name}` &&
-    icon.sizes === `${size}x${size}` &&
-    icon.type === "image/png" &&
-    icon.purpose === "any"
-  ), `Manifest is missing valid ${size}px PNG`);
-}
-for (const size of [192, 512]) {
-  const asset = `icon-${size}-maskable-v6.png`;
-  assert(manifest.icons.some((icon) =>
-    icon.src === `/icons/${asset}` &&
-    icon.sizes === `${size}x${size}` &&
-    icon.type === "image/png" &&
-    icon.purpose === "maskable"
-  ), `Missing ${size}px Android maskable PNG`);
-}
+assert.equal(manifest.id, "/");
+assert.equal(manifest.display, "standalone");
+const expectedManifestIcons = [
+  {src:"/icons/icon-192-v7.png",sizes:"192x192",type:"image/png",purpose:"any"},
+  {src:"/icons/icon-512-v7.png",sizes:"512x512",type:"image/png",purpose:"any"},
+  {src:"/icons/icon-192-maskable-v7.png",sizes:"192x192",type:"image/png",purpose:"maskable"},
+  {src:"/icons/icon-512-maskable-v7.png",sizes:"512x512",type:"image/png",purpose:"maskable"},
+];
+assert.deepEqual(manifest.icons, expectedManifestIcons, "Android install icon references changed");
 const login = readFileSync("src/components/LoginScreen.tsx", "utf8");
 const html = readFileSync("index.html", "utf8");
-assert(login.includes("/icons/icon-192-v5.png"), "Login does not use verified icon");
-assert(html.includes("/icons/apple-touch-icon-v6.png"), "Missing iOS touch icon");
-console.log("Manifest and UI icon references verified");
+const sw = readFileSync("public/sw.js", "utf8");
+assert(login.includes('src="/icons/icon-512-v7.png"'), "Login must use high-quality 512px icon");
+assert(html.includes('href="/icons/apple-touch-icon-v7.png"'), "Missing refreshed 180px iOS home-screen icon");
+assert(html.includes('href="/icons/favicon-32-v7.png"'), "Missing refreshed favicon");
+assert(sw.includes('const SHELL_CACHE = "twinly-shell-v12";'), "Old service-worker cache");
+for (const name of Object.keys(expectedAssets)) {
+  if (name === "apple-touch-icon-v7.png" || name === "favicon-32-v7.png" ||
+      name.startsWith("icon-")) {
+    assert(sw.includes(`/icons/${name}`), `Service worker references missing ${name}`);
+  }
+}
+console.log("Verified source integrity, PNG checksums, Android manifest, iOS icon, login and SW.");
