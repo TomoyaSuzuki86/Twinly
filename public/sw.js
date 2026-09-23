@@ -1,11 +1,14 @@
-const SHELL_CACHE = "twinly-shell-v9";
+const SHELL_CACHE = "twinly-shell-v10";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
         "/manifest.webmanifest",
-        "/icons/icon-192-v4.png"
+        "/icons/icon-192-v5.png",
+        "/icons/icon-512-v5.png",
+        "/icons/apple-touch-icon-v5.png",
+        "/icons/favicon-32-v5.png"
       ])
     )
   );
@@ -47,8 +50,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Install metadata changes on deploy; do not pin a previous manifest cache-first.
+  if (url.pathname === "/manifest.webmanifest") {
+    event.respondWith(
+      fetch(req, { cache: "no-store" }).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+        }
+        return response;
+      }).catch(async () => (await caches.match(req)) || new Response("", { status: 503 }))
+    );
+    return;
+  }
+
   // Do not cache authentication handlers, API responses, or arbitrary same-origin URLs.
-  if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/") && url.pathname !== "/manifest.webmanifest") return;
+  if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/")) return;
   event.respondWith(caches.match(req).then(async (cached) => {
     if (cached) return cached; // Hashed Vite assets are immutable.
     const response = await fetch(req);
@@ -67,8 +84,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Twinly";
   const options = {
     body: payload.body,
-    icon: "/icons/icon-192-v4.png",
-    badge: "/icons/icon-192-v4.png",
+    icon: "/icons/icon-192-v5.png",
+    badge: "/icons/icon-192-v5.png",
     tag: payload.tag || "twinly-notification",
     data: {
       url: payload.url || "/",
