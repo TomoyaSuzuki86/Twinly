@@ -18,15 +18,16 @@ describe("MilkModal sync regression", () => {
       <MilkModal open initialDraft={firstDraft} {...common} />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を10ml増やす" }));
-    expect(screen.getByText("60")).toBeTruthy();
+    fireEvent.change(screen.getByRole("slider", { name: "ミルク量スライダー" }), {
+      target: { value: "60" },
+    });
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("60");
 
     rerender(<MilkModal open initialDraft={synchronizedDraft} {...common} />);
-    expect(screen.getByText("60")).toBeTruthy();
-    expect(screen.queryByText("180")).toBeNull();
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("60");
 
     rerender(<MilkModal open={false} initialDraft={synchronizedDraft} {...common} />);
     rerender(<MilkModal open initialDraft={synchronizedDraft} {...common} />);
-    expect(screen.getByText("180")).toBeTruthy();
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("180");
   });
 });
