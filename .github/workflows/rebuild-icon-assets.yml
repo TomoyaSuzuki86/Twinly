@@ -1,0 +1,52 @@
+name: Rebuild Twinly icon binaries (temporary)
+on:
+  push:
+    branches:
+      - fix/validated-pwa-icons-20260923
+    paths:
+      - .github/workflows/rebuild-icon-assets.yml
+      - public/icons/icon-192-v5.png
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Pillow
+        run: python -m pip install Pillow==11.3.0
+      - name: Produce valid PNG raster icons and decode the pixels
+        run: |
+          python - <<'PY'
+          from PIL import Image, ImageOps
+          from pathlib import Path
+          import hashlib
+          root=Path('public/icons')
+          source=root/'icon-192-v5.png'
+          with Image.open(source) as im:
+              im.load()
+              assert im.size == (192, 192), im.size
+              assert im.mode in ('P','RGB','RGBA'), im.mode
+              src=im.convert('RGB')
+          for size in (512, 180, 32):
+              dest=(root/f'icon-{size}-v5.png')
+              src.resize((size,size),Image.Resampling.LANCZOS).save(dest,format='PNG',optimize=True)
+              with Image.open(dest) as check:
+                  check.load()
+                  assert check.format == 'PNG' and check.size == (size,size)
+              print(dest,size,hashlib.sha256(dest.read_bytes()).hexdigest(),flush=True)
+          PY
+      - name: Commit validated files to the review branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/icons/icon-512-v5.png public/icons/icon-180-v5.png public/icons/icon-32-v5.png
+          if ! git diff --cached --quiet; then
+            git commit -m "build: generate and decode-check complete raster PNG icons"
+            git push origin HEAD:fix/validated-pwa-icons-20260923
+          fi
