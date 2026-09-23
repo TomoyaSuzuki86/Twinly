@@ -1,11 +1,11 @@
-const SHELL_CACHE = "twinly-shell-v8";
+const SHELL_CACHE = "twinly-shell-v9";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
         "/manifest.webmanifest",
-        "/icons/icon-192-v3.webp"
+        "/icons/icon-192-v4.png"
       ])
     )
   );
@@ -67,8 +67,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Twinly";
   const options = {
     body: payload.body,
-    icon: "/icons/icon-192-v3.webp",
-    badge: "/icons/icon-192-v3.webp",
+    icon: "/icons/icon-192-v4.png",
+    badge: "/icons/icon-192-v4.png",
     tag: payload.tag || "twinly-notification",
     data: {
       url: payload.url || "/",
