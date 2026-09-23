@@ -35,7 +35,7 @@ describe("MilkModal", () => {
     });
   });
 
-  it("changes milk amount with -10, -5, +5, and +10ml buttons", () => {
+  it("changes milk amount with a 10ml-step slider", () => {
     render(
       <MilkModal
         open
@@ -50,20 +50,36 @@ describe("MilkModal", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "ミルク量を減らす" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "ミルク量を増やす" })).toBeNull();
+    const slider = screen.getByRole("slider", { name: "ミルク量スライダー" });
+    fireEvent.change(slider, { target: { value: "180" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を10ml減らす" }));
-    expect(screen.getByText("40")).toBeTruthy();
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("180");
+    expect((slider as HTMLInputElement).value).toBe("180");
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を5ml減らす" }));
-    expect(screen.getByText("35")).toBeTruthy();
+  it("allows direct numeric milk input and saves it", () => {
+    const onSave = vi.fn();
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を5ml増やす" }));
-    expect(screen.getByText("40")).toBeTruthy();
+    render(
+      <MilkModal
+        open
+        onOpenChange={vi.fn()}
+        displayName="赤ちゃんA"
+        initialDraft={{
+          milkMl: 50,
+          note: "",
+          timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+        }}
+        onSave={onSave}
+      />
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "ミルク量を10ml増やす" }));
-    expect(screen.getByText("50")).toBeTruthy();
+    const amountInput = screen.getByLabelText("ミルク量");
+    fireEvent.change(amountInput, { target: { value: "175" } });
+    expect((amountInput as HTMLInputElement).value).toBe("175");
+
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ milkMl: 175 }));
   });
 
   it("does not show bottle or breast choices", () => {
@@ -81,7 +97,7 @@ describe("MilkModal", () => {
       />
     );
 
-    expect(screen.getAllByText("50")[0]).toBeTruthy();
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("50");
     expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
     expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
   });

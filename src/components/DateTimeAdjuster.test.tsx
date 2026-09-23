@@ -17,4 +17,13 @@ describe("DateTimeAdjuster", () => {
     fireEvent.click(screen.getByRole("button", { name: "10分進める" }));
     expect(onChange).toHaveBeenLastCalledWith(value + 10 * 60 * 1000);
   });
+
+  it("shows explicit minute labels instead of arrow symbols", () => {
+    render(<DateTimeAdjuster id="datetime" value={Date.now()} onChange={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "30分戻す" }).textContent).toBe("-30分");
+    expect(screen.getByRole("button", { name: "10分戻す" }).textContent).toBe("-10分");
+    expect(screen.getByRole("button", { name: "10分進める" }).textContent).toBe("+10分");
+    expect(screen.getByRole("button", { name: "30分進める" }).textContent).toBe("+30分");
+  });
 });
