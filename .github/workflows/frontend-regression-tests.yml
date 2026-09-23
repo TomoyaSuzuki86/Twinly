@@ -7,6 +7,9 @@ on:
       - master
     paths:
       - "src/**"
+      - "public/**"
+      - "scripts/verify-icons.mjs"
+      - "index.html"
       - "functions/**"
       - "firestore.rules"
       - "tests/**"
