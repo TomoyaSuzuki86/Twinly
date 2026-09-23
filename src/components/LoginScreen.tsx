@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Baby, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,9 +35,11 @@ export function LoginScreen({ onSendEmailLink, onGoogleSignIn }: LoginScreenProp
     <div className="grid min-h-screen place-items-center p-4">
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card p-6 text-card-foreground shadow-xl sm:p-8">
         <div className="space-y-3 text-center">
-          <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500">
-            <Baby className="h-7 w-7 text-white" />
-          </div>
+          <img
+            src="/icons/icon-v2.svg"
+            alt="Twinly"
+            className="mx-auto h-24 w-24 rounded-2xl object-cover shadow-lg"
+          />
           <div>
             <h1 className="text-2xl font-extrabold">Twinly</h1>
             <p className="mt-1 text-sm text-muted-foreground">家族で育児記録を共有できます</p>
