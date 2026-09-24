@@ -589,7 +589,7 @@ export function BabyPanel({
                   <Input
                     value={customMemoEmoji}
                     onChange={(event) => setCustomMemoEmoji(event.target.value)}
-                    placeholder="🛁"
+                    placeholder="💀"
                     aria-label="カスタムメモの絵文字"
                     className="h-8 w-14 flex-none px-1 text-center text-lg"
                     maxLength={8}
