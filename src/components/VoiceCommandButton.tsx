@@ -142,16 +142,27 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     clearMaxListeningTimer();
   };
 
-  const resetSession = (sessionId?: number) => {
+  const resetSession = (
+    sessionId?: number,
+    options: { invalidate?: boolean; preserveSubmitted?: boolean } = {}
+  ) => {
     if (sessionId !== undefined && sessionId !== sessionIdRef.current) return;
+    if (options.invalidate) sessionIdRef.current += 1;
     clearTimers();
     setBabyTabVoiceHighlight(forcedBabyIdRef.current, false);
     recognitionRef.current = null;
     latestTranscriptsRef.current = [];
     forcedBabyIdRef.current = undefined;
     keepListeningRef.current = false;
-    submittedRef.current = false;
+    if (!options.preserveSubmitted) submittedRef.current = false;
     setListening(false);
+  };
+
+  const finishSubmittedSession = (sessionId: number) => {
+    // Chrome can emit a final onresult/onend after stop(). Invalidate this session
+    // before clearing its state, and keep the submitted guard armed until the next
+    // explicit startListening() call.
+    resetSession(sessionId, { invalidate: true, preserveSubmitted: true });
   };
 
   const submitLatestTranscript = (sessionId: number, stopRecognition = true) => {
@@ -169,7 +180,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
 
     if (onTranscript) {
       onTranscript(transcripts[0]);
-      resetSession(sessionId);
+      finishSubmittedSession(sessionId);
       return;
     }
     const parsed = selectVoiceCommandFromAlternatives(transcripts, {
@@ -180,12 +191,12 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
     });
     if (!parsed.ok) {
       const message = parseErrorMessage(parsed.reason);
-      resetSession(sessionId);
+      finishSubmittedSession(sessionId);
       onMessage(message);
       return;
     }
     onCommand(parsed.command);
-    resetSession(sessionId);
+    finishSubmittedSession(sessionId);
   };
 
   const scheduleSilenceSubmit = () => {
@@ -275,6 +286,7 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       };
       recognition.onresult = (event) => {
         if (sessionId !== sessionIdRef.current) return;
+        if (!keepListeningRef.current || submittedRef.current) return;
         const transcripts = collectBestTranscripts(event.results, event.resultIndex);
         if (!transcripts.length) return;
         latestTranscriptsRef.current = transcripts;

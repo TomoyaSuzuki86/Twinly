@@ -99,4 +99,63 @@ describe("VoiceCommandButton session target isolation", () => {
       })
     );
   });
+
+  it("ignores a late final result after submission and accepts the next explicit session", () => {
+    vi.useFakeTimers();
+    const ref = createRef<VoiceCommandButtonHandle>();
+    const onCommand = vi.fn();
+
+    render(
+      <VoiceCommandButton
+        ref={ref}
+        onCommand={onCommand}
+        onMessage={vi.fn()}
+      />
+    );
+
+    act(() => {
+      ref.current?.startListening("A");
+    });
+
+    const firstSession = MockSpeechRecognition.instances[0];
+
+    act(() => {
+      firstSession.onresult?.({ resultIndex: 0, results: speechResults("ミルク 120") });
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(onCommand).toHaveBeenCalledTimes(1);
+    expect(firstSession.stop).toHaveBeenCalledTimes(1);
+
+    // Android Chrome may deliver a final result/end callback after stop().
+    // Neither callback is allowed to submit the already-recorded command again.
+    act(() => {
+      firstSession.onresult?.({ resultIndex: 0, results: speechResults("ミルク 120") });
+      firstSession.onend?.();
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(onCommand).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      ref.current?.startListening("A");
+    });
+
+    expect(MockSpeechRecognition.instances).toHaveLength(2);
+    const secondSession = MockSpeechRecognition.instances[1];
+
+    act(() => {
+      secondSession.onresult?.({ resultIndex: 0, results: speechResults("ミルク 130") });
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(onCommand).toHaveBeenCalledTimes(2);
+    expect(onCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        babyId: "A",
+        type: "milk",
+        milkMl: 130,
+      })
+    );
+  });
 });
