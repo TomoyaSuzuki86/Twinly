@@ -27,7 +27,7 @@ export type StoreStatus = {
   conflicts?: SyncConflict[];
 };
 
-type SyncCheckReason = "start" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
+type SyncCheckReason = "start" | "manual" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
 type ConflictRecord = {
   id: string;
   mutation: AppMutation;
@@ -367,6 +367,13 @@ export class AppStore {
     this.stopped = false;
     this.connect("start");
     return () => this.stop();
+  }
+
+  async syncNow() {
+    if (this.stopped) return;
+    this.connect("manual");
+    const generation = this.connectionGeneration;
+    await this.recoverFromServer(generation);
   }
 
   private stop() {

@@ -93,11 +93,14 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       let seeds: LogEvent[] = [];
       let ready = false;
       let stateFromCache = true;
+      const eventSourcesFromCache = new Map<string, boolean>();
+      const compositeFromCache = () =>
+        stateFromCache || [...eventSourcesFromCache.values()].some(Boolean);
       const emit = () => {
         if (stopped || !ready) return;
         const byId = new Map([...seeds, ...recent].map((event) => [event.id, event]));
         onChange({ app: { ...current, events: [...byId.values()].sort((a, b) => b.timestamp - a.timestamp) },
-          fromCache: stateFromCache, completeHistory: allHistory });
+          fromCache: compositeFromCache(), completeHistory: allHistory });
       };
       const stopState = onSnapshot(stateRef, { includeMetadataChanges: true }, (snapshot) => {
         if (stopped) return;
@@ -116,8 +119,9 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         if (version === 2) { emit(); return; }
         version = 2;
         if (allHistory) {
-          stopEvents = onSnapshot(query(eventsRef, orderBy("timestamp", "desc")), (rows) => {
+          stopEvents = onSnapshot(query(eventsRef, orderBy("timestamp", "desc")), { includeMetadataChanges: true }, (rows) => {
             if (stopped) return;
+            eventSourcesFromCache.set("all-history", rows.metadata.fromCache);
             recent = rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent);
             ready = true;
             emit();
@@ -137,13 +141,15 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         for (const babyId of ["A", "B"] as const) for (const type of types) {
           const sourceKey = `${babyId}:${type}`;
           stops.push(onSnapshot(query(eventsRef, where("babyId", "==", babyId), where("type", "==", type),
-            where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)), (rows) => {
+            where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)), { includeMetadataChanges: true }, (rows) => {
+              eventSourcesFromCache.set(sourceKey, rows.metadata.fromCache);
               seedRows.set(sourceKey, rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
               finish();
             }, onError));
         }
         stops.push(onSnapshot(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")),
-          (rows) => {
+          { includeMetadataChanges: true }, (rows) => {
+            eventSourcesFromCache.set("recent-window", rows.metadata.fromCache);
             recent = rows.docs.map((item) => ({ ...item.data(), id: item.id }) as LogEvent);
             windowReady = true;
             finish();

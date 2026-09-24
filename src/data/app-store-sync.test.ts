@@ -182,6 +182,33 @@ describe("AppStore resilient synchronization", () => {
     }
   });
 
+  it("manual sync reads the server directly instead of relying on listener delivery", async () => {
+    const initial = createInitialAppState();
+    const remote = appendEvents(initial, [remoteMilk]);
+    const subscribe = vi.fn((next: (snapshot: AppSnapshot) => void) => {
+      next({ app: initial, fromCache: true, completeHistory: true });
+      return () => {};
+    });
+    const loadLatest = vi.fn(async () => remote);
+    const repository: AppRepository = {
+      subscribe,
+      commit: vi.fn(async (mutation) => mutation),
+      loadLatest,
+      loadAll: async () => remote,
+    };
+    const context = createStore(repository, initial);
+    const stop = context.store.start();
+
+    expect(context.view().events).toEqual([]);
+    await context.store.syncNow();
+
+    expect(loadLatest).toHaveBeenCalledTimes(1);
+    expect(context.view().events).toEqual([remoteMilk]);
+    expect(context.status().ready).toBe(true);
+    expect(context.status().fromCache).toBe(false);
+    stop();
+  });
+
   it("keeps diagnostics metadata-only", async () => {
     const initial = createInitialAppState();
     const repository: AppRepository = {
