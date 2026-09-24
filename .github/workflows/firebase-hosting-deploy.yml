@@ -189,6 +189,10 @@ jobs:
           fi
           npx --yes firebase-tools@latest deploy --only "$selector" --project twinly-prod --non-interactive
 
+      - name: Prune unused Firebase secret versions
+        if: steps.scope.outputs.functions == 'true' && steps.functions_deploy.outcome == 'success'
+        run: npx --yes firebase-tools@latest functions:secrets:prune --project twinly-prod --non-interactive --force
+
       - name: Deploy Firestore rules and indexes
         id: firestore_deploy
         if: steps.scope.outputs.rules == 'true'
