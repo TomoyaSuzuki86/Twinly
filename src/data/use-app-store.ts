@@ -127,8 +127,7 @@ export function useAppStore(userId: string | undefined, familyId: string | undef
   }, [userId, familyId, identity, effectiveAllHistory, cachedForIdentity, setApp, setLoading]);
 
   const requestSync = () => {
-    store.current?.recheck("pageshow");
-    void store.current?.flush();
+    void store.current?.syncNow();
   };
 
   const hydrated = Boolean(userId && familyId && (hydratedIdentity === identity || cachedForIdentity));
