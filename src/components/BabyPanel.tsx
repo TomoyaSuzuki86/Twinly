@@ -538,7 +538,15 @@ export function BabyPanel({
               >
                 <FileText className="h-4 w-4" />
               </Button>
-              <span className="flex-shrink-0 text-sm font-medium text-muted-foreground">一言メモ</span>
+              <button
+                type="button"
+                className="flex-shrink-0 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setCustomMemoOpen((open) => !open)}
+                aria-expanded={customMemoOpen}
+                aria-label="カスタムメモを開閉"
+              >
+                一言メモ
+              </button>
               <Input
                 type="text"
                 placeholder="ひとことメモ"
