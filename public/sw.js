@@ -1,26 +1,40 @@
-const SHELL_CACHE = "twinly-shell-v12";
+const SHELL_CACHE_VERSION = "twinly-shell-v13";
+const BUILD_CACHE_KEY = "dev";
+const SHELL_CACHE = `${SHELL_CACHE_VERSION}-${BUILD_CACHE_KEY}`;
+
+const STATIC_PRECACHE = [
+  "/manifest.webmanifest",
+  "/icons/icon-192-v7.png",
+  "/icons/icon-512-v7.png",
+  "/icons/icon-192-maskable-v7.png",
+  "/icons/icon-512-maskable-v7.png",
+  "/icons/apple-touch-icon-v7.png",
+  "/icons/favicon-32-v7.png",
+];
+
+const BUILD_ASSET_PRECACHE = [];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.addAll([
-        "/manifest.webmanifest",
-        "/icons/icon-192-v7.png",
-        "/icons/icon-512-v7.png",
-        "/icons/icon-192-maskable-v7.png",
-        "/icons/icon-512-maskable-v7.png",
-        "/icons/apple-touch-icon-v7.png",
-        "/icons/favicon-32-v7.png"
-      ])
-    )
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    // The app shell is mandatory for offline boot. Optional metadata/icons must
+    // never make the whole service-worker install fail.
+    await cache.addAll(BUILD_ASSET_PRECACHE);
+    await Promise.allSettled(STATIC_PRECACHE.map((url) => cache.add(url)));
+  })());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => (key === SHELL_CACHE ? null : caches.delete(key))))
+      Promise.all(
+        keys.map((key) =>
+          key.startsWith("twinly-shell-") && key !== SHELL_CACHE
+            ? caches.delete(key)
+            : null
+        )
+      )
     )
   );
   self.clients.claim();
@@ -36,23 +50,25 @@ self.addEventListener("fetch", (event) => {
 
   if (req.mode === "navigate") {
     event.respondWith((async () => {
+      const cached = (await caches.match(req, { ignoreSearch: true })) || (await caches.match("/index.html"));
+      if (!self.navigator?.onLine && cached) return cached;
       try {
-        // Always bypass the browser HTTP cache for app-shell navigation.
-        // Otherwise a cached index.html can keep pointing at an old JS bundle after deploy.
         const response = await fetch(req, { cache: "no-store" });
         if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
           const copy = response.clone();
-          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy)));
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => Promise.all([
+            cache.put("/", copy.clone()),
+            cache.put("/index.html", copy),
+          ])));
         }
         return response;
       } catch {
-        return (await caches.match("/index.html")) || new Response("通信状態を確認してください", { status: 503 });
+        return cached || new Response("通信状態を確認してください", { status: 503 });
       }
     })());
     return;
   }
 
-  // Install metadata changes on deploy; do not pin a previous manifest cache-first.
   if (url.pathname === "/manifest.webmanifest") {
     event.respondWith(
       fetch(req, { cache: "no-store" }).then((response) => {
@@ -66,22 +82,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Do not cache authentication handlers, API responses, or arbitrary same-origin URLs.
   if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/")) return;
-  event.respondWith(caches.match(req).then(async (cached) => {
-    if (cached) return cached; // Hashed Vite assets are immutable.
-    const response = await fetch(req);
-    if (response.ok && !response.headers.get("content-type")?.includes("text/html")) {
-      const copy = response.clone();
-      event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+  event.respondWith((async () => {
+    const cached = await caches.match(req);
+    if (cached) return cached;
+    try {
+      const response = await fetch(req);
+      if (response.ok && !response.headers.get("content-type")?.includes("text/html")) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+      }
+      return response;
+    } catch {
+      return new Response("", { status: 503 });
     }
-    return response;
-  }));
+  })());
 });
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
-
   const payload = event.data.json();
   const title = payload.title || "Twinly";
   const options = {
@@ -95,31 +114,22 @@ self.addEventListener("push", (event) => {
       careReminders: Array.isArray(payload.careReminders) ? payload.careReminders : [],
     },
   };
-
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || "/";
-
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
           client.focus();
-          if ("navigate" in client) {
-            return client.navigate(targetUrl);
-          }
+          if ("navigate" in client) return client.navigate(targetUrl);
           return client;
         }
       }
-
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
-
-      return undefined;
+      return self.clients.openWindow ? self.clients.openWindow(targetUrl) : undefined;
     })
   );
 });
