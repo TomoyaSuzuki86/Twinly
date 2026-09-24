@@ -4,7 +4,7 @@ import { createInitialAppState, toSharedAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
 import { createMutation, isCommitResult } from "./app-repository";
 
-const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }> }));
+const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }>, queryFromCache: false }));
 vi.mock("firebase/firestore", () => {
   const ref = (...parts: any[]) => ({ path: parts.map((part) => typeof part === "string" ? part : part.path || "").filter(Boolean).join("/") });
   const snapshot = (path: string) => ({ id: path.split("/").pop(), exists: () => memory.docs.has(path),
@@ -24,7 +24,7 @@ vi.mock("firebase/firestore", () => {
         path: reference.path,
         includeMetadataChanges: Boolean(hasOptions && options?.includeMetadataChanges),
       });
-      callback(reference.constraints ? { docs: [], metadata: { fromCache: false } } : snapshot(reference.path));
+      callback(reference.constraints ? { docs: [], metadata: { fromCache: memory.queryFromCache } } : snapshot(reference.path));
       return () => {};
     },
     runTransaction: async (_db: any, action: any) => {
@@ -48,7 +48,7 @@ const statePath = "families/family/app/state";
 const eventPath = "families/family/events/event";
 const record = { id: "event", babyId: "A" as const, type: "milk" as const, timestamp: Date.now(), milkMl: 120 };
 const repository = () => createFirestoreAppRepository({} as Firestore, "family", "user");
-beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; });
+beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; memory.queryFromCache = false; });
 
 describe("Firestore adapter contract", () => {
   it("writes just one event and receipt in v2 without rewriting shared state", async () => {
@@ -124,13 +124,23 @@ describe("Firestore adapter contract", () => {
   });
 
 
-  it("uses metadata changes only for the shared state listener", () => {
+  it("tracks metadata changes for every source that contributes to the visible snapshot", () => {
     memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
     repository().subscribe(() => {}, () => {});
 
-    const metadataSubscriptions = memory.subscriptions.filter((item) => item.includeMetadataChanges);
-    expect(metadataSubscriptions).toEqual([{ path: statePath, includeMetadataChanges: true }]);
     expect(memory.subscriptions).toHaveLength(16);
+    expect(memory.subscriptions.every((item) => item.includeMetadataChanges)).toBe(true);
+  });
+
+  it("keeps the combined snapshot cache-only while any event source is cache-only", () => {
+    memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
+    memory.queryFromCache = true;
+    const snapshots: Array<{ fromCache: boolean }> = [];
+
+    repository().subscribe((snapshot) => snapshots.push(snapshot), () => {});
+
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots[snapshots.length - 1].fromCache).toBe(true);
   });
 
   it("reconciles simultaneous consumption of the last diaper", async () => {
