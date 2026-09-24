@@ -11,6 +11,8 @@ import {
   Check,
   Ruler,
   FileText,
+  ListPlus,
+  Plus,
   CalendarRange,
   Utensils,
   Moon,
@@ -20,7 +22,7 @@ import { ReactNode, type Ref, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "./ui/input";
-import { BabyId, BabyProfile, LogEvent } from "@/types";
+import { BabyId, BabyProfile, CustomMemoPreset, LogEvent } from "@/types";
 import { DiaperStockEstimate } from "@/lib/diaper-stock";
 import { MilkProgressComparison } from "@/lib/milk-progress";
 import type { TutorialAnchorRefFactory } from "@/lib/tutorial-anchors";
@@ -36,6 +38,7 @@ import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
 import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
 
 const SLEEP_LONG_PRESS_MS = 550;
+const CUSTOM_MEMO_LONG_PRESS_MS = 550;
 const SLEEP_TRANSITION_FEEDBACK_MS = 2000;
 
 type BabyPanelProps = {
@@ -48,6 +51,9 @@ type BabyPanelProps = {
   now: Date;
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
+  customMemoPresets?: CustomMemoPreset[];
+  onAddCustomMemoPreset?: (emoji: string, text: string) => CustomMemoPreset | null;
+  onDeleteCustomMemoPreset?: (id: string) => void;
   gaugesEnabled?: boolean;
   stockForecastEnabled?: boolean;
   lowStock: { size: string; remaining: number } | null;
@@ -92,6 +98,9 @@ export function BabyPanel({
   now,
   diaperStockManagementEnabled,
   sleepManagementEnabled,
+  customMemoPresets = [],
+  onAddCustomMemoPreset = () => null,
+  onDeleteCustomMemoPreset = () => {},
   gaugesEnabled = true,
   stockForecastEnabled = true,
   lowStock,
@@ -114,6 +123,9 @@ export function BabyPanel({
 }: BabyPanelProps) {
   const babyId = profile.babyId;
   const [healthOpen, setHealthOpen] = useState(false);
+  const [customMemoOpen, setCustomMemoOpen] = useState(false);
+  const [customMemoEmoji, setCustomMemoEmoji] = useState("");
+  const [customMemoText, setCustomMemoText] = useState("");
   const {
     temperature,
     setTemperature,
@@ -129,6 +141,9 @@ export function BabyPanel({
 
   useEffect(() => {
     setHealthOpen(false);
+    setCustomMemoOpen(false);
+    setCustomMemoEmoji("");
+    setCustomMemoText("");
   }, [babyId]);
 
   const {
@@ -200,6 +215,50 @@ export function BabyPanel({
   };
 
   useEffect(() => () => clearSleepLongPressTimer(), []);
+
+  const customMemoLongPressTimerRef = useRef<number | null>(null);
+  const customMemoLongPressTriggeredRef = useRef(false);
+
+  const clearCustomMemoLongPressTimer = () => {
+    if (customMemoLongPressTimerRef.current !== null) {
+      window.clearTimeout(customMemoLongPressTimerRef.current);
+      customMemoLongPressTimerRef.current = null;
+    }
+  };
+
+  const recordCustomMemo = (preset: CustomMemoPreset) =>
+    onAddEvent({
+      babyId,
+      type: "daily",
+      note: preset.text,
+      customMemoId: preset.id,
+      customMemoEmoji: preset.emoji,
+    });
+
+  const createAndRecordCustomMemo = () => {
+    const emoji = customMemoEmoji.trim();
+    const text = customMemoText.trim();
+    if (!emoji || !text) return;
+    const preset = onAddCustomMemoPreset(emoji, text);
+    if (!preset) return;
+    recordCustomMemo(preset);
+    setCustomMemoEmoji("");
+    setCustomMemoText("");
+  };
+
+  const startCustomMemoLongPress = (preset: CustomMemoPreset) => {
+    clearCustomMemoLongPressTimer();
+    customMemoLongPressTriggeredRef.current = false;
+    customMemoLongPressTimerRef.current = window.setTimeout(() => {
+      customMemoLongPressTimerRef.current = null;
+      customMemoLongPressTriggeredRef.current = true;
+      if (window.confirm(`「${preset.emoji} ${preset.text}」を削除しますか？`)) {
+        onDeleteCustomMemoPreset(preset.id);
+      }
+    }, CUSTOM_MEMO_LONG_PRESS_MS);
+  };
+
+  useEffect(() => () => clearCustomMemoLongPressTimer(), []);
 
   const primaryActionBoundsRef = useRef<HTMLDivElement | null>(null);
   const milkButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -468,76 +527,172 @@ export function BabyPanel({
         ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2 sm:col-span-2">
-            <div className="flex flex-shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
-              <FileText className="h-4 w-4" />
-              <span>{"\u4e00\u8a00\u30e1\u30e2"}</span>
-            </div>
-            <Input
-              type="text"
-              placeholder={"\u3072\u3068\u3053\u3068\u30e1\u30e2"}
-              value={dailyNote}
-              onChange={(e) => setDailyNote(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveDailyNote();
-              }}
-              className="h-7 flex-1 px-2 text-sm"
-            />
-            {dailyNote.trim() ? (
-              <Button
-                size="icon"
-                className="h-7 w-7 flex-shrink-0"
-                onClick={handleSaveDailyNote}
-                aria-label="一言メモを保存"
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-            ) : (
-              <VoiceCommandButton
-                className="h-7 w-7 flex-shrink-0"
-                onCommand={() => {}}
-                onMessage={onVoiceMessage}
-                onTranscript={(text) => {
-                  const note = text.trim();
-                  if (!note) return;
-                  onAddEvent({
-                    babyId,
-                    type: "daily",
-                    note,
-                  });
-                  setDailyNote("");
-                }}
-              />
-            )}
-            <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={onOpenDailyReport} aria-label="show daily reports">
-              <FileText className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <div className="overflow-hidden rounded-lg border bg-card/70 sm:col-span-2">
+          <div
+            ref={tutorialAnchorRef?.(`memo:${babyId}`)}
+            className="overflow-hidden rounded-lg border bg-card sm:col-span-2"
+          >
             <div className="flex items-center gap-2 p-2">
               <Button
                 variant="ghost"
-                className="h-7 min-w-0 flex-1 justify-start px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                size="icon"
+                className="h-7 w-7 flex-shrink-0"
+                onClick={onOpenDailyReport}
+                aria-label="メモ一覧を開く"
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+              <button
+                type="button"
+                className="flex-shrink-0 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setCustomMemoOpen((open) => !open)}
+                aria-expanded={customMemoOpen}
+                aria-label="カスタムメモを開閉"
+              >
+                一言メモ
+              </button>
+              <Input
+                type="text"
+                placeholder="ひとことメモ"
+                value={dailyNote}
+                onChange={(e) => setDailyNote(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveDailyNote();
+                }}
+                className="h-7 min-w-0 flex-1 px-2 text-sm"
+              />
+              {dailyNote.trim() ? (
+                <Button
+                  size="icon"
+                  className="h-7 w-7 flex-shrink-0"
+                  onClick={handleSaveDailyNote}
+                  aria-label="一言メモを保存"
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              ) : (
+                <VoiceCommandButton
+                  className="h-7 w-7 flex-shrink-0"
+                  onCommand={() => {}}
+                  onMessage={onVoiceMessage}
+                  onTranscript={(text) => {
+                    const note = text.trim();
+                    if (!note) return;
+                    onAddEvent({ babyId, type: "daily", note });
+                    setDailyNote("");
+                  }}
+                />
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 flex-shrink-0"
+                onClick={() => setCustomMemoOpen((open) => !open)}
+                aria-expanded={customMemoOpen}
+                aria-label="カスタムメモを開閉"
+              >
+                <ListPlus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {customMemoOpen ? (
+              <div className="space-y-2 border-t bg-background/20 p-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={customMemoEmoji}
+                    onChange={(event) => setCustomMemoEmoji(event.target.value)}
+                    placeholder="🙂"
+                    aria-label="カスタムメモの絵文字"
+                    className="h-8 w-14 flex-none px-1 text-center text-lg placeholder:opacity-30"
+                    maxLength={8}
+                  />
+                  <Input
+                    value={customMemoText}
+                    onChange={(event) => setCustomMemoText(event.target.value)}
+                    placeholder="沐浴、散歩など"
+                    aria-label="カスタムメモの内容"
+                    className="h-8 min-w-0 flex-1"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") createAndRecordCustomMemo();
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    className="h-8 w-8 flex-none"
+                    disabled={!customMemoEmoji.trim() || !customMemoText.trim()}
+                    onClick={createAndRecordCustomMemo}
+                    aria-label="カスタムメモを追加"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {customMemoPresets.length ? (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {customMemoPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className="flex select-none items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/50 [-webkit-touch-callout:none]"
+                        onPointerDown={() => startCustomMemoLongPress(preset)}
+                        onPointerUp={clearCustomMemoLongPressTimer}
+                        onPointerLeave={clearCustomMemoLongPressTimer}
+                        onPointerCancel={clearCustomMemoLongPressTimer}
+                        onContextMenu={(event) => event.preventDefault()}
+                        onClick={() => {
+                          if (customMemoLongPressTriggeredRef.current) {
+                            customMemoLongPressTriggeredRef.current = false;
+                            return;
+                          }
+                          recordCustomMemo(preset);
+                        }}
+                        aria-label={`${preset.text}を記録・長押しで削除`}
+                      >
+                        <span aria-hidden="true" className="text-base leading-none">{preset.emoji}</span>
+                        <span>{preset.text}</span>
+                      </button>
+                      ))}
+                    </div>
+                    <p className="px-1 text-[10px] leading-none text-muted-foreground/70">
+                      長押しで削除
+                    </p>
+                  </>
+                ) : (
+                  <p className="px-1 text-xs text-muted-foreground">よく使うルーティンを追加すると、ここから1タップで記録できます。</p>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="overflow-hidden rounded-lg border bg-card/70 sm:col-span-2">
+            <div className="flex items-center gap-1 p-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 flex-shrink-0"
+                onClick={onOpenHealthChart}
+                aria-label="からだの記録グラフを開く"
+              >
+                <Ruler className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-7 min-w-0 flex-1 justify-start px-1 text-muted-foreground hover:bg-transparent hover:text-foreground"
                 onClick={() => setHealthOpen((open) => !open)}
                 aria-expanded={healthOpen}
                 aria-label="からだの記録を開閉"
               >
-                <Thermometer className="h-4 w-4" />
-                <span className="text-sm font-semibold">{"\u304b\u3089\u3060\u306e\u8a18\u9332"}</span>
-                {healthOpen ? <ChevronDown className="ml-auto h-4 w-4" /> : <ChevronRight className="ml-auto h-4 w-4" />}
+                <span className="text-sm font-semibold">からだの記録</span>
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 flex-shrink-0"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenHealthChart();
-                }}
-                aria-label="show chart"
+                className="ml-auto h-7 w-7 flex-shrink-0"
+                onClick={() => setHealthOpen((open) => !open)}
+                aria-expanded={healthOpen}
+                aria-label="からだの記録を開閉"
               >
-                <Ruler className="h-4 w-4" />
+                {healthOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
             </div>
 

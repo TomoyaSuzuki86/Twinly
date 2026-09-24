@@ -27,7 +27,7 @@ type Props = {
 type Rect = { top: number; left: number; width: number; height: number };
 type SleepType = "sleepStart" | "wake";
 
-const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 8, 10, 11];
+const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11];
 const TOTAL_STEPS = tutorialSteps.length;
 const scrollTargetIntoView = new Set([1, 7, 8, 9]);
 const voiceSteps = new Set([4, 5]);
@@ -406,7 +406,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "この子だけに、声で入力",
     "ヘッダーから、2人へまとめて入力",
     "声では、いろいろな記録ができます",
-    "記録は、あとから直せます",
+    "よく使う記録は、1タップに",
     "ログ下の集計を、すぐ確認",
     "タイムラインで、1週間を見渡す",
     "もっと便利に使いたいときは",
@@ -421,7 +421,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "赤ちゃんの名前タブを長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。選択中の赤ちゃん1人だけに入る結果を画面上で確認しますが、実際のログには保存しません。",
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。ヘッダーから始めた音声入力は常に2人が対象です。話の中に赤ちゃんの名前が入っていても振り分けには使いません。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応します。一言メモ欄は空のときマイクになり、話した内容が入るとチェックの保存ボタンに変わります。ヘッダーで普通の文章を話した場合は、2人の共通メモとして残せます。",
-    "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。",
+    "「一言メモ」をタップすると、よく使う記録を絵文字＋名前で登録できます。追加時はそのまま今回の記録にも保存。次回からは1タップ、削除は長押しです。",
     "ログ見出しのすぐ下には、その日の食事・おむつ・睡眠の集計カードがあります。横にスワイプして3項目を見比べられ、各カードをタップすると詳しい履歴を開けます。",
     "タイムラインでは、1週間のミルク・離乳食・おむつ・睡眠を24時間軸でまとめて確認できます。生活リズムをざっと振り返りたいときに便利です。",
     "Twinlyには、画面テーマの追加やAIアドバイスなどの有料機能もあります。必要になったときに試せる程度に覚えておけば大丈夫です。",
@@ -447,6 +447,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
   const spotlightLabel =
     step === 4 ? "選択中の赤ちゃんの音声入力を練習" :
     step === 5 ? "2人同時の音声入力を練習" :
+    step === 7 ? "カスタムメモ" :
     step === 8 ? "食事・おむつ・睡眠の集計" :
     step === 9 ? "週間タイムラインを開くボタン" :
     step === 11 ? "設定を開く" :
@@ -670,11 +671,16 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
                 </div>)}
               </div>}
 
-              {step === 7 && <p className="mt-4 rounded-xl bg-muted p-3 text-sm leading-relaxed">
-                1人だけ音声入力 → 名前タブ<br />
-                2人同時に音声入力 → 上のTwinly<br />
-                間違えたら → 直後は「取り消す」、あとからはログを開く
-              </p>}
+              {step === 7 && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border bg-muted/40 px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" className="text-lg leading-none">🙂</span>
+                  <span className="truncate text-sm font-semibold">沐浴</span>
+                </div>
+                <div className="flex-none text-right text-[10px] leading-tight text-muted-foreground">
+                  <div>タップで記録</div>
+                  <div>長押しで削除</div>
+                </div>
+              </div>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">

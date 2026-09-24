@@ -133,7 +133,7 @@ describe("WeeklyTimelineModal", () => {
     expect(screen.getByLabelText("奏汰のミルク 09:00")).toBeTruthy();
   });
 
-  it("keeps two grouped lanes with fixed subtype positions regardless of event order", () => {
+  it("keeps three grouped lanes with fixed subtype positions regardless of event order", () => {
     const timestamp = new Date("2026-07-29T09:00:00+09:00").getTime();
     const overlappingEvents: LogEvent[] = [
       {
@@ -165,6 +165,15 @@ describe("WeeklyTimelineModal", () => {
         note: "10倍がゆ",
         timestamp,
       },
+      {
+        id: "custom-memo",
+        babyId: "A",
+        type: "daily",
+        note: "🛁 沐浴",
+        customMemoId: "bath",
+        customMemoEmoji: "🛁",
+        timestamp,
+      },
     ];
 
     render(
@@ -179,10 +188,11 @@ describe("WeeklyTimelineModal", () => {
       />
     );
 
-    expect(screen.getByLabelText("奏汰のミルク 09:00").style.left).toBe("20%");
-    expect(screen.getByLabelText("奏汰の離乳食 09:00").style.left).toBe("30%");
-    expect(screen.getByLabelText("奏汰のおしっこ 09:00").style.left).toBe("70%");
-    expect(screen.getByLabelText("奏汰のうんち 09:00").style.left).toBe("80%");
+    expect(screen.getByLabelText("奏汰のミルク 09:00").style.left).toBe("11.111%");
+    expect(screen.getByLabelText("奏汰の離乳食 09:00").style.left).toBe("22.222%");
+    expect(screen.getByLabelText("奏汰のおしっこ 09:00").style.left).toBe("44.444%");
+    expect(screen.getByLabelText("奏汰のうんち 09:00").style.left).toBe("55.556%");
+    expect(screen.getByLabelText("奏汰の🛁 沐浴 09:00").style.left).toBe("83.333%");
   });
 
   it("keeps a lone poop marker in the poop lane", () => {
@@ -207,7 +217,7 @@ describe("WeeklyTimelineModal", () => {
     );
 
     const poop = screen.getByLabelText("奏汰のうんち 15:00");
-    expect(poop.style.left).toBe("80%");
+    expect(poop.style.left).toBe("55.556%");
     expect(poop.style.clipPath).toContain("polygon");
   });
 

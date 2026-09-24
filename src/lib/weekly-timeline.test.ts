@@ -41,6 +41,22 @@ describe("weekly timeline", () => {
       event("b", "2026-07-28T10:30:00+09:00", "B", "diaper"),
       event("a", "2026-07-28T09:00:00+09:00", "A"),
       event("food", "2026-07-28T10:00:00+09:00", "A", "solidFood"),
+      {
+        id: "custom",
+        babyId: "A",
+        type: "daily",
+        timestamp: new Date("2026-07-28T10:15:00+09:00").getTime(),
+        note: "🛁 沐浴",
+        customMemoId: "bath",
+        customMemoEmoji: "🛁",
+      },
+      {
+        id: "plain-note",
+        babyId: "A",
+        type: "daily",
+        timestamp: new Date("2026-07-28T10:20:00+09:00").getTime(),
+        note: "普通のメモ",
+      },
       event("health", "2026-07-28T08:00:00+09:00", "A", "weight"),
       event("outside", "2026-07-20T09:00:00+09:00", "A"),
     ];
@@ -49,7 +65,7 @@ describe("weekly timeline", () => {
     const tuesday = days.find((day) => day.key === "2026-07-28");
 
     expect(days).toHaveLength(7);
-    expect(tuesday?.events.map((item) => item.id)).toEqual(["a", "food", "b"]);
-    expect(days.flatMap((day) => day.events)).toHaveLength(3);
+    expect(tuesday?.events.map((item) => item.id)).toEqual(["a", "food", "custom", "b"]);
+    expect(days.flatMap((day) => day.events)).toHaveLength(4);
   });
 });

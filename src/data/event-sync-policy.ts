@@ -13,6 +13,8 @@ export const USER_EVENT_FIELDS: readonly (keyof LogEvent)[] = [
   "weight",
   "height",
   "note",
+  "customMemoId",
+  "customMemoEmoji",
 ];
 
 const setEventValue = (event: LogEvent, field: keyof LogEvent, value: unknown) => {

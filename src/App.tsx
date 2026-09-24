@@ -7,7 +7,9 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
+  CustomMemoPreset,
   FamilyRelationship,
+  LogEvent,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
@@ -270,6 +272,50 @@ export default function App() {
 
   const onUpdateDiaperStock = (babyId: BabyId, size: string, stock: number) => {
     updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
+  };
+
+  const handleAddCustomMemoPreset = (emoji: string, text: string): CustomMemoPreset | null => {
+    const normalizedEmoji = emoji.trim();
+    const normalizedText = text.trim();
+    if (!normalizedEmoji || !normalizedText) return null;
+    const preset: CustomMemoPreset = {
+      id: uid(),
+      emoji: normalizedEmoji,
+      text: normalizedText,
+    };
+    if (!updateApp((previous) => ({
+      ...previous,
+      customMemoPresets: [preset, ...previous.customMemoPresets],
+    }))) return null;
+    return preset;
+  };
+
+  const handleDeleteCustomMemoPreset = (id: string) => {
+    updateApp((previous) => ({
+      ...previous,
+      customMemoPresets: previous.customMemoPresets.filter((preset) => preset.id !== id),
+    }));
+  };
+
+  const handleCopyCustomMemoToTwin = (
+    event: LogEvent,
+    payload: { note: string; timestamp: number }
+  ) => {
+    if (event.type !== "daily" || (!event.customMemoId && !event.customMemoEmoji)) return false;
+    const targetBabyId: BabyId = event.babyId === "A" ? "B" : "A";
+    return recordEventDrafts([
+      {
+        babyId: targetBabyId,
+        type: "daily",
+        payload: {
+          note: payload.note,
+          timestamp: payload.timestamp,
+          customMemoId: event.customMemoId,
+          customMemoEmoji: event.customMemoEmoji,
+        },
+        autoWake: false,
+      },
+    ]);
   };
 
   const handleProfileSetup = async (profile: {
@@ -586,6 +632,9 @@ export default function App() {
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
+                customMemoPresets={app.customMemoPresets}
+                onAddCustomMemoPreset={handleAddCustomMemoPreset}
+                onDeleteCustomMemoPreset={handleDeleteCustomMemoPreset}
                 lowStock={dashboard.A.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
@@ -630,6 +679,9 @@ export default function App() {
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
+                customMemoPresets={app.customMemoPresets}
+                onAddCustomMemoPreset={handleAddCustomMemoPreset}
+                onDeleteCustomMemoPreset={handleDeleteCustomMemoPreset}
                 lowStock={dashboard.B.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
@@ -825,6 +877,7 @@ export default function App() {
         memberNameByUid={memberNameByUid}
         onSave={onSaveEdit}
         onDelete={removeEvent}
+        onCopyCustomMemoToTwin={handleCopyCustomMemoToTwin}
       />
       <Suspense fallback={<div role="status" className="fixed bottom-4 left-4 rounded border bg-background p-3">読み込み中…</div>}>
       {chartModalOpen && <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />}
