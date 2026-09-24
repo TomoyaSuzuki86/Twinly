@@ -9,6 +9,7 @@ import {
   BabyId,
   CustomMemoPreset,
   FamilyRelationship,
+  LogEvent,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
 import { MilkModal } from "./components/MilkModal";
