@@ -10,6 +10,7 @@ export type TutorialAnchorKey =
   | `primary:${BabyId}:diaper`
   | `primary:${BabyId}:sleep`
   | `logs:${BabyId}`
+  | `memo:${BabyId}`
   | `log-summary:${BabyId}`
   | `timeline:${BabyId}`;
 
@@ -41,7 +42,7 @@ export const resolveTutorialTargetKeys = (step: number, activeBabyId: BabyId): T
     case 6:
       return ["header"];
     case 7:
-      return [`logs:${activeBabyId}`];
+      return [`memo:${activeBabyId}`];
     case 8:
       return [`log-summary:${activeBabyId}`];
     case 9:
