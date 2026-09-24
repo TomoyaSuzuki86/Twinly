@@ -21,25 +21,37 @@ const BUILD_ASSET_PRECACHE = [];
 const PRECACHE_URLS = [...new Set([...STATIC_PRECACHE, ...BUILD_ASSET_PRECACHE])];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    const results = await Promise.allSettled(
+      PRECACHE_URLS.map((url) => cache.add(url))
+    );
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed) console.warn(`Twinly precache missed ${failed} asset(s); runtime cache will backfill them.`);
+  })());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.map((key) =>
-          key.startsWith("twinly-shell-") && key !== SHELL_CACHE
-            ? caches.delete(key)
-            : null
-        )
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    await Promise.allSettled(
+      ["/", "/index.html"].map(async (url) => {
+        if (await cache.match(url)) return;
+        const response = await fetch(url, { cache: "no-store" });
+        if (response.ok) await cache.put(url, response);
+      })
+    );
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.map((key) =>
+        key.startsWith("twinly-shell-") && key !== SHELL_CACHE
+          ? caches.delete(key)
+          : null
       )
-    )
-  );
-  self.clients.claim();
+    );
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
