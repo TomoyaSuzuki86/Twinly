@@ -51,9 +51,9 @@ type BabyPanelProps = {
   now: Date;
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
-  customMemoPresets: CustomMemoPreset[];
-  onAddCustomMemoPreset: (emoji: string, text: string) => void;
-  onDeleteCustomMemoPreset: (id: string) => void;
+  customMemoPresets?: CustomMemoPreset[];
+  onAddCustomMemoPreset?: (emoji: string, text: string) => void;
+  onDeleteCustomMemoPreset?: (id: string) => void;
   gaugesEnabled?: boolean;
   stockForecastEnabled?: boolean;
   lowStock: { size: string; remaining: number } | null;
@@ -98,9 +98,9 @@ export function BabyPanel({
   now,
   diaperStockManagementEnabled,
   sleepManagementEnabled,
-  customMemoPresets,
-  onAddCustomMemoPreset,
-  onDeleteCustomMemoPreset,
+  customMemoPresets = [],
+  onAddCustomMemoPreset = () => {},
+  onDeleteCustomMemoPreset = () => {},
   gaugesEnabled = true,
   stockForecastEnabled = true,
   lowStock,
