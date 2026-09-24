@@ -10,6 +10,7 @@ const { familyAccess, getAppRefForUid } = require("./runtime-context")({ db, acc
 
 Object.assign(exports, require("./ai-service")(db));
 Object.assign(exports, require("./family-functions")({ admin, db, familyAccess, logger }));
+Object.assign(exports, require("./reminder-projection-functions")({ admin, db, logger }));
 Object.assign(exports, require("./reminder-functions")({ admin, db, familyAccess, getAppRefForUid, logger }));
 Object.assign(exports, require("./wear-functions")({ admin, db, getAppRefForUid, logger }));
 
