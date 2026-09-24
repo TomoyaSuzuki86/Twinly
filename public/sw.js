@@ -1,19 +1,28 @@
-const SHELL_CACHE = "twinly-shell-v16";
+const SHELL_CACHE_VERSION = "twinly-shell-v17";
+const BUILD_CACHE_KEY = "dev";
+const SHELL_CACHE = `${SHELL_CACHE_VERSION}-${BUILD_CACHE_KEY}`;
+
+const STATIC_PRECACHE = [
+  "/manifest.webmanifest",
+  "/assets/twinly-launch-v2.mp4",
+  "/icons/icon-192-v7.png",
+  "/icons/icon-512-v7.png",
+  "/icons/icon-192-maskable-v7.png",
+  "/icons/icon-512-maskable-v7.png",
+  "/icons/apple-touch-icon-v7.png",
+  "/icons/favicon-32-v7.png",
+];
+
+// Replaced in dist/sw.js by scripts/inject-sw-precache.mjs after Vite has
+// generated the current hashed JS/CSS chunks. Keeping this empty in source
+// also makes public/sw.js valid when served directly by the Vite dev server.
+const BUILD_ASSET_PRECACHE = [];
+
+const PRECACHE_URLS = [...new Set([...STATIC_PRECACHE, ...BUILD_ASSET_PRECACHE])];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) =>
-      cache.addAll([
-        "/manifest.webmanifest",
-        "/assets/twinly-launch-v2.mp4",
-        "/icons/icon-192-v7.png",
-        "/icons/icon-512-v7.png",
-        "/icons/icon-192-maskable-v7.png",
-        "/icons/icon-512-maskable-v7.png",
-        "/icons/apple-touch-icon-v7.png",
-        "/icons/favicon-32-v7.png"
-      ])
-    )
+    caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE_URLS))
   );
   self.skipWaiting();
 });
@@ -21,7 +30,13 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((key) => (key === SHELL_CACHE ? null : caches.delete(key))))
+      Promise.all(
+        keys.map((key) =>
+          key.startsWith("twinly-shell-") && key !== SHELL_CACHE
+            ? caches.delete(key)
+            : null
+        )
+      )
     )
   );
   self.clients.claim();
@@ -38,8 +53,8 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       try {
-        // Always bypass the browser HTTP cache for app-shell navigation.
-        // Otherwise a cached index.html can keep pointing at an old JS bundle after deploy.
+        // Prefer the latest HTML while online. Every production/development build
+        // also precaches /index.html, so a cold offline launch can always boot.
         const response = await fetch(req, { cache: "no-store" });
         if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
           const copy = response.clone();
@@ -67,16 +82,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Do not cache authentication handlers, API responses, or arbitrary same-origin URLs.
+  // Build assets and icons are cache-first. The current build's app-shell assets
+  // are already present before this service worker activates.
   if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/")) return;
   event.respondWith(caches.match(req).then(async (cached) => {
-    if (cached) return cached; // Hashed Vite assets are immutable.
-    const response = await fetch(req);
-    if (response.ok && !response.headers.get("content-type")?.includes("text/html")) {
-      const copy = response.clone();
-      event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+    if (cached) return cached;
+    try {
+      const response = await fetch(req);
+      if (response.ok && !response.headers.get("content-type")?.includes("text/html")) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(req, copy)));
+      }
+      return response;
+    } catch {
+      return cached || new Response("", { status: 503 });
     }
-    return response;
   }));
 });
 
