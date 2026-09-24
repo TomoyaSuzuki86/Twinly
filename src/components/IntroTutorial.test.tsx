@@ -133,7 +133,7 @@ describe("IntroTutorial", () => {
     expect(finishTutorial).not.toHaveBeenCalled();
   });
 
-  it("practices custom memos before the daily summary while keeping the timeline step omitted", async () => {
+  it("explains custom memos compactly before the daily summary while keeping the timeline step omitted", async () => {
     setup();
     await screen.findByText("まずは、記録する子を選ぶ");
 
@@ -143,13 +143,9 @@ describe("IntroTutorial", () => {
 
     expect(screen.getByText("よく使う記録は、1タップに")).toBeTruthy();
     expect(screen.getByText("8 / 11")).toBeTruthy();
-    expect(screen.getByText("次へ").closest("button")?.hasAttribute("disabled")).toBe(true);
-
-    fireEvent.click(screen.getByText("追加してみる"));
-
-    expect(screen.getByText("作成と記録をまとめて体験")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /沐浴 .*を編集/ })).toBeTruthy();
+    expect(screen.getByText("タップで記録")).toBeTruthy();
     expect(screen.getByText("長押しで削除")).toBeTruthy();
+    expect(screen.queryByText("追加してみる")).toBeNull();
     expect(screen.getByText("次へ").closest("button")?.hasAttribute("disabled")).toBe(false);
 
     next();
