@@ -527,7 +527,10 @@ export function BabyPanel({
         ) : null}
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="overflow-hidden rounded-lg border bg-card sm:col-span-2">
+          <div
+            ref={tutorialAnchorRef?.(`memo:${babyId}`)}
+            className="overflow-hidden rounded-lg border bg-card sm:col-span-2"
+          >
             <div className="flex items-center gap-2 p-2">
               <Button
                 variant="ghost"
