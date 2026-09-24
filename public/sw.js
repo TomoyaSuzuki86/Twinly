@@ -17,27 +17,40 @@ const BUILD_ASSET_PRECACHE = [];
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
-    // The app shell is mandatory for offline boot. Optional metadata/icons must
-    // never make the whole service-worker install fail.
-    await cache.addAll(BUILD_ASSET_PRECACHE);
-    await Promise.allSettled(STATIC_PRECACHE.map((url) => cache.add(url)));
+    // Never let one flaky asset abort the entire worker installation. Once the
+    // worker controls the app, normal online requests will backfill any misses.
+    const results = await Promise.allSettled(
+      [...BUILD_ASSET_PRECACHE, ...STATIC_PRECACHE].map((url) => cache.add(url))
+    );
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed) console.warn(`Twinly precache missed ${failed} asset(s); runtime cache will backfill them.`);
   })());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.map((key) =>
-          key.startsWith("twinly-shell-") && key !== SHELL_CACHE
-            ? caches.delete(key)
-            : null
-        )
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL_CACHE);
+    // Warm the navigation shell again during activation. This gives an online
+    // launch a second chance even if install-time precaching partially failed.
+    await Promise.allSettled(
+      ["/", "/index.html"].map(async (url) => {
+        if (await cache.match(url)) return;
+        const response = await fetch(url, { cache: "no-store" });
+        if (response.ok) await cache.put(url, response);
+      })
+    );
+
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.map((key) =>
+        key.startsWith("twinly-shell-") && key !== SHELL_CACHE
+          ? caches.delete(key)
+          : null
       )
-    )
-  );
-  self.clients.claim();
+    );
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("fetch", (event) => {
