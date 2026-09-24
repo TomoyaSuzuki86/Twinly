@@ -67,7 +67,7 @@ const openTutorialSleepTime = () => {
 };
 
 describe("IntroTutorial", () => {
-  it("waits for readiness and starts the ten-step tutorial", async () => {
+  it("waits for readiness and starts the eleven-step tutorial", async () => {
     const view = render(<IntroTutorial {...props} ready={false} />);
     expect(shouldShowTutorial).not.toHaveBeenCalled();
 
@@ -76,7 +76,7 @@ describe("IntroTutorial", () => {
 
     view.rerender(<IntroTutorial {...props} />);
     await screen.findByText("まずは、記録する子を選ぶ");
-    expect(screen.getByText("1 / 10")).toBeTruthy();
+    expect(screen.getByText("1 / 11")).toBeTruthy();
   });
 
   it("explains the basic record controls before practice", async () => {
@@ -84,7 +84,7 @@ describe("IntroTutorial", () => {
     await screen.findByText("まずは、記録する子を選ぶ");
     next();
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 10")).toBeTruthy();
+    expect(screen.getByText("2 / 11")).toBeTruthy();
   });
 
   it("uses a tutorial-only sleep button and never touches the live sleep control", async () => {
@@ -129,11 +129,11 @@ describe("IntroTutorial", () => {
     fireEvent.click(screen.getByText("スキップ"));
 
     expect(screen.getByText("基本の記録は、ボタンから")).toBeTruthy();
-    expect(screen.getByText("2 / 10")).toBeTruthy();
+    expect(screen.getByText("2 / 11")).toBeTruthy();
     expect(finishTutorial).not.toHaveBeenCalled();
   });
 
-  it("omits the redundant edit and timeline steps", async () => {
+  it("practices custom memos before the daily summary while keeping the timeline step omitted", async () => {
     setup();
     await screen.findByText("まずは、記録する子を選ぶ");
 
@@ -141,13 +141,24 @@ describe("IntroTutorial", () => {
       fireEvent.click(screen.getByText("スキップ"));
     }
 
+    expect(screen.getByText("よく使う記録は、1タップに")).toBeTruthy();
+    expect(screen.getByText("8 / 11")).toBeTruthy();
+    expect(screen.getByText("次へ").closest("button")?.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getByText("追加してみる"));
+
+    expect(screen.getByText("作成と記録をまとめて体験")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /沐浴 .*を編集/ })).toBeTruthy();
+    expect(screen.getByText("長押しで削除")).toBeTruthy();
+    expect(screen.getByText("次へ").closest("button")?.hasAttribute("disabled")).toBe(false);
+
+    next();
     expect(screen.getByText("ログ下の集計を、すぐ確認")).toBeTruthy();
-    expect(screen.getByText("8 / 10")).toBeTruthy();
-    expect(screen.queryByText("記録は、あとから直せます")).toBeNull();
+    expect(screen.getByText("9 / 11")).toBeTruthy();
 
     fireEvent.click(screen.getByText("スキップ"));
     expect(screen.getByText("もっと便利に使いたいときは")).toBeTruthy();
-    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.getByText("10 / 11")).toBeTruthy();
     expect(screen.queryByText("タイムラインで、1週間を見渡す")).toBeNull();
   });
 
