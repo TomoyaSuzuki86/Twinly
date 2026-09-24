@@ -45,7 +45,12 @@ export const buildWeeklyTimeline = (events: LogEvent[], weekStart: Date): Weekly
   events
     .filter(
       (event) =>
-        (event.type === "milk" || event.type === "solidFood" || event.type === "diaper") &&
+        (
+          event.type === "milk" ||
+          event.type === "solidFood" ||
+          event.type === "diaper" ||
+          (event.type === "daily" && Boolean(event.customMemoEmoji))
+        ) &&
         event.timestamp >= start.getTime() &&
         event.timestamp <= rangeEnd
     )

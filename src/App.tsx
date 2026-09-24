@@ -272,6 +272,26 @@ export default function App() {
     updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
   };
 
+  const handleAddCustomMemoPreset = (emoji: string, text: string) => {
+    const normalizedEmoji = emoji.trim();
+    const normalizedText = text.trim();
+    if (!normalizedEmoji || !normalizedText) return;
+    updateApp((previous) => ({
+      ...previous,
+      customMemoPresets: [
+        { id: uid(), emoji: normalizedEmoji, text: normalizedText },
+        ...previous.customMemoPresets,
+      ],
+    }));
+  };
+
+  const handleDeleteCustomMemoPreset = (id: string) => {
+    updateApp((previous) => ({
+      ...previous,
+      customMemoPresets: previous.customMemoPresets.filter((preset) => preset.id !== id),
+    }));
+  };
+
   const handleProfileSetup = async (profile: {
     nickname: string;
     relationship: FamilyRelationship;
@@ -586,6 +606,9 @@ export default function App() {
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
+                customMemoPresets={app.customMemoPresets}
+                onAddCustomMemoPreset={handleAddCustomMemoPreset}
+                onDeleteCustomMemoPreset={handleDeleteCustomMemoPreset}
                 lowStock={dashboard.A.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}
@@ -630,6 +653,9 @@ export default function App() {
                 now={now}
                 diaperStockManagementEnabled={app.diaperStockManagementEnabled}
                 sleepManagementEnabled={app.sleepManagementEnabled}
+                customMemoPresets={app.customMemoPresets}
+                onAddCustomMemoPreset={handleAddCustomMemoPreset}
+                onDeleteCustomMemoPreset={handleDeleteCustomMemoPreset}
                 lowStock={dashboard.B.lowStock}
                 gaugesEnabled={Boolean(familyAccess?.features.gauges)}
                 stockForecastEnabled={Boolean(familyAccess?.features.stockForecast)}

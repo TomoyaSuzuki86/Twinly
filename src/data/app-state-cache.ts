@@ -61,6 +61,7 @@ export const readCachedAppState = (
     return mergeSharedAppState({
       profiles: parsed.profiles,
       events: parsed.events,
+      customMemoPresets: parsed.customMemoPresets,
       diaperStockManagementEnabled: parsed.diaperStockManagementEnabled,
       sleepManagementEnabled: parsed.sleepManagementEnabled,
     }, parsed.ui);

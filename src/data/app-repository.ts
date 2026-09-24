@@ -77,6 +77,7 @@ export function createMutation(before: AppState, after: AppState, id: string, op
     }
   };
   walk(before.profiles, after.profiles, ["profiles"]);
+  walk(before.customMemoPresets, after.customMemoPresets, ["customMemoPresets"]);
   walk(before.diaperStockManagementEnabled, after.diaperStockManagementEnabled, ["diaperStockManagementEnabled"]);
   walk(before.sleepManagementEnabled, after.sleepManagementEnabled, ["sleepManagementEnabled"]);
   return { id, events, settings };

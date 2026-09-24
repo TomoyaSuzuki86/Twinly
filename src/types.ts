@@ -12,6 +12,12 @@ export type EventType =
 export type DiaperKind = "pee" | "poop" | "mix";
 export type MilkMethod = "bottle" | "breast";
 
+export type CustomMemoPreset = {
+  id: string;
+  emoji: string;
+  text: string;
+};
+
 export type FamilyRelationship = "father" | "mother" | "grandfather" | "grandmother" | "other";
 export type FamilyRole = "owner" | "member";
 
@@ -44,6 +50,8 @@ export type LogEvent = {
   weight?: number;
   height?: number;
   note?: string;
+  customMemoId?: string;
+  customMemoEmoji?: string;
   sharedDailyId?: string;
   createdByUid?: string;
   updatedByUid?: string;
@@ -73,6 +81,7 @@ export type BabyProfile = {
 export type AppState = {
   profiles: Record<BabyId, BabyProfile>;
   events: LogEvent[];
+  customMemoPresets: CustomMemoPreset[];
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
   ui: {

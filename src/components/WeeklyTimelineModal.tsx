@@ -55,10 +55,11 @@ const getMarkerTop = (timestamp: number) => {
 };
 
 const getMarkerLeft = (event: LogEvent) => {
-  if (event.type === "milk") return "20%";
-  if (event.type === "solidFood") return "30%";
-  if (event.diaperKind === "pee") return "70%";
-  return "80%";
+  if (event.type === "milk") return "11.111%";
+  if (event.type === "solidFood") return "22.222%";
+  if (event.diaperKind === "pee") return "44.444%";
+  if (event.type === "diaper") return "55.556%";
+  return "83.333%";
 };
 
 const getEventPresentation = (event: LogEvent) => {
@@ -165,7 +166,7 @@ export function WeeklyTimelineModal({
         <DialogHeader className="flex-none border-b px-4 py-3 pr-12 text-left">
           <DialogTitle className="text-base">週間タイムライン</DialogTitle>
           <DialogDescription className="sr-only">
-            1週間のミルク、離乳食、おしっこ、うんちの記録を24時間軸で表示します。
+            1週間のミルク、離乳食、おしっこ、うんち、カスタムメモの記録を24時間軸で表示します。
           </DialogDescription>
         </DialogHeader>
 
@@ -227,7 +228,7 @@ export function WeeklyTimelineModal({
             })}
           </div>
 
-          <div className="grid grid-cols-5 gap-1 text-center text-[9px] leading-none text-muted-foreground min-[390px]:text-[10px]">
+          <div className="grid grid-cols-3 gap-x-1 gap-y-1.5 text-center text-[9px] leading-none text-muted-foreground min-[430px]:grid-cols-6 min-[390px]:text-[10px]">
             <span className="flex items-center justify-center gap-1">
               <span className="h-2 w-2 rounded-full border border-sky-100 bg-blue-500" />
               ミルク
@@ -247,6 +248,10 @@ export function WeeklyTimelineModal({
             <span className="flex items-center justify-center gap-1">
               <Moon className="h-2.5 w-2.5 text-violet-300" />
               睡眠
+            </span>
+            <span className="flex items-center justify-center gap-1">
+              <span className="text-[10px] leading-none">📝</span>
+              メモ
             </span>
           </div>
         </div>
@@ -347,14 +352,39 @@ export function WeeklyTimelineModal({
                   })}
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-border/25"
+                    className="pointer-events-none absolute inset-y-0 left-1/3 border-l border-border/25"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-y-0 left-2/3 border-l border-border/25"
                   />
                   {day.events
                     .filter((event) => event.babyId === selectedBabyId)
                     .map((event) => {
                       const profile = profiles[event.babyId];
-                      const presentation = getEventPresentation(event);
                       const time = fmtTime(new Date(event.timestamp));
+                      const isCustomMemo = event.type === "daily" && Boolean(event.customMemoEmoji);
+
+                      if (isCustomMemo) {
+                        return (
+                          <span
+                            key={event.id}
+                            role="img"
+                            aria-label={`${profile.displayName}の${event.note || "カスタムメモ"} ${time}`}
+                            title={`${profile.displayName} ${event.note || "カスタムメモ"} ${time}`}
+                            data-selected="true"
+                            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-[13px] leading-none drop-shadow-sm min-[390px]:text-[15px]"
+                            style={{
+                              top: getMarkerTop(event.timestamp),
+                              left: getMarkerLeft(event),
+                            }}
+                          >
+                            {event.customMemoEmoji}
+                          </span>
+                        );
+                      }
+
+                      const presentation = getEventPresentation(event);
                       const isPoop = event.type === "diaper" && event.diaperKind === "poop";
 
                       return (
