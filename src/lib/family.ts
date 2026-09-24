@@ -32,7 +32,7 @@ type FamilyOnboardingInput =
 
 const FAMILY_SESSION_CACHE_PREFIX = "twinly-family-session:";
 
-class InvalidFamilySessionError extends Error {}
+export class InvalidFamilySessionError extends Error {}
 
 const familySessionCacheKey = (uid: string) => `${FAMILY_SESSION_CACHE_PREFIX}${uid}`;
 
@@ -114,8 +114,14 @@ const loadFamilySessionFresh = async (user: User, forceServer: boolean): Promise
     readServer ? getDocFromServer(familyRef) : getDoc(familyRef),
     readServer ? getDocFromServer(memberRef) : getDoc(memberRef),
   ]);
-  if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") {
-    throw new InvalidFamilySessionError("家族情報が見つからないか、アクセス権がありません。");
+  if (!familySnap.exists()) {
+    throw new InvalidFamilySessionError("家族データが見つかりません。家族との紐付け情報が古くなっている可能性があります。");
+  }
+  if (!memberSnap.exists()) {
+    throw new InvalidFamilySessionError("このアカウントの家族メンバー登録が見つかりません。家族の管理者から再招待が必要です。");
+  }
+  if (memberSnap.data().status === "inactive") {
+    throw new InvalidFamilySessionError("このアカウントの家族メンバー登録は無効になっています。家族の管理者に確認してください。");
   }
 
   return {
