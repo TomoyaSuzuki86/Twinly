@@ -3,6 +3,7 @@ import type { AppState, FamilyInfo, FamilyMember } from "@/types";
 import { createInitialAppState } from "./app-state";
 import { readCachedAppState } from "@/data/app-state-cache";
 import {
+  InvalidFamilySessionError,
   loadFamilySession,
   readCachedFamilySession,
   subscribeFamilyMembers,
@@ -77,7 +78,11 @@ export function useFamilySessionLifecycle({
         console.error("Failed to load family session", error);
         if (!context.isCurrent()) return;
         if (!cachedSession) {
-          setSessionError("家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。");
+          setSessionError(
+            error instanceof InvalidFamilySessionError
+              ? error.message
+              : "家族情報を取得できませんでした。通信状態を確認して再読み込みしてください。"
+          );
           setFamily(null);
           setFamilyMember(null);
           setFamilyMembers([]);
