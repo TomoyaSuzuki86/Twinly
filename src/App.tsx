@@ -32,7 +32,7 @@ import { BabyTabTrigger } from "./components/BabyTabTrigger";
 import { SnackbarUndo } from "./components/SnackbarUndo";
 import { iconGradients } from "./lib/utils";
 const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
-import { SkeletonLoader } from "./components/SkeletonLoader";
+import { LaunchSplash } from "./components/LaunchSplash";
 import { BabyPanelHydrationPlaceholder, BabyTabHydrationPlaceholder } from "./components/AppHydrationPlaceholder";
 import { HistoryModalSkeleton } from "./components/HistoryModalSkeleton";
 const DailyReportModal = lazy(() => import("./components/DailyReportModal").then((module) => ({ default: module.DailyReportModal })));
@@ -410,7 +410,7 @@ export default function App() {
   if (!authReady || appLoading) {
     return (
       <AppContainer>
-        <SkeletonLoader />
+        <LaunchSplash />
       </AppContainer>
     );
   }
