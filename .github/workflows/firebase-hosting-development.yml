@@ -67,9 +67,9 @@ jobs:
       - name: Test app
         run: npm test
 
-      - name: Test development billing policy
+      - name: Test Functions
         if: steps.billing_scope.outputs.deploy == 'true'
-        run: node --test functions/test/development-billing-policy.test.js
+        run: npm test --prefix functions
 
       - name: Verify Stripe sandbox price
         if: steps.billing_scope.outputs.deploy == 'true'
