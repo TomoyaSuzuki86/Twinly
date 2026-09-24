@@ -101,6 +101,8 @@ export function EventCard({
       <Weight className="h-5 w-5 text-lime-300" />
     ) : event.type === "height" ? (
       <Ruler className="h-5 w-5 text-blue-300" />
+    ) : event.type === "daily" && event.customMemoEmoji ? (
+      <span aria-hidden="true" className="text-2xl leading-none">{event.customMemoEmoji}</span>
     ) : (
       <FileText className="h-5 w-5 text-violet-300" />
     );

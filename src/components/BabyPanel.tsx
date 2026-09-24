@@ -13,7 +13,6 @@ import {
   FileText,
   ListPlus,
   Plus,
-  Trash2,
   CalendarRange,
   Utensils,
   Moon,
@@ -39,6 +38,7 @@ import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
 import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
 
 const SLEEP_LONG_PRESS_MS = 550;
+const CUSTOM_MEMO_LONG_PRESS_MS = 550;
 const SLEEP_TRANSITION_FEEDBACK_MS = 2000;
 
 type BabyPanelProps = {
@@ -52,7 +52,7 @@ type BabyPanelProps = {
   diaperStockManagementEnabled: boolean;
   sleepManagementEnabled: boolean;
   customMemoPresets?: CustomMemoPreset[];
-  onAddCustomMemoPreset?: (emoji: string, text: string) => void;
+  onAddCustomMemoPreset?: (emoji: string, text: string) => CustomMemoPreset | null;
   onDeleteCustomMemoPreset?: (id: string) => void;
   gaugesEnabled?: boolean;
   stockForecastEnabled?: boolean;
@@ -99,7 +99,7 @@ export function BabyPanel({
   diaperStockManagementEnabled,
   sleepManagementEnabled,
   customMemoPresets = [],
-  onAddCustomMemoPreset = () => {},
+  onAddCustomMemoPreset = () => null,
   onDeleteCustomMemoPreset = () => {},
   gaugesEnabled = true,
   stockForecastEnabled = true,
@@ -215,6 +215,50 @@ export function BabyPanel({
   };
 
   useEffect(() => () => clearSleepLongPressTimer(), []);
+
+  const customMemoLongPressTimerRef = useRef<number | null>(null);
+  const customMemoLongPressTriggeredRef = useRef(false);
+
+  const clearCustomMemoLongPressTimer = () => {
+    if (customMemoLongPressTimerRef.current !== null) {
+      window.clearTimeout(customMemoLongPressTimerRef.current);
+      customMemoLongPressTimerRef.current = null;
+    }
+  };
+
+  const recordCustomMemo = (preset: CustomMemoPreset) =>
+    onAddEvent({
+      babyId,
+      type: "daily",
+      note: `${preset.emoji} ${preset.text}`,
+      customMemoId: preset.id,
+      customMemoEmoji: preset.emoji,
+    });
+
+  const createAndRecordCustomMemo = () => {
+    const emoji = customMemoEmoji.trim();
+    const text = customMemoText.trim();
+    if (!emoji || !text) return;
+    const preset = onAddCustomMemoPreset(emoji, text);
+    if (!preset) return;
+    recordCustomMemo(preset);
+    setCustomMemoEmoji("");
+    setCustomMemoText("");
+  };
+
+  const startCustomMemoLongPress = (preset: CustomMemoPreset) => {
+    clearCustomMemoLongPressTimer();
+    customMemoLongPressTriggeredRef.current = false;
+    customMemoLongPressTimerRef.current = window.setTimeout(() => {
+      customMemoLongPressTimerRef.current = null;
+      customMemoLongPressTriggeredRef.current = true;
+      if (window.confirm(`「${preset.emoji} ${preset.text}」を削除しますか？`)) {
+        onDeleteCustomMemoPreset(preset.id);
+      }
+    }, CUSTOM_MEMO_LONG_PRESS_MS);
+  };
+
+  useEffect(() => () => clearCustomMemoLongPressTimer(), []);
 
   const primaryActionBoundsRef = useRef<HTMLDivElement | null>(null);
   const milkButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -557,27 +601,14 @@ export function BabyPanel({
                     aria-label="カスタムメモの内容"
                     className="h-8 min-w-0 flex-1"
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      const emoji = customMemoEmoji.trim();
-                      const text = customMemoText.trim();
-                      if (!emoji || !text) return;
-                      onAddCustomMemoPreset(emoji, text);
-                      setCustomMemoEmoji("");
-                      setCustomMemoText("");
+                      if (event.key === "Enter") createAndRecordCustomMemo();
                     }}
                   />
                   <Button
                     size="icon"
                     className="h-8 w-8 flex-none"
                     disabled={!customMemoEmoji.trim() || !customMemoText.trim()}
-                    onClick={() => {
-                      const emoji = customMemoEmoji.trim();
-                      const text = customMemoText.trim();
-                      if (!emoji || !text) return;
-                      onAddCustomMemoPreset(emoji, text);
-                      setCustomMemoEmoji("");
-                      setCustomMemoText("");
-                    }}
+                    onClick={createAndRecordCustomMemo}
                     aria-label="カスタムメモを追加"
                   >
                     <Plus className="h-4 w-4" />
@@ -587,37 +618,27 @@ export function BabyPanel({
                 {customMemoPresets.length ? (
                   <div className="flex flex-wrap gap-2">
                     {customMemoPresets.map((preset) => (
-                      <div key={preset.id} className="flex items-center overflow-hidden rounded-full border bg-card">
-                        <button
-                          type="button"
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium hover:bg-muted/50"
-                          onClick={() => {
-                            onAddEvent({
-                              babyId,
-                              type: "daily",
-                              note: `${preset.emoji} ${preset.text}`,
-                              customMemoId: preset.id,
-                              customMemoEmoji: preset.emoji,
-                            });
-                          }}
-                          aria-label={`${preset.text}を記録`}
-                        >
-                          <span aria-hidden="true" className="text-base leading-none">{preset.emoji}</span>
-                          <span>{preset.text}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="grid h-8 w-7 place-items-center border-l text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          onClick={() => {
-                            if (window.confirm(`「${preset.emoji} ${preset.text}」を削除しますか？`)) {
-                              onDeleteCustomMemoPreset(preset.id);
-                            }
-                          }}
-                          aria-label={`${preset.text}を削除`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className="flex select-none items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted/50 [-webkit-touch-callout:none]"
+                        onPointerDown={() => startCustomMemoLongPress(preset)}
+                        onPointerUp={clearCustomMemoLongPressTimer}
+                        onPointerLeave={clearCustomMemoLongPressTimer}
+                        onPointerCancel={clearCustomMemoLongPressTimer}
+                        onContextMenu={(event) => event.preventDefault()}
+                        onClick={() => {
+                          if (customMemoLongPressTriggeredRef.current) {
+                            customMemoLongPressTriggeredRef.current = false;
+                            return;
+                          }
+                          recordCustomMemo(preset);
+                        }}
+                        aria-label={`${preset.text}を記録・長押しで削除`}
+                      >
+                        <span aria-hidden="true" className="text-base leading-none">{preset.emoji}</span>
+                        <span>{preset.text}</span>
+                      </button>
                     ))}
                   </div>
                 ) : (

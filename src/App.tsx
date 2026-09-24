@@ -7,6 +7,7 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
+  CustomMemoPreset,
   FamilyRelationship,
 } from "./types";
 import { fmtDate, uid } from "./lib/utils";
@@ -272,17 +273,20 @@ export default function App() {
     updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
   };
 
-  const handleAddCustomMemoPreset = (emoji: string, text: string) => {
+  const handleAddCustomMemoPreset = (emoji: string, text: string): CustomMemoPreset | null => {
     const normalizedEmoji = emoji.trim();
     const normalizedText = text.trim();
-    if (!normalizedEmoji || !normalizedText) return;
-    updateApp((previous) => ({
+    if (!normalizedEmoji || !normalizedText) return null;
+    const preset: CustomMemoPreset = {
+      id: uid(),
+      emoji: normalizedEmoji,
+      text: normalizedText,
+    };
+    if (!updateApp((previous) => ({
       ...previous,
-      customMemoPresets: [
-        { id: uid(), emoji: normalizedEmoji, text: normalizedText },
-        ...previous.customMemoPresets,
-      ],
-    }));
+      customMemoPresets: [preset, ...previous.customMemoPresets],
+    }))) return null;
+    return preset;
   };
 
   const handleDeleteCustomMemoPreset = (id: string) => {
