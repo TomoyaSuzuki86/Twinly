@@ -4,7 +4,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
-        "/manifest.webmanifest",\n        "/assets/twinly-launch.mp4",
+        "/manifest.webmanifest",
+        "/assets/twinly-launch.mp4",
         "/icons/icon-192-v7.png",
         "/icons/icon-512-v7.png",
         "/icons/icon-192-maskable-v7.png",
