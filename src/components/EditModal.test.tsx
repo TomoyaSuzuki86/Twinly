@@ -107,6 +107,63 @@ describe("EditModal", () => {
     });
   });
 
+  it("copies only custom memos to the other twin using the current edited values", () => {
+    const onCopyCustomMemoToTwin = vi.fn(() => true);
+    const event: LogEvent = {
+      id: "custom-memo-1",
+      babyId: "A",
+      type: "daily",
+      timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+      note: "沐浴",
+      customMemoId: "bath",
+      customMemoEmoji: "🛁",
+    };
+
+    render(
+      <EditModal
+        open
+        onOpenChange={vi.fn()}
+        event={event}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyCustomMemoToTwin={onCopyCustomMemoToTwin}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("日時"), { target: { value: "2026-04-18T09:30" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "メモ" }), { target: { value: "朝の沐浴" } });
+    fireEvent.click(screen.getByRole("button", { name: "もう片方にもコピー" }));
+
+    expect(onCopyCustomMemoToTwin).toHaveBeenCalledWith(event, {
+      note: "朝の沐浴",
+      timestamp: new Date("2026-04-18T09:30:00").getTime(),
+    });
+    expect(screen.getByRole("button", { name: "コピー済み" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("does not show the twin-copy action for an ordinary daily memo", () => {
+    const event: LogEvent = {
+      id: "daily-plain",
+      babyId: "A",
+      type: "daily",
+      timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+      note: "普通のメモ",
+    };
+
+    render(
+      <EditModal
+        open
+        onOpenChange={vi.fn()}
+        event={event}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onCopyCustomMemoToTwin={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "もう片方にもコピー" })).toBeNull();
+  });
+
   it("requires confirmation before deleting a record", () => {
     const onDelete = vi.fn();
     const onOpenChange = vi.fn();

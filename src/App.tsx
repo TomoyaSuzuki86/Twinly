@@ -296,6 +296,27 @@ export default function App() {
     }));
   };
 
+  const handleCopyCustomMemoToTwin = (
+    event: LogEvent,
+    payload: { note: string; timestamp: number }
+  ) => {
+    if (event.type !== "daily" || (!event.customMemoId && !event.customMemoEmoji)) return false;
+    const targetBabyId: BabyId = event.babyId === "A" ? "B" : "A";
+    return recordEventDrafts([
+      {
+        babyId: targetBabyId,
+        type: "daily",
+        payload: {
+          note: payload.note,
+          timestamp: payload.timestamp,
+          customMemoId: event.customMemoId,
+          customMemoEmoji: event.customMemoEmoji,
+        },
+        autoWake: false,
+      },
+    ]);
+  };
+
   const handleProfileSetup = async (profile: {
     nickname: string;
     relationship: FamilyRelationship;
@@ -855,6 +876,7 @@ export default function App() {
         memberNameByUid={memberNameByUid}
         onSave={onSaveEdit}
         onDelete={removeEvent}
+        onCopyCustomMemoToTwin={handleCopyCustomMemoToTwin}
       />
       <Suspense fallback={<div role="status" className="fixed bottom-4 left-4 rounded border bg-background p-3">読み込み中…</div>}>
       {chartModalOpen && <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />}

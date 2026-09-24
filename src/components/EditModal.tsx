@@ -11,7 +11,7 @@ import { DiaperKind, LogEvent } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
 import { MilkAmountControl } from "./MilkAmountControl";
 
@@ -21,6 +21,10 @@ type EditModalProps = {
   event: LogEvent | null;
   onSave: (eventId: string, payload: Partial<LogEvent>) => void;
   onDelete: (eventId: string) => void;
+  onCopyCustomMemoToTwin?: (
+    event: LogEvent,
+    payload: { note: string; timestamp: number }
+  ) => boolean | void;
   memberNameByUid?: Record<string, string>;
 };
 
@@ -29,12 +33,21 @@ const diaperKindOptions = [
   { k: "poop", label: "うんち" },
 ] as const;
 
-export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberNameByUid = {} }: EditModalProps) {
+export function EditModal({
+  open,
+  onOpenChange,
+  event,
+  onSave,
+  onDelete,
+  onCopyCustomMemoToTwin,
+  memberNameByUid = {},
+}: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
   const [timestamp, setTimestamp] = useState(0);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [copiedToTwin, setCopiedToTwin] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -43,6 +56,7 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberN
       setNote(event.note ?? "");
       setTimestamp(event.timestamp);
       setDeleteConfirming(false);
+      setCopiedToTwin(false);
     }
   }, [event]);
 
@@ -65,8 +79,15 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberN
     onOpenChange(false);
   };
 
+  const handleCopyToTwin = () => {
+    if (!event || !onCopyCustomMemoToTwin) return;
+    const copied = onCopyCustomMemoToTwin(event, { note, timestamp });
+    if (copied !== false) setCopiedToTwin(true);
+  };
+
   if (!event) return null;
 
+  const isCustomMemo = event.type === "daily" && Boolean(event.customMemoId || event.customMemoEmoji);
   const requiresDiaperKindReselection = event.type === "diaper" && diaperKind === "mix";
 
   return (
@@ -76,6 +97,21 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberN
           <DialogTitle>記録の編集</DialogTitle>
           <DialogDescription>記録内容を必要に応じて修正できます。</DialogDescription>
         </DialogHeader>
+        {isCustomMemo && onCopyCustomMemoToTwin ? (
+          <div className="flex justify-start">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={handleCopyToTwin}
+              disabled={copiedToTwin}
+            >
+              <Copy className="mr-1.5 h-4 w-4" />
+              {copiedToTwin ? "コピー済み" : "もう片方にもコピー"}
+            </Button>
+          </div>
+        ) : null}
         {event.createdByUid ? (
           <div className="text-xs text-muted-foreground">
             記録：{memberNameByUid[event.createdByUid] ?? "家族メンバー"}
