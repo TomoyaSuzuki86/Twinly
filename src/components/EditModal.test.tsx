@@ -131,7 +131,7 @@ describe("EditModal", () => {
     );
 
     fireEvent.change(screen.getByLabelText("日時"), { target: { value: "2026-04-18T09:30" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "メモ" }), { target: { value: "朝の沐浴" } });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "朝の沐浴" } });
     fireEvent.click(screen.getByRole("button", { name: "もう片方にもコピー" }));
 
     expect(onCopyCustomMemoToTwin).toHaveBeenCalledWith(event, {
