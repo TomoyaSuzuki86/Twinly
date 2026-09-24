@@ -1,4 +1,4 @@
-const SHELL_CACHE = "twinly-shell-v14";
+const SHELL_CACHE = "twinly-shell-v15";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

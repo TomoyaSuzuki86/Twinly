@@ -25,7 +25,7 @@ export function LaunchSplash() {
           playsInline
           preload="auto"
           onError={() => setVideoFailed(true)}
-          className="h-auto w-full max-w-[320px] object-contain"
+          className="h-auto w-full max-w-[240px] object-contain"
         />
       ) : (
         <img
