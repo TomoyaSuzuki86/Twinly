@@ -215,9 +215,6 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     if (step === 5) {
       setStatus("「10分前 おしっこ」と話してみてください。相対時刻と2人同時入力をまとめて練習します。");
     }
-    if (step === 7) {
-      setStatus("「追加してみる」を押して、カスタムメモがそのまま記録になる流れを試してください。");
-    }
   }, [step, open]);
 
   const finish = (outcome: TutorialOutcome, after?: () => void) => {
@@ -424,7 +421,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "赤ちゃんの名前タブを長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。選択中の赤ちゃん1人だけに入る結果を画面上で確認しますが、実際のログには保存しません。",
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。ヘッダーから始めた音声入力は常に2人が対象です。話の中に赤ちゃんの名前が入っていても振り分けには使いません。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応します。一言メモ欄は空のときマイクになり、話した内容が入るとチェックの保存ボタンに変わります。ヘッダーで普通の文章を話した場合は、2人の共通メモとして残せます。",
-    "「一言メモ」をタップすると、よく使うメモを登録できます。絵文字と名前を入力して追加すると、そのまま今回の記録も保存されます。次からは登録したメモを1タップするだけ。不要になったメモは長押しで削除できます。",
+    "「一言メモ」をタップすると、よく使う記録を絵文字＋名前で登録できます。追加時はそのまま今回の記録にも保存。次回からは1タップ、削除は長押しです。",
     "ログ見出しのすぐ下には、その日の食事・おむつ・睡眠の集計カードがあります。横にスワイプして3項目を見比べられ、各カードをタップすると詳しい履歴を開けます。",
     "タイムラインでは、1週間のミルク・離乳食・おむつ・睡眠を24時間軸でまとめて確認できます。生活リズムをざっと振り返りたいときに便利です。",
     "Twinlyには、画面テーマの追加やAIアドバイスなどの有料機能もあります。必要になったときに試せる程度に覚えておけば大丈夫です。",
@@ -441,7 +438,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "8時30分におしっこ",
   ];
 
-  const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5 || step === 7;
+  const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5;
   const interactiveSpotlight = step === 4 || step === 5 || step === 11;
   const isVoiceStep = voiceSteps.has(step);
   const stepIndex = Math.max(0, tutorialSteps.indexOf(step));
@@ -524,8 +521,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
           ))}
 
           <section
-            className={`twinly-tutorial-card ${step === 7 || step === 9 ? "twinly-tutorial-card-above-target" : ""}`}
-            style={(step === 7 || step === 9) && rect ? { top: `${Math.max(12, rect.top - 12)}px` } : undefined}
+            className={`twinly-tutorial-card ${step === 9 ? "twinly-tutorial-card-above-target" : ""}`}
+            style={step === 9 && rect ? { top: `${Math.max(12, rect.top - 12)}px` } : undefined}
           >
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
@@ -674,57 +671,15 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
                 </div>)}
               </div>}
 
-              {step === 7 && <div className="twinly-tutorial-demo" aria-live="polite">
-                <div className="rounded-xl border bg-card p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="grid h-9 w-12 flex-none place-items-center rounded-md border bg-background text-lg">🙂</div>
-                    <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border bg-background px-3 text-sm font-medium">沐浴</div>
-                    <Button
-                      size="sm"
-                      className="h-9 flex-none"
-                      disabled={practiced}
-                      onClick={() => {
-                        setPracticed(true);
-                        setStatus("「沐浴」をカスタムメモに追加し、同時に今回の記録にも追加する動きを再現しました。実際の育児ログには保存されません。");
-                      }}
-                    >
-                      {practiced ? "追加済み" : "追加してみる"}
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-center text-[10px] text-muted-foreground">本番では絵文字と名前を自由に登録できます</p>
+              {step === 7 && <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border bg-muted/40 px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden="true" className="text-lg leading-none">🙂</span>
+                  <span className="truncate text-sm font-semibold">沐浴</span>
                 </div>
-
-                {practiced ? <div className="mt-3 space-y-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <button type="button" className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-sm font-medium">
-                        <span aria-hidden="true" className="text-base leading-none">🙂</span>
-                        <span>沐浴</span>
-                      </button>
-                    </div>
-                    <p className="mt-1 px-1 text-[10px] leading-none text-muted-foreground/70">長押しで削除</p>
-                  </div>
-
-                  <EventCard
-                    event={{
-                      id: "tutorial-custom-memo",
-                      babyId: activeBabyId,
-                      type: "daily",
-                      timestamp: Date.now(),
-                      note: "沐浴",
-                      customMemoId: "tutorial-bath",
-                      customMemoEmoji: "🙂",
-                    }}
-                    onEdit={() => undefined}
-                  />
-                </div> : null}
-
-                <p className="mt-3 text-center text-xs text-muted-foreground">{status}</p>
-                {practiced && <div className="twinly-tutorial-result mt-3">
-                  <span className="flex items-center justify-center gap-1 text-sm font-bold">
-                    <Check size={14} aria-hidden="true" />作成と記録をまとめて体験
-                  </span>
-                </div>}
+                <div className="flex-none text-right text-[10px] leading-tight text-muted-foreground">
+                  <div>タップで記録</div>
+                  <div>長押しで削除</div>
+                </div>
               </div>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
