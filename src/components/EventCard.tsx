@@ -67,8 +67,11 @@ export function EventCard({
     event.note?.startsWith(event.customMemoEmoji)
       ? event.note.slice(event.customMemoEmoji.length).trimStart()
       : event.note;
+  const isCustomMemo = event.type === "daily" && Boolean(event.customMemoEmoji);
   const title =
-    event.type === "wake" && sleepDurationMinutes !== undefined
+    isCustomMemo && displayNote
+      ? displayNote
+      : event.type === "wake" && sleepDurationMinutes !== undefined
       ? `起床・睡眠 ${formatSleepDuration(sleepDurationMinutes)}`
       : formatEventTitle(event);
   const iconBg =
@@ -131,7 +134,7 @@ export function EventCard({
                   ? "直前の入眠が継続中のため集計対象外"
                   : "対応する入眠記録がないため集計対象外"}
               </p>
-            ) : displayNote ? (
+            ) : !isCustomMemo && displayNote ? (
               <p className="mt-1 line-clamp-2 break-words text-sm text-muted-foreground">{displayNote}</p>
             ) : null}
           </div>
