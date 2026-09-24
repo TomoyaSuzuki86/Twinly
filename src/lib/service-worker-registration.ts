@@ -48,11 +48,10 @@ export const installServiceWorkerRegistration = () => {
     }
   };
 
-  window.addEventListener("load", handleLoad);
+  void handleLoad();
 
   const cleanup = () => {
     disposed = true;
-    window.removeEventListener("load", handleLoad);
     if (controllerChangeHandler) {
       navigator.serviceWorker.removeEventListener("controllerchange", controllerChangeHandler);
     }
