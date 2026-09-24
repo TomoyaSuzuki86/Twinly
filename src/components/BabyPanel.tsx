@@ -230,7 +230,7 @@ export function BabyPanel({
     onAddEvent({
       babyId,
       type: "daily",
-      note: `${preset.emoji} ${preset.text}`,
+      note: preset.text,
       customMemoId: preset.id,
       customMemoEmoji: preset.emoji,
     });
@@ -616,8 +616,9 @@ export function BabyPanel({
                 </div>
 
                 {customMemoPresets.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {customMemoPresets.map((preset) => (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {customMemoPresets.map((preset) => (
                       <button
                         key={preset.id}
                         type="button"
@@ -639,8 +640,12 @@ export function BabyPanel({
                         <span aria-hidden="true" className="text-base leading-none">{preset.emoji}</span>
                         <span>{preset.text}</span>
                       </button>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                    <p className="px-1 text-[10px] leading-none text-muted-foreground/70">
+                      長押しで削除
+                    </p>
+                  </>
                 ) : (
                   <p className="px-1 text-xs text-muted-foreground">よく使うルーティンを追加すると、ここから1タップで記録できます。</p>
                 )}
