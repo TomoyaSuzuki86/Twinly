@@ -32,7 +32,7 @@ type FamilyOnboardingInput =
 
 const FAMILY_SESSION_CACHE_PREFIX = "twinly-family-session:";
 
-class InvalidFamilySessionError extends Error {}
+export class InvalidFamilySessionError extends Error {}
 
 const familySessionCacheKey = (uid: string) => `${FAMILY_SESSION_CACHE_PREFIX}${uid}`;
 
@@ -114,8 +114,14 @@ const loadFamilySessionFresh = async (user: User, forceServer: boolean): Promise
     readServer ? getDocFromServer(familyRef) : getDoc(familyRef),
     readServer ? getDocFromServer(memberRef) : getDoc(memberRef),
   ]);
-  if (!familySnap.exists() || !memberSnap.exists() || memberSnap.data().status === "inactive") {
-    throw new InvalidFamilySessionError("家族情報が見つからないか、アクセス権がありません。");
+  if (!familySnap.exists()) {
+    throw new InvalidFamilySessionError("家族データが見つかりません。家族との紐付け情報が古くなっている可能性があります。");
+  }
+  if (!memberSnap.exists()) {
+    throw new InvalidFamilySessionError("このアカウントの家族メンバー登録が見つかりません。家族の管理者から再招待が必要です。");
+  }
+  if (memberSnap.data().status === "inactive") {
+    throw new InvalidFamilySessionError("このアカウントの家族メンバー登録は無効になっています。家族の管理者に確認してください。");
   }
 
   return {
@@ -177,9 +183,27 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
     if (session) writeCachedFamilySession(user.uid, session);
     else clearCachedFamilySession(user.uid);
     return session;
-  } catch (error) {
-    clearCachedFamilySession(user.uid);
-    throw error;
+  } catch (firstError) {
+    // A preview channel is a separate origin, so it starts without Twinly's
+    // family-session cache. If the first server read races an auth-token refresh
+    // or hits a transient backend failure, retry once from the server before
+    // showing the blocking family-session error. Confirmed access failures are
+    // not transient and must be surfaced immediately.
+    if (firstError instanceof InvalidFamilySessionError) {
+      clearCachedFamilySession(user.uid);
+      throw firstError;
+    }
+    try {
+      if (typeof user.getIdToken === "function") await user.getIdToken(true);
+      const session = await loadFamilySessionFresh(user, true);
+      if (session) writeCachedFamilySession(user.uid, session);
+      else clearCachedFamilySession(user.uid);
+      return session;
+    } catch (retryError) {
+      clearCachedFamilySession(user.uid);
+      console.warn("Family session retry failed", { firstError, retryError });
+      throw retryError;
+    }
   }
 };
 

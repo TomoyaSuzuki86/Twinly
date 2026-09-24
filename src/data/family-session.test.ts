@@ -23,6 +23,6 @@ describe("family session failures", () => {
     api.getDoc.mockResolvedValueOnce({ data: () => ({ activeFamilyId: "family" }) })
       .mockResolvedValueOnce({ exists: () => true, data: () => ({}) })
       .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: "inactive" }) });
-    await expect(loadFamilySession(user)).rejects.toThrow("アクセス権");
+    await expect(loadFamilySession(user)).rejects.toThrow("家族メンバー登録は無効");
   });
 });

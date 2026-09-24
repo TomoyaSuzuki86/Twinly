@@ -1,9 +1,10 @@
-const SHELL_CACHE_VERSION = "twinly-shell-v13";
+const SHELL_CACHE_VERSION = "twinly-shell-v18";
 const BUILD_CACHE_KEY = "dev";
 const SHELL_CACHE = `${SHELL_CACHE_VERSION}-${BUILD_CACHE_KEY}`;
 
 const STATIC_PRECACHE = [
   "/manifest.webmanifest",
+  "/assets/twinly-launch-v2.mp4",
   "/icons/icon-192-v7.png",
   "/icons/icon-512-v7.png",
   "/icons/icon-192-maskable-v7.png",
