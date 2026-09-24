@@ -180,10 +180,15 @@ export const loadFamilySession = async (user: User): Promise<FamilySession | nul
   } catch (firstError) {
     // A preview channel is a separate origin, so it starts without Twinly's
     // family-session cache. If the first server read races an auth-token refresh
-    // or hits a transient Firestore failure, refresh the token and retry once
-    // from the server before showing the blocking family-session error.
+    // or hits a transient backend failure, retry once from the server before
+    // showing the blocking family-session error. Confirmed access failures are
+    // not transient and must be surfaced immediately.
+    if (firstError instanceof InvalidFamilySessionError) {
+      clearCachedFamilySession(user.uid);
+      throw firstError;
+    }
     try {
-      await user.getIdToken(true);
+      if (typeof user.getIdToken === "function") await user.getIdToken(true);
       const session = await loadFamilySessionFresh(user, true);
       if (session) writeCachedFamilySession(user.uid, session);
       else clearCachedFamilySession(user.uid);
