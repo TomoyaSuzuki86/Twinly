@@ -27,7 +27,7 @@ type Props = {
 type Rect = { top: number; left: number; width: number; height: number };
 type SleepType = "sleepStart" | "wake";
 
-const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 8, 10, 11];
+const tutorialSteps = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11];
 const TOTAL_STEPS = tutorialSteps.length;
 const scrollTargetIntoView = new Set([1, 7, 8, 9]);
 const voiceSteps = new Set([4, 5]);
@@ -214,6 +214,9 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     }
     if (step === 5) {
       setStatus("「10分前 おしっこ」と話してみてください。相対時刻と2人同時入力をまとめて練習します。");
+    }
+    if (step === 7) {
+      setStatus("「追加してみる」を押して、カスタムメモがそのまま記録になる流れを試してください。");
     }
   }, [step, open]);
 
@@ -406,7 +409,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "この子だけに、声で入力",
     "ヘッダーから、2人へまとめて入力",
     "声では、いろいろな記録ができます",
-    "記録は、あとから直せます",
+    "よく使う記録は、1タップに",
     "ログ下の集計を、すぐ確認",
     "タイムラインで、1週間を見渡す",
     "もっと便利に使いたいときは",
@@ -421,7 +424,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "赤ちゃんの名前タブを長押し、またはダブルタップすると、実際にマイクが起動します。「ミルク180」と話してみてください。選択中の赤ちゃん1人だけに入る結果を画面上で確認しますが、実際のログには保存しません。",
     "今度は画面上部のTwinlyを長押し、またはダブルタップします。「10分前 おしっこ」と話してみてください。ヘッダーから始めた音声入力は常に2人が対象です。話の中に赤ちゃんの名前が入っていても振り分けには使いません。",
     "音声入力はミルクだけではありません。おむつ・離乳食・入眠・起床にも対応します。一言メモ欄は空のときマイクになり、話した内容が入るとチェックの保存ボタンに変わります。ヘッダーで普通の文章を話した場合は、2人の共通メモとして残せます。",
-    "本番では保存直後なら「取り消す」で戻せます。あとからはログを開いて編集・削除できます。",
+    "「一言メモ」をタップすると、よく使うメモを登録できます。絵文字と名前を入力して追加すると、そのまま今回の記録も保存されます。次からは登録したメモを1タップするだけ。不要になったメモは長押しで削除できます。",
     "ログ見出しのすぐ下には、その日の食事・おむつ・睡眠の集計カードがあります。横にスワイプして3項目を見比べられ、各カードをタップすると詳しい履歴を開けます。",
     "タイムラインでは、1週間のミルク・離乳食・おむつ・睡眠を24時間軸でまとめて確認できます。生活リズムをざっと振り返りたいときに便利です。",
     "Twinlyには、画面テーマの追加やAIアドバイスなどの有料機能もあります。必要になったときに試せる程度に覚えておけば大丈夫です。",
@@ -438,7 +441,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
     "8時30分におしっこ",
   ];
 
-  const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5;
+  const requiresPractice = step === 2 || step === 3 || step === 4 || step === 5 || step === 7;
   const interactiveSpotlight = step === 4 || step === 5 || step === 11;
   const isVoiceStep = voiceSteps.has(step);
   const stepIndex = Math.max(0, tutorialSteps.indexOf(step));
@@ -447,6 +450,7 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
   const spotlightLabel =
     step === 4 ? "選択中の赤ちゃんの音声入力を練習" :
     step === 5 ? "2人同時の音声入力を練習" :
+    step === 7 ? "カスタムメモ" :
     step === 8 ? "食事・おむつ・睡眠の集計" :
     step === 9 ? "週間タイムラインを開くボタン" :
     step === 11 ? "設定を開く" :
@@ -670,11 +674,58 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
                 </div>)}
               </div>}
 
-              {step === 7 && <p className="mt-4 rounded-xl bg-muted p-3 text-sm leading-relaxed">
-                1人だけ音声入力 → 名前タブ<br />
-                2人同時に音声入力 → 上のTwinly<br />
-                間違えたら → 直後は「取り消す」、あとからはログを開く
-              </p>}
+              {step === 7 && <div className="twinly-tutorial-demo" aria-live="polite">
+                <div className="rounded-xl border bg-card p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="grid h-9 w-12 flex-none place-items-center rounded-md border bg-background text-lg">🙂</div>
+                    <div className="flex h-9 min-w-0 flex-1 items-center rounded-md border bg-background px-3 text-sm font-medium">沐浴</div>
+                    <Button
+                      size="sm"
+                      className="h-9 flex-none"
+                      disabled={practiced}
+                      onClick={() => {
+                        setPracticed(true);
+                        setStatus("「沐浴」をカスタムメモに追加し、同時に今回の記録にも追加する動きを再現しました。実際の育児ログには保存されません。");
+                      }}
+                    >
+                      {practiced ? "追加済み" : "追加してみる"}
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-center text-[10px] text-muted-foreground">本番では絵文字と名前を自由に登録できます</p>
+                </div>
+
+                {practiced ? <div className="mt-3 space-y-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <button type="button" className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-sm font-medium">
+                        <span aria-hidden="true" className="text-base leading-none">🙂</span>
+                        <span>沐浴</span>
+                      </button>
+                    </div>
+                    <p className="mt-1 px-1 text-[10px] leading-none text-muted-foreground/70">長押しで削除</p>
+                  </div>
+
+                  <EventCard
+                    event={{
+                      id: "tutorial-custom-memo",
+                      babyId: activeBabyId,
+                      type: "daily",
+                      timestamp: Date.now(),
+                      note: "沐浴",
+                      customMemoId: "tutorial-bath",
+                      customMemoEmoji: "🙂",
+                    }}
+                    onEdit={() => undefined}
+                  />
+                </div> : null}
+
+                <p className="mt-3 text-center text-xs text-muted-foreground">{status}</p>
+                {practiced && <div className="twinly-tutorial-result mt-3">
+                  <span className="flex items-center justify-center gap-1 text-sm font-bold">
+                    <Check size={14} aria-hidden="true" />作成と記録をまとめて体験
+                  </span>
+                </div>}
+              </div>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
