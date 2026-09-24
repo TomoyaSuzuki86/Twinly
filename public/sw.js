@@ -51,7 +51,9 @@ self.addEventListener("fetch", (event) => {
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       const cached = (await caches.match(req, { ignoreSearch: true })) || (await caches.match("/index.html"));
-      if (!self.navigator?.onLine && cached) return cached;
+      if (cached) {
+        return cached;
+      }
       try {
         const response = await fetch(req, { cache: "no-store" });
         if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
