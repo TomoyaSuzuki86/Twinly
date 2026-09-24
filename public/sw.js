@@ -1,10 +1,10 @@
-const SHELL_CACHE = "twinly-shell-v12";
+const SHELL_CACHE = "twinly-shell-v13";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
       cache.addAll([
-        "/manifest.webmanifest",
+        "/manifest.webmanifest",\n        "/assets/twinly-launch.mp4",
         "/icons/icon-192-v7.png",
         "/icons/icon-512-v7.png",
         "/icons/icon-192-maskable-v7.png",
