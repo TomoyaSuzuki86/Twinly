@@ -14,6 +14,7 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { MilkDraft } from "@/lib/entry-drafts";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
+import { MilkAmountControl } from "./MilkAmountControl";
 
 type MilkModalProps = {
   open: boolean;
@@ -25,11 +26,6 @@ type MilkModalProps = {
   onSaveSolidFood?: (payload: { note: string; timestamp: number; autoWake: boolean }) => void;
 };
 
-const MAX_MILK_ML = 999;
-const SLIDER_MAX_ML = 300;
-
-const normalizeMilkMl = (value: number) =>
-  Math.min(MAX_MILK_ML, Math.max(0, Math.round(Number.isFinite(value) ? value : 0)));
 
 export function MilkModal({
   open,
@@ -42,7 +38,6 @@ export function MilkModal({
 }: MilkModalProps) {
   const [recordType, setRecordType] = useState<"milk" | "solidFood">("milk");
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
-  const [milkMlInput, setMilkMlInput] = useState(String(initialDraft.milkMl));
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
@@ -55,29 +50,11 @@ export function MilkModal({
     if (!justOpened) return;
     setRecordType("milk");
     setMilkMl(initialDraft.milkMl);
-    setMilkMlInput(String(initialDraft.milkMl));
     setNote(initialDraft.note);
     setSolidFoodNote("");
     setTimestamp(initialDraft.timestamp);
     setAutoWake(true);
   }, [open, initialDraft]);
-
-  const setMilkAmount = (value: number) => {
-    const normalized = normalizeMilkMl(value);
-    setMilkMl(normalized);
-    setMilkMlInput(String(normalized));
-  };
-
-  const handleMilkInputChange = (rawValue: string) => {
-    const digitsOnly = rawValue.replace(/\D/g, "");
-    setMilkMlInput(digitsOnly);
-    if (digitsOnly === "") return;
-    setMilkMl(normalizeMilkMl(Number(digitsOnly)));
-  };
-
-  const normalizeMilkInput = () => {
-    setMilkAmount(Number(milkMlInput || 0));
-  };
 
   const handleSave = () => {
     if (recordType === "solidFood") {
@@ -87,7 +64,7 @@ export function MilkModal({
     }
 
     onSave({
-      milkMl: normalizeMilkMl(Number(milkMlInput || milkMl)),
+      milkMl,
       note,
       timestamp,
       autoWake,
@@ -123,42 +100,7 @@ export function MilkModal({
           </div>
 
           {recordType === "milk" ? (
-            <div className="text-center">
-              <Label htmlFor="milk-amount" className="text-sm font-semibold text-muted-foreground">
-                量 (ml)
-              </Label>
-              <div className="mt-3 flex items-baseline justify-center gap-2">
-                <input
-                  id="milk-amount"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  aria-label="ミルク量"
-                  value={milkMlInput}
-                  onChange={(event) => handleMilkInputChange(event.target.value)}
-                  onBlur={normalizeMilkInput}
-                  onFocus={(event) => event.currentTarget.select()}
-                  className="w-48 border-0 bg-transparent p-0 text-center text-7xl font-extrabold tracking-tight outline-none [color:hsl(var(--care-milk))] focus:ring-0"
-                />
-                <span className="text-xl font-semibold text-muted-foreground">ml</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={SLIDER_MAX_ML}
-                step="10"
-                value={Math.min(SLIDER_MAX_ML, milkMl)}
-                onChange={(event) => setMilkAmount(Number(event.target.value))}
-                aria-label="ミルク量スライダー"
-                aria-valuetext={`${milkMl}ml`}
-                className="mt-5 h-2 w-full cursor-pointer accent-sky-500"
-              />
-              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                <span>0ml</span>
-                <span>10ml刻み</span>
-                <span>{SLIDER_MAX_ML}ml</span>
-              </div>
-            </div>
+            <MilkAmountControl value={milkMl} onChange={setMilkMl} />
           ) : (
             <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
               <Label htmlFor="solid-food-note" className="font-semibold text-emerald-200">

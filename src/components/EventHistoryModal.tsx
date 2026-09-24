@@ -1,7 +1,6 @@
 import { HistoryDialogShell } from "./HistoryDialogShell";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { BabyId, BabyProfile, LogEvent } from "@/types";
-import { fmtDate, fmtTime } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
@@ -70,21 +69,6 @@ const formatMilkComparison = (difference: number) => {
   return difference > 0
     ? `過去7日平均より ${rounded}ml 多めです`
     : `過去7日平均より ${rounded}ml 少なめです`;
-};
-
-const describeEvent = (event: LogEvent) => {
-  if (event.type === "milk") {
-    return `${event.milkMl ?? 0}ml・ミルク`;
-  }
-
-  if (event.type === "solidFood") return "離乳食";
-
-  if (event.type === "diaper") {
-    const kind = event.diaperKind === "pee" ? "おしっこ" : event.diaperKind === "poop" ? "うんち" : "両方";
-    return `おむつ・${kind}`;
-  }
-
-  return "";
 };
 
 function MilkSummaryCard({ title, stats }: { title: string; stats: MilkStats }) {
@@ -331,8 +315,8 @@ export function EventHistoryModal({
       className="flex h-[75vh] max-w-4xl flex-col overflow-hidden"
     >
 
-        <div className="grid flex-1 gap-4 overflow-y-auto md:min-h-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] md:overflow-hidden">
-          <div className="space-y-4 md:min-h-0 md:overflow-y-auto md:pr-1">
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-4">
             {historyType === "milk" ? (
               <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -436,31 +420,6 @@ export function EventHistoryModal({
             </div>
           </div>
 
-          <div className="flex min-h-[320px] flex-col overflow-hidden rounded-xl border bg-card p-4 md:min-h-0">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-medium">履歴一覧</div>
-              <div className="text-xs text-muted-foreground">{filteredEvents.length}件</div>
-            </div>
-
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
-              {filteredEvents.length === 0 ? (
-                <div className="rounded-lg border-2 border-dashed border-border/50 p-6 text-center text-sm text-muted-foreground">
-                  まだ記録がありません
-                </div>
-              ) : (
-                filteredEvents.map((event) => (
-                  <div key={event.id} className="rounded-xl border p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-medium">{describeEvent(event)}</div>
-                      <div className="text-sm text-muted-foreground">{fmtTime(new Date(event.timestamp))}</div>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{fmtDate(new Date(event.timestamp))}</div>
-                    {event.note ? <div className="mt-2 text-sm text-muted-foreground">{event.note}</div> : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
     </HistoryDialogShell>
   );

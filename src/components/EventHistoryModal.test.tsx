@@ -63,5 +63,6 @@ describe("EventHistoryModal", () => {
     expect(screen.getAllByText("200ml").length).toBeGreaterThan(0);
     expect(screen.getByText("27ml")).toBeTruthy();
     expect(screen.getByText(/173ml/)).toBeTruthy();
+    expect(screen.queryByText("履歴一覧")).toBeNull();
   });
 });

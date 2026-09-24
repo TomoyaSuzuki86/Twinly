@@ -7,14 +7,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DiaperKind, LogEvent } from "@/types";
 import { useEffect, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import { clamp } from "@/lib/utils";
 import { Trash2 } from "lucide-react";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
+import { MilkAmountControl } from "./MilkAmountControl";
 
 type EditModalProps = {
   open: boolean;
@@ -89,14 +88,7 @@ export function EditModal({ open, onOpenChange, event, onSave, onDelete, memberN
           {event.type === "milk" && (
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">ミルク</h3>
-              <div className="space-y-2">
-                <Label>量 (ml)</Label>
-                <Input
-                  type="number"
-                  value={milkMl}
-                  onChange={(e) => setMilkMl(clamp(Number(e.target.value || 0), 0, 999))}
-                />
-              </div>
+              <MilkAmountControl id="edit-milk-amount" value={milkMl} onChange={setMilkMl} />
             </div>
           )}
           {event.type === "diaper" && (

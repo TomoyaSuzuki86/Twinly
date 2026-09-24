@@ -34,6 +34,7 @@ import { iconGradients } from "./lib/utils";
 const HealthChartModal = lazy(() => import("./components/HealthChartModal").then((module) => ({ default: module.HealthChartModal })));
 import { SkeletonLoader } from "./components/SkeletonLoader";
 import { BabyPanelHydrationPlaceholder, BabyTabHydrationPlaceholder } from "./components/AppHydrationPlaceholder";
+import { HistoryModalSkeleton } from "./components/HistoryModalSkeleton";
 const DailyReportModal = lazy(() => import("./components/DailyReportModal").then((module) => ({ default: module.DailyReportModal })));
 const EventHistoryModal = lazy(() => import("./components/EventHistoryModal").then((module) => ({ default: module.EventHistoryModal })));
 const SleepHistoryModal = lazy(() => import("./components/SleepHistoryModal").then((module) => ({ default: module.SleepHistoryModal })));
@@ -837,6 +838,17 @@ export default function App() {
         initialBabyId={selectedBabyTab}
         now={now}
       />}
+      </Suspense>
+      <Suspense
+        fallback={
+          historyModal ? (
+            <HistoryModalSkeleton
+              open
+              onOpenChange={(open) => !open && setHistoryModal(null)}
+            />
+          ) : null
+        }
+      >
       {historyModal?.type === "sleep" ? (
         <SleepHistoryModal
           open
