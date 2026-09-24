@@ -524,8 +524,8 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
           ))}
 
           <section
-            className={`twinly-tutorial-card ${step === 9 ? "twinly-tutorial-card-above-target" : ""}`}
-            style={step === 9 && rect ? { top: `${Math.max(12, rect.top - 12)}px` } : undefined}
+            className={`twinly-tutorial-card ${step === 7 || step === 9 ? "twinly-tutorial-card-above-target" : ""}`}
+            style={(step === 7 || step === 9) && rect ? { top: `${Math.max(12, rect.top - 12)}px` } : undefined}
           >
             <div className="flex items-center justify-between gap-4">
               <span className="text-xs font-semibold tabular-nums text-muted-foreground">
