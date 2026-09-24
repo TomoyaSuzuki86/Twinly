@@ -62,9 +62,10 @@ export function EventCard({
 }) {
   const time = fmtTime(new Date(event.timestamp));
   const displayNote =
-    event.type === "daily" && event.customMemoEmoji && event.note
-      ? event.note.replace(new RegExp(`^${event.customMemoEmoji.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\  const time = fmtTime(new Date(event.timestamp));
-  const title =")}\\s*`), "").trimStart()
+    event.type === "daily" &&
+    event.customMemoEmoji &&
+    event.note?.startsWith(event.customMemoEmoji)
+      ? event.note.slice(event.customMemoEmoji.length).trimStart()
       : event.note;
   const title =
     event.type === "wake" && sleepDurationMinutes !== undefined
