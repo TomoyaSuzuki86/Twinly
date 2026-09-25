@@ -160,7 +160,7 @@ export function EditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="z-[70]">
         <DialogHeader>
           <DialogTitle>記録の編集</DialogTitle>
           <DialogDescription>記録内容を必要に応じて修正できます。</DialogDescription>
