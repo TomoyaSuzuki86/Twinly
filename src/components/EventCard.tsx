@@ -16,7 +16,13 @@ import {
 
 const formatEventTitle = (event: LogEvent) => {
   if (event.type === "milk") {
-    if (event.milkMethod === "breast") return "母乳";
+    if (event.milkMethod === "breast") {
+      const sides = [
+        event.breastLeftMinutes ? `左${event.breastLeftMinutes}分` : null,
+        event.breastRightMinutes ? `右${event.breastRightMinutes}分` : null,
+      ].filter(Boolean);
+      return sides.length ? `母乳 ${sides.join("・")}` : "母乳";
+    }
     return `${event.milkMl ?? 0}ml・ミルク`;
   }
 

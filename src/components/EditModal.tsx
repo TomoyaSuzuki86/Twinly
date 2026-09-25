@@ -14,6 +14,7 @@ import { Textarea } from "./ui/textarea";
 import { Copy, Trash2 } from "lucide-react";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
 import { MilkAmountControl } from "./MilkAmountControl";
+import { BreastfeedingDurationFields } from "./BreastfeedingDurationFields";
 
 type EditModalProps = {
   open: boolean;
@@ -43,6 +44,8 @@ export function EditModal({
   memberNameByUid = {},
 }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
+  const [breastLeftMinutes, setBreastLeftMinutes] = useState(10);
+  const [breastRightMinutes, setBreastRightMinutes] = useState(10);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
   const [note, setNote] = useState("");
   const [timestamp, setTimestamp] = useState(0);
@@ -52,6 +55,8 @@ export function EditModal({
   useEffect(() => {
     if (event) {
       setMilkMl(event.milkMl ?? 0);
+      setBreastLeftMinutes(event.breastLeftMinutes ?? 10);
+      setBreastRightMinutes(event.breastRightMinutes ?? 10);
       setDiaperKind(event.diaperKind ?? "pee");
       setNote(event.note ?? "");
       setTimestamp(event.timestamp);
@@ -65,7 +70,7 @@ export function EditModal({
     const payload: Partial<LogEvent> =
       event.type === "milk"
         ? event.milkMethod === "breast"
-          ? { milkMethod: "breast", note, timestamp }
+          ? { milkMethod: "breast", breastLeftMinutes, breastRightMinutes, note, timestamp }
           : { milkMl, milkMethod: "bottle", note, timestamp }
         : event.type === "diaper"
         ? { diaperKind, note, timestamp }
@@ -127,7 +132,12 @@ export function EditModal({
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-semibold">{event.milkMethod === "breast" ? "母乳" : "ミルク"}</h3>
               {event.milkMethod === "breast" ? (
-                <p className="text-sm text-muted-foreground">母乳は量を持たず、授乳時刻を次の授乳目安に使います。</p>
+                <BreastfeedingDurationFields
+                  leftMinutes={breastLeftMinutes}
+                  rightMinutes={breastRightMinutes}
+                  onLeftChange={setBreastLeftMinutes}
+                  onRightChange={setBreastRightMinutes}
+                />
               ) : (
                 <MilkAmountControl id="edit-milk-amount" value={milkMl} onChange={setMilkMl} />
               )}
@@ -190,7 +200,7 @@ export function EditModal({
                 <DialogClose asChild>
                   <Button variant="ghost">キャンセル</Button>
                 </DialogClose>
-                <Button onClick={handleSave} disabled={requiresDiaperKindReselection}>
+                <Button onClick={handleSave} disabled={requiresDiaperKindReselection || (event.type === "milk" && event.milkMethod === "breast" && breastLeftMinutes === 0 && breastRightMinutes === 0)}>
                   保存する
                 </Button>
               </div>
