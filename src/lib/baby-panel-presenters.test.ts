@@ -4,7 +4,9 @@ import type { MilkProgressComparison } from "./milk-progress";
 import type { LogEvent } from "@/types";
 import {
   adjustNumber,
+  buildDiaperProgressComparison,
   formatDiaperEstimateSummary,
+  formatDiaperProgressDifference,
   formatMilkProgressDifference,
   formatMilkProgressSummary,
   formatSleepProgressDifference,
@@ -59,6 +61,34 @@ describe("BabyPanel presenters", () => {
   it("keeps numeric stepping behavior including the invalid-input fallback", () => {
     expect(adjustNumber("36.0", 0.5, 1)).toBe("36.5");
     expect(adjustNumber("", 0.5, 2)).toBe("0.00");
+  });
+
+  it("compares diaper counts with the previous seven days at the same cutoff time", () => {
+    const now = new Date("2026-04-18T10:20:00+09:00");
+    const history = Array.from({ length: 7 }, (_, index) =>
+      event({
+        id: `diaper-history-${index}`,
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date(`2026-04-${String(17 - index).padStart(2, "0")}T09:00:00+09:00`).getTime(),
+        diaperKind: "pee",
+      })
+    );
+    const today = [
+      event({ id: "diaper-today-1", babyId: "A", type: "diaper", timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(), diaperKind: "pee" }),
+      event({ id: "diaper-today-2", babyId: "A", type: "diaper", timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(), diaperKind: "poop" }),
+    ];
+
+    const comparison = buildDiaperProgressComparison({
+      events: [...today, ...history],
+      babyId: "A",
+      targetDate: new Date("2026-04-18T00:00:00+09:00"),
+      now,
+    });
+
+    expect(comparison.currentCount).toBe(2);
+    expect(comparison.trailingAverage).toBe(1);
+    expect(formatDiaperProgressDifference(comparison)).toBe("+1回");
   });
 
   it("formats diaper forecast states without changing their wording", () => {
