@@ -23,6 +23,7 @@ type VoiceCommandButtonProps = {
   onCommand: (command: VoiceCommand) => void;
   onMessage: (message: string) => void;
   onTranscript?: (text: string) => void;
+  recognitionMode?: "command" | "dictation";
   className?: string;
 };
 
@@ -100,7 +101,7 @@ const setBabyTabVoiceHighlight = (target: VoiceCommandTarget | undefined, active
 };
 
 export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceCommandButtonProps>(function VoiceCommandButton(
-  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, className },
+  { babyNames, defaultMilkMlByBaby, onCommand, onMessage, onTranscript, recognitionMode = "command", className },
   ref
 ) {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -241,10 +242,14 @@ export const VoiceCommandButton = forwardRef<VoiceCommandButtonHandle, VoiceComm
       if (!keepListeningRef.current || submittedRef.current) return;
 
       const recognition = new SpeechRecognition();
+      const dictationMode = recognitionMode === "dictation";
       recognition.lang = "ja-JP";
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 5;
-      recognition.continuous = true;
+      // Free-form one-line dictation must not use the command recognizer's continuous
+      // interim stream. Android Chrome can expose revised/cumulative interim results as
+      // separate segments, which is the source of repeated memo text.
+      recognition.interimResults = !dictationMode;
+      recognition.maxAlternatives = dictationMode ? 1 : 5;
+      recognition.continuous = !dictationMode;
 
       recognition.onstart = () => {
         setListening(true);
