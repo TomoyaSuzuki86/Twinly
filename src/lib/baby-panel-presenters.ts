@@ -1,5 +1,6 @@
 import type { DiaperStockEstimate } from "@/lib/diaper-stock";
 import type { MilkProgressComparison } from "@/lib/milk-progress";
+import type { SleepProgressComparison } from "@/lib/sleep-history";
 import type { LogEvent } from "@/types";
 
 export type BabyPanelLogSummary = {
@@ -95,6 +96,22 @@ export const formatMilkProgressSummary = (progress: MilkProgressComparison | nul
     title: `${progress.currentAmount}ml / 平均${roundedAverage}ml`,
     detail,
   };
+};
+
+const formatSignedDifference = (difference: number, unit: string) => {
+  const rounded = Math.round(difference);
+  if (rounded === 0) return `0${unit}`;
+  return `${rounded > 0 ? "+" : ""}${rounded}${unit}`;
+};
+
+export const formatMilkProgressDifference = (progress: MilkProgressComparison | null) => {
+  if (!progress || progress.status === "no-history") return null;
+  return formatSignedDifference(progress.difference, "ml");
+};
+
+export const formatSleepProgressDifference = (progress: SleepProgressComparison | null) => {
+  if (!progress || progress.status === "no-history") return null;
+  return formatSignedDifference(progress.differenceMinutes, "分");
 };
 
 export const roundMilkAmountUp = (amount: number) => Math.ceil(Math.max(0, amount) / 5) * 5;
