@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { collapseRepeatedTranscriptPrefix, mergeTranscriptSegments } from "./speech-transcript";
+import {
+  collapseExactRepeatedTranscript,
+  collapseRepeatedTranscriptPrefix,
+  mergeTranscriptSegments,
+} from "./speech-transcript";
+
+describe("free-form speech transcript exact duplication", () => {
+  it("collapses a short exact two-copy Android Chrome memo artifact", () => {
+    expect(collapseExactRepeatedTranscript("沐浴した沐浴した")).toBe("沐浴した");
+  });
+
+  it("collapses the same memo when recognition inserts whitespace between copies", () => {
+    expect(collapseExactRepeatedTranscript("沐浴した 沐浴した")).toBe("沐浴した");
+  });
+
+  it("keeps an ordinary free-form memo unchanged", () => {
+    expect(collapseExactRepeatedTranscript("沐浴してからミルクを飲んだ")).toBe("沐浴してからミルクを飲んだ");
+  });
+});
 
 describe("speech transcript cumulative results", () => {
   it("does not repeat a phrase included in the next cumulative result", () => {

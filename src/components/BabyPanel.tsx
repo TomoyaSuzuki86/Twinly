@@ -36,6 +36,7 @@ import { VoiceCommandButton } from "./VoiceCommandButton";
 import { formatSleepDuration } from "@/lib/sleep";
 import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
 import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
+import { collapseExactRepeatedTranscript } from "@/lib/speech-transcript";
 
 const SLEEP_LONG_PRESS_MS = 550;
 const CUSTOM_MEMO_LONG_PRESS_MS = 550;
@@ -576,7 +577,7 @@ export function BabyPanel({
                   onCommand={() => {}}
                   onMessage={onVoiceMessage}
                   onTranscript={(text) => {
-                    const note = text.trim();
+                    const note = collapseExactRepeatedTranscript(text);
                     if (!note) return;
                     onAddEvent({ babyId, type: "daily", note });
                     setDailyNote("");
