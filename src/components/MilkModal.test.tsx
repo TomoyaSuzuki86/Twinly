@@ -92,6 +92,8 @@ describe("MilkModal", () => {
         displayName="赤ちゃんA"
         initialDraft={{
           milkMl: 50,
+          breastLeftMinutes: 15,
+          breastRightMinutes: 20,
           note: "",
           timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
         }}
@@ -101,10 +103,22 @@ describe("MilkModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "母乳" }));
     expect(screen.queryByLabelText("ミルク量")).toBeNull();
+    expect(screen.queryByText("母乳として記録")).toBeNull();
+    expect(screen.queryByText(/母乳量は推定せず/)).toBeNull();
+
+    const left = screen.getByLabelText("左の授乳時間") as HTMLSelectElement;
+    const right = screen.getByLabelText("右の授乳時間") as HTMLSelectElement;
+    expect(left.value).toBe("15");
+    expect(right.value).toBe("20");
+
+    fireEvent.change(left, { target: { value: "25" } });
+    fireEvent.change(right, { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
     expect(onSave).toHaveBeenCalledWith({
       milkMethod: "breast",
+      breastLeftMinutes: 25,
+      breastRightMinutes: 5,
       note: "",
       timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
       autoWake: true,

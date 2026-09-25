@@ -17,6 +17,8 @@ describe("EditModal", () => {
       timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
       milkMl: 100,
       milkMethod: "breast",
+      breastLeftMinutes: 15,
+      breastRightMinutes: 20,
       note: "legacy",
     };
 
@@ -24,9 +26,18 @@ describe("EditModal", () => {
 
     expect(screen.getByText("母乳")).toBeTruthy();
     expect(screen.queryByLabelText("ミルク量")).toBeNull();
+    expect(screen.queryByText(/母乳は量を持たず/)).toBeNull();
+    expect((screen.getByLabelText("左の授乳時間") as HTMLSelectElement).value).toBe("15");
+    expect((screen.getByLabelText("右の授乳時間") as HTMLSelectElement).value).toBe("20");
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
-    expect(onSave).toHaveBeenCalledWith("milk-legacy", { milkMethod: "breast", note: "legacy", timestamp: event.timestamp });
+    expect(onSave).toHaveBeenCalledWith("milk-legacy", {
+      milkMethod: "breast",
+      breastLeftMinutes: 15,
+      breastRightMinutes: 20,
+      note: "legacy",
+      timestamp: event.timestamp,
+    });
   });
 
   it("does not offer mix when editing diaper records", () => {
