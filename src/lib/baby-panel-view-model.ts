@@ -2,7 +2,9 @@ import type { BabyProfile, LogEvent } from "@/types";
 import type { DiaperStockEstimate } from "./diaper-stock";
 import type { MilkProgressComparison } from "./milk-progress";
 import {
+  buildDiaperProgressComparison,
   formatDiaperEstimateSummary,
+  formatDiaperProgressDifference,
   formatMilkProgressDifference,
   formatMilkProgressSummary,
   formatSleepProgressDifference,
@@ -48,11 +50,19 @@ export const buildBabyPanelViewModel = ({
 }: Params) => {
   const babyId = profile.babyId;
   const logSummary = summarizeBabyPanelLogEvents(logEvents);
+  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const diaperEstimateSummary =
     diaperStockManagementEnabled && stockForecastEnabled
       ? formatDiaperEstimateSummary(diaperEstimate)
       : null;
+  const diaperProgress = buildDiaperProgressComparison({
+    events: latestEvents,
+    babyId,
+    targetDate: selectedLogDate,
+    now,
+  });
+  const diaperProgressDifferenceLabel = formatDiaperProgressDifference(diaperProgress);
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
   const milkProgressDifferenceLabel = formatMilkProgressDifference(milkProgress);
 
@@ -87,7 +97,6 @@ export const buildBabyPanelViewModel = ({
     ? formatSleepDuration((now.getTime() - sleepAnalysis.currentSleepStart.timestamp) / 60000)
     : null;
 
-  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
   const sleepComparisonNow = new Date(selectedLogDate);
   sleepComparisonNow.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
   const sleepProgress = getSleepProgressComparison(sleepAnalysis, sleepComparisonNow);
@@ -136,6 +145,7 @@ export const buildBabyPanelViewModel = ({
     ...logSummary,
     remainingDiapers,
     diaperEstimateSummary,
+    diaperProgressDifferenceLabel,
     milkProgressSummary,
     milkProgressDifferenceLabel,
     sleepAnalysis,
