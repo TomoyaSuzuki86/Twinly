@@ -209,6 +209,8 @@ describe("EditModal", () => {
     expect(onCopyToTwin).toHaveBeenCalledWith(event, {
       note: "朝の沐浴",
       timestamp: new Date("2026-04-18T09:30:00").getTime(),
+      customMemoId: "bath",
+      customMemoEmoji: "🛁",
     });
     expect(screen.getByRole("button", { name: "コピー済み" }).hasAttribute("disabled")).toBe(true);
   });
