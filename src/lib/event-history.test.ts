@@ -159,7 +159,7 @@ describe("event-history helpers", () => {
     });
     const data = buildSolidFoodChartData(foodEvents, "1W", now);
     expect(data).toHaveLength(7);
-    expect(data.at(-1)).toMatchObject({ key: "2026-04-21", count: 1 });
+    expect(data[data.length - 1]).toMatchObject({ key: "2026-04-21", count: 1 });
   });
 
   it("summarizes diaper totals by kind and daily average", () => {
