@@ -156,6 +156,7 @@ export function BabyPanel({
     remainingDiapers,
     diaperEstimateSummary,
     milkProgressSummary,
+    milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
     activityGauge,
@@ -166,6 +167,7 @@ export function BabyPanel({
     currentSleepDuration,
     sleepLogSummary,
     sleepLogTotal,
+    sleepProgressDifferenceLabel,
     averageActivityDuration,
     sleepDurationByWakeId,
     lastMilkEvent,
@@ -791,26 +793,16 @@ export function BabyPanel({
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
         <div
           ref={tutorialAnchorRef?.(`log-summary:${babyId}`)}
-          className="-mx-1 overflow-x-auto px-1 pb-2"
-          data-horizontal-scroll="true"
-          onTouchStart={(event) => event.stopPropagation()}
-          onTouchEnd={(event) => event.stopPropagation()}
-          onTouchCancel={(event) => event.stopPropagation()}
+          className="pb-2"
         >
-          <div
-            className={`grid w-max min-w-full gap-3 ${
-              sleepManagementEnabled
-                ? "grid-cols-[repeat(3,minmax(160px,1fr))]"
-                : "grid-cols-[repeat(2,minmax(160px,1fr))]"
-            }`}
-          >
+          <div className="grid min-w-0 grid-cols-2 gap-3">
           <button
             type="button"
             className="min-w-0 text-left"
             onClick={() => onOpenHistory("milk", babyId)}
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
-            <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
+            <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
               <CardHeader className="p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">食事</CardTitle>
               </CardHeader>
@@ -820,15 +812,10 @@ export function BabyPanel({
                     <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
                     <span className="font-semibold text-muted-foreground">ml</span>
                   </div>
-                  {milkProgressSummary ? (
-                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[900px]:block">
-                      <p className="truncate text-xs font-semibold leading-tight [color:hsl(var(--gauge-milk-text))]">
-                        {milkProgressSummary.title}
-                      </p>
-                      <p className="truncate text-[11px] leading-tight [color:hsl(var(--gauge-milk-muted))]">
-                        {milkProgressSummary.detail}
-                      </p>
-                    </div>
+                  {milkProgressDifferenceLabel ? (
+                    <span className="shrink-0 whitespace-nowrap rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-milk-text))]">
+                      {milkProgressDifferenceLabel}
+                    </span>
                   ) : null}
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -894,7 +881,7 @@ export function BabyPanel({
           {sleepManagementEnabled ? (
             <button
               type="button"
-              className="min-w-0 text-left"
+              className="col-span-2 min-w-0 text-left"
               onClick={() => onOpenHistory("sleep", babyId)}
               aria-label={`${profile.displayName}の睡眠履歴を開く`}
             >
@@ -903,10 +890,15 @@ export function BabyPanel({
                   <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
-                  <div className="flex min-w-0 items-baseline gap-1">
+                  <div className="flex min-w-0 items-baseline justify-between gap-3">
                     <span className="whitespace-nowrap text-2xl font-bold [color:hsl(var(--gauge-sleep-fill))]">{sleepLogTotal}</span>
+                    {sleepProgressDifferenceLabel ? (
+                      <span className="shrink-0 whitespace-nowrap rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-sleep-fill))]">
+                        {sleepProgressDifferenceLabel}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <div className="mt-2 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between gap-2">
                       <span>睡眠回数</span>
                       <span>{sleepLogSummary.sleepCount}回</span>
