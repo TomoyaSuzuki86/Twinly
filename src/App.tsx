@@ -886,7 +886,16 @@ export default function App() {
       />
       <Suspense fallback={<div role="status" className="fixed bottom-4 left-4 rounded border bg-background p-3">読み込み中…</div>}>
       {chartModalOpen && <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />}
-      {dailyReportModalOpen && <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} onDelete={removeEvent} />}
+      {dailyReportModalOpen && <DailyReportModal
+        open={dailyReportModalOpen}
+        onOpenChange={setDailyReportModalOpen}
+        events={app.events}
+        profiles={app.profiles}
+        onSelectEvent={(eventId) => {
+          setDailyReportModalOpen(false);
+          openModal("edit", { eventId });
+        }}
+      />}
       {timelineModalOpen && <WeeklyTimelineModal
         open={timelineModalOpen}
         onOpenChange={setTimelineModalOpen}
