@@ -15,6 +15,19 @@ export type MilkBreakdown = {
   solidFoodCount: number;
 };
 
+export type BreastfeedingStats = {
+  count: number;
+  leftMinutes: number;
+  rightMinutes: number;
+  totalMinutes: number;
+  dailyAverageMinutes: number;
+};
+
+export type SolidFoodStats = {
+  count: number;
+  dailyAverage: number;
+};
+
 export type DiaperStats = {
   count: number;
   dailyAverage: number;
@@ -32,6 +45,16 @@ export type MilkChartDatum = MilkBreakdown & {
 };
 
 export type DiaperChartDatum = DiaperBreakdown & {
+  key: string;
+  label: string;
+};
+
+export type BreastfeedingChartDatum = BreastfeedingStats & {
+  key: string;
+  label: string;
+};
+
+export type SolidFoodChartDatum = SolidFoodStats & {
   key: string;
   label: string;
 };
@@ -80,6 +103,42 @@ export const summarizeMilkEvents = (events: LogEvent[]): MilkBreakdown => {
   };
 };
 
+export const summarizeBreastfeedingEvents = (
+  events: LogEvent[],
+  daySpan: number
+): BreastfeedingStats => {
+  const breastEvents = events.filter(
+    (event) => event.type === "milk" && event.milkMethod === "breast"
+  );
+  const leftMinutes = breastEvents.reduce(
+    (sum, event) => sum + Math.max(0, event.breastLeftMinutes ?? 0),
+    0
+  );
+  const rightMinutes = breastEvents.reduce(
+    (sum, event) => sum + Math.max(0, event.breastRightMinutes ?? 0),
+    0
+  );
+  const totalMinutes = leftMinutes + rightMinutes;
+  return {
+    count: breastEvents.length,
+    leftMinutes,
+    rightMinutes,
+    totalMinutes,
+    dailyAverageMinutes: daySpan === 0 ? 0 : totalMinutes / daySpan,
+  };
+};
+
+export const summarizeSolidFoodEvents = (
+  events: LogEvent[],
+  daySpan: number
+): SolidFoodStats => {
+  const count = events.filter((event) => event.type === "solidFood").length;
+  return {
+    count,
+    dailyAverage: daySpan === 0 ? 0 : count / daySpan,
+  };
+};
+
 export const summarizeDiaperEvents = (events: LogEvent[], daySpan: number): DiaperBreakdown => {
   const peeCount = events.reduce(
     (count, event) => count + (event.diaperKind === "pee" || event.diaperKind === "mix" ? 1 : 0),
@@ -115,6 +174,27 @@ const getPeriodLabel = (key: string) => key.slice(5);
 
 const getPeriodDaySpan = (timeRange: TimeRange) => (timeRange === "3M" ? 7 : 1);
 
+const buildPeriodKeys = (timeRange: TimeRange, now: Date) => {
+  const keys: string[] = [];
+  if (timeRange === "3M") {
+    const cursor = startOfWeek(getRangeStart(timeRange, now));
+    const end = startOfWeek(now);
+    while (cursor.getTime() <= end.getTime()) {
+      keys.push(fmtDate(cursor));
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return keys;
+  }
+
+  const cursor = getRangeStart(timeRange, now);
+  const end = startOfDay(now);
+  while (cursor.getTime() <= end.getTime()) {
+    keys.push(fmtDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+};
+
 export const filterEventsForTimeRange = (events: LogEvent[], timeRange: TimeRange, now: Date) => {
   const rangeStart = getRangeStart(timeRange, now).getTime();
   const rangeEnd = now.getTime();
@@ -141,6 +221,34 @@ export const buildMilkChartData = (events: LogEvent[], timeRange: TimeRange, now
     label: getPeriodLabel(key),
     ...summarizeMilkEvents(bucketEvents),
   }));
+
+export const buildBreastfeedingChartData = (
+  events: LogEvent[],
+  timeRange: TimeRange,
+  now: Date
+): BreastfeedingChartDatum[] => {
+  const buckets = new Map(bucketEventsByPeriod(events, timeRange, now));
+  const daySpan = getPeriodDaySpan(timeRange);
+  return buildPeriodKeys(timeRange, now).map((key) => ({
+    key,
+    label: getPeriodLabel(key),
+    ...summarizeBreastfeedingEvents(buckets.get(key) ?? [], daySpan),
+  }));
+};
+
+export const buildSolidFoodChartData = (
+  events: LogEvent[],
+  timeRange: TimeRange,
+  now: Date
+): SolidFoodChartDatum[] => {
+  const buckets = new Map(bucketEventsByPeriod(events, timeRange, now));
+  const daySpan = getPeriodDaySpan(timeRange);
+  return buildPeriodKeys(timeRange, now).map((key) => ({
+    key,
+    label: getPeriodLabel(key),
+    ...summarizeSolidFoodEvents(buckets.get(key) ?? [], daySpan),
+  }));
+};
 
 export const buildDiaperChartData = (events: LogEvent[], timeRange: TimeRange, now: Date): DiaperChartDatum[] => {
   const daySpan = getPeriodDaySpan(timeRange);
