@@ -76,13 +76,13 @@ describe("EventHistoryModal", () => {
     expect(screen.getByText("27ml")).toBeTruthy();
     expect(screen.getByText(/93ml/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("tab", { name: "母乳" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "母乳" }), { button: 0, ctrlKey: false });
     expect(screen.getByText("授乳時間の推移")).toBeTruthy();
     expect(screen.getByText("母乳の記録")).toBeTruthy();
     expect(screen.getAllByText("15分").length).toBeGreaterThan(0);
     expect(screen.getAllByText("10分").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("tab", { name: "離乳食" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "離乳食" }), { button: 0, ctrlKey: false });
     expect(screen.getByText("離乳食回数の推移")).toBeTruthy();
     expect(screen.getByText("離乳食の記録")).toBeTruthy();
     expect(screen.getByText("10倍がゆ 小さじ2")).toBeTruthy();
