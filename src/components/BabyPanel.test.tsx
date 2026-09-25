@@ -369,7 +369,7 @@ describe("BabyPanel", () => {
     expect(sleepSummaryButton.parentElement?.parentElement?.className).not.toContain("overflow-x-auto");
   });
 
-  it("shows compact milk and sleep differences directly in the summary cards", () => {
+  it("shows compact milk, diaper, and sleep differences beside the summary titles", () => {
     const historicalSleep: LogEvent[] = Array.from({ length: 7 }, (_, index) => {
       const day = String(17 - index).padStart(2, "0");
       return [
@@ -388,6 +388,30 @@ describe("BabyPanel", () => {
       ];
     }).flat();
 
+    const historicalDiapers: LogEvent[] = Array.from({ length: 7 }, (_, index) => ({
+      id: `diaper-history-${index}`,
+      babyId: "A" as const,
+      type: "diaper" as const,
+      timestamp: new Date(`2026-04-${String(17 - index).padStart(2, "0")}T09:00:00+09:00`).getTime(),
+      diaperKind: "pee" as const,
+    }));
+    const todayDiapers: LogEvent[] = [
+      {
+        id: "diaper-today-1",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(),
+        diaperKind: "pee",
+      },
+      {
+        id: "diaper-today-2",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+        diaperKind: "poop",
+      },
+    ];
+
     const todaySleep: LogEvent[] = [
       {
         id: "sleep-today",
@@ -404,9 +428,9 @@ describe("BabyPanel", () => {
     ];
 
     renderPanel({
-      events: todaySleep,
-      latestEvents: [...todaySleep, ...historicalSleep],
-      logEvents: todaySleep,
+      events: [...todaySleep, ...todayDiapers],
+      latestEvents: [...todaySleep, ...todayDiapers, ...historicalSleep, ...historicalDiapers],
+      logEvents: [...todaySleep, ...todayDiapers],
       milkProgress: {
         currentAmount: 600,
         trailingAverage: 550,
@@ -417,7 +441,10 @@ describe("BabyPanel", () => {
     });
 
     expect(screen.getByText("+50ml")).toBeTruthy();
-    expect(screen.getByText("+30分")).toBeTruthy();
+    const diaperDifference = screen.getByText("+1回");
+    const sleepDifference = screen.getByText("+30分");
+    expect(diaperDifference.parentElement?.className).toContain("justify-between");
+    expect(sleepDifference.parentElement?.className).toContain("justify-between");
     expect(screen.queryByText(/平均より/)).toBeNull();
   });
 
