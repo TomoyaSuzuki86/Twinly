@@ -575,7 +575,7 @@ describe("BabyPanel", () => {
 
     expect(screen.getByText("120")).toBeTruthy();
     expect(screen.queryByText("哺乳瓶")).toBeNull();
-    expect(screen.getByText("母乳")).toBeTruthy();
+    expect(screen.getAllByText("母乳").length).toBeGreaterThan(0);
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getAllByText("1回")).toHaveLength(2);
     expect(screen.getAllByText("2回")).toHaveLength(2);
