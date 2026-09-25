@@ -803,20 +803,18 @@ export function BabyPanel({
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
             <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
-              <CardHeader className="p-3">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">食事</CardTitle>
+                {milkProgressDifferenceLabel ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-milk-text))]">
+                    {milkProgressDifferenceLabel}
+                  </span>
+                ) : null}
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
-                    <span className="font-semibold text-muted-foreground">ml</span>
-                  </div>
-                  {milkProgressDifferenceLabel ? (
-                    <span className="shrink-0 whitespace-nowrap rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-milk-text))]">
-                      {milkProgressDifferenceLabel}
-                    </span>
-                  ) : null}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
+                  <span className="font-semibold text-muted-foreground">ml</span>
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
