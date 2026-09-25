@@ -363,9 +363,16 @@ describe("BabyPanel", () => {
     expect(screen.getByText("活動 2時間20分 / 1時間45分")).toBeTruthy();
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("100");
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
+    const mealSummaryButton = screen.getByRole("button", { name: /食事履歴を開く/ });
+    const diaperSummaryButton = screen.getByRole("button", { name: /おむつ履歴を開く/ });
     const sleepSummaryButton = screen.getByRole("button", { name: /睡眠履歴を開く/ });
+    expect(mealSummaryButton.className).toContain("h-full");
+    expect(diaperSummaryButton.className).toContain("h-full");
+    expect(mealSummaryButton.firstElementChild?.className).toContain("h-full");
+    expect(diaperSummaryButton.firstElementChild?.className).toContain("h-full");
     expect(sleepSummaryButton.className).toContain("col-span-2");
     expect(sleepSummaryButton.parentElement?.className).toContain("grid-cols-2");
+    expect(sleepSummaryButton.parentElement?.className).toContain("items-stretch");
     expect(sleepSummaryButton.parentElement?.parentElement?.className).not.toContain("overflow-x-auto");
   });
 
