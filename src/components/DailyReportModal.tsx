@@ -61,7 +61,11 @@ export function DailyReportModal({
   const reports = useMemo(() => {
     const dailyEvents = events
       .filter((event) => event.type === "daily")
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort(
+        (a, b) =>
+          b.timestamp - a.timestamp ||
+          Number(Boolean(b.sharedDailyId)) - Number(Boolean(a.sharedDailyId))
+      );
     const bySharedId = new Map<string, LogEvent[]>();
     dailyEvents.forEach((event) => {
       if (!event.sharedDailyId) return;
