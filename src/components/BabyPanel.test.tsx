@@ -12,6 +12,7 @@ const renderPanel = ({
   latestEvents,
   logEvents,
   diaperEstimate = null,
+  milkProgress = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
   onOpenModal = vi.fn(),
