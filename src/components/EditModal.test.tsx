@@ -8,6 +8,77 @@ describe("EditModal", () => {
     cleanup();
   });
 
+
+  it("preserves unsaved milk amount and memo when sync refreshes the same event", () => {
+    const timestamp = new Date("2026-04-18T10:00:00+09:00").getTime();
+    const event: LogEvent = {
+      id: "milk-sync-1",
+      babyId: "A",
+      type: "milk",
+      timestamp,
+      milkMl: 120,
+      milkMethod: "bottle",
+      note: "保存済みメモ",
+    };
+
+    const { rerender } = render(
+      <EditModal open onOpenChange={vi.fn()} event={event} onSave={vi.fn()} onDelete={vi.fn()} />
+    );
+
+    fireEvent.change(screen.getByLabelText("ミルク量"), { target: { value: "180" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "" }), { target: { value: "編集中のメモ" } });
+
+    // Reproduce a Firestore/sync refresh: same event id, but a newly-created object
+    // containing the last persisted values arrives from app.events.
+    rerender(
+      <EditModal
+        open
+        onOpenChange={vi.fn()}
+        event={{ ...event }}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("180");
+    expect((screen.getByDisplayValue("編集中のメモ") as HTMLTextAreaElement).value).toBe("編集中のメモ");
+  });
+
+  it("reinitializes the draft when switching to a different event while open", () => {
+    const first: LogEvent = {
+      id: "milk-first",
+      babyId: "A",
+      type: "milk",
+      timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
+      milkMl: 120,
+      milkMethod: "bottle",
+      note: "first",
+    };
+    const second: LogEvent = {
+      id: "milk-second",
+      babyId: "A",
+      type: "milk",
+      timestamp: new Date("2026-04-18T11:00:00+09:00").getTime(),
+      milkMl: 160,
+      milkMethod: "bottle",
+      note: "second",
+    };
+
+    const props = {
+      open: true,
+      onOpenChange: vi.fn(),
+      onSave: vi.fn(),
+      onDelete: vi.fn(),
+    };
+    const { rerender } = render(<EditModal {...props} event={first} />);
+
+    fireEvent.change(screen.getByLabelText("ミルク量"), { target: { value: "180" } });
+    rerender(<EditModal {...props} event={second} />);
+
+    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("160");
+    expect(screen.getByDisplayValue("second")).toBeTruthy();
+  });
+
   it("edits breastfeeding without exposing a fake milk amount", () => {
     const onSave = vi.fn();
     const event: LogEvent = {

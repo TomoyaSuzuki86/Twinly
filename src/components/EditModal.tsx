@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DiaperKind, LogEvent } from "@/types";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Copy, Trash2 } from "lucide-react";
@@ -53,9 +53,21 @@ export function EditModal({
   const [timestamp, setTimestamp] = useState(0);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [copiedToTwin, setCopiedToTwin] = useState(false);
+  const initializedEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (event) {
+    if (!open || !event) {
+      initializedEventIdRef.current = null;
+      return;
+    }
+
+    // Firestore/sync refreshes replace app.events with new object instances even when
+    // the same record is still being edited. Re-initializing from every new object
+    // discards the user's unsaved milk amount/note. Initialize only when the editor
+    // opens for a record, or when it switches to a different record id.
+    if (initializedEventIdRef.current === event.id) return;
+    initializedEventIdRef.current = event.id;
+
       setMilkMl(event.milkMl ?? 0);
       setBreastLeftActive((event.breastLeftMinutes ?? 10) > 0);
       setBreastRightActive((event.breastRightMinutes ?? 10) > 0);
@@ -66,8 +78,7 @@ export function EditModal({
       setTimestamp(event.timestamp);
       setDeleteConfirming(false);
       setCopiedToTwin(false);
-    }
-  }, [event]);
+  }, [open, event]);
 
   const handleSave = () => {
     if (!event) return;
