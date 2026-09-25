@@ -15,15 +15,14 @@ import {
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate, fmtTime, iconGradients } from "@/lib/utils";
 import { Baby } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useState } from "react";
 
 type DailyReportModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   events: LogEvent[];
   profiles: Record<BabyId, BabyProfile>;
-  onDelete: (eventId: string) => void;
+  onSelectEvent: (eventId: string) => void;
 };
 
 type FilterValue = "all" | BabyId;
@@ -41,51 +40,9 @@ export function DailyReportModal({
   onOpenChange,
   events,
   profiles,
-  onDelete,
+  onSelectEvent,
 }: DailyReportModalProps) {
   const [filter, setFilter] = useState<FilterValue>("all");
-  const [deleteTarget, setDeleteTarget] = useState<DailyReportItem | null>(null);
-  const longPressRef = useRef<{
-    timer: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
-
-  const clearLongPress = () => {
-    if (!longPressRef.current) return;
-    window.clearTimeout(longPressRef.current.timer);
-    longPressRef.current = null;
-  };
-
-  useEffect(() => () => clearLongPress(), []);
-
-  const startLongPress = (
-    event: React.PointerEvent<HTMLDivElement>,
-    report: DailyReportItem
-  ) => {
-    clearLongPress();
-    const timer = window.setTimeout(() => {
-      longPressRef.current = null;
-      setDeleteTarget(report);
-    }, 550);
-    longPressRef.current = {
-      timer,
-      startX: event.clientX,
-      startY: event.clientY,
-    };
-  };
-
-  const moveLongPress = (event: React.PointerEvent<HTMLDivElement>) => {
-    const current = longPressRef.current;
-    if (!current) return;
-    if (
-      Math.abs(event.clientX - current.startX) > 10 ||
-      Math.abs(event.clientY - current.startY) > 10
-    ) {
-      clearLongPress();
-    }
-  };
-
   const reports = useMemo(() => {
     const dailyEvents = events
       .filter((event) => event.type === "daily")
@@ -120,7 +77,6 @@ export function DailyReportModal({
   }, [events, filter]);
 
   return (
-    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl h-[70vh] flex flex-col">
         <DialogHeader>
@@ -160,16 +116,13 @@ export function DailyReportModal({
                 const firstGradient =
                   iconGradients.find((gradient) => gradient.value === firstProfile.iconGradient) ?? iconGradients[0];
                 return (
-                  <div
+                  <button
                     key={report.key}
+                    type="button"
                     data-testid={`daily-report-${report.key}`}
-                    className={`flex select-none items-start gap-3 rounded-lg border p-4 ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
-                    onPointerDown={(event) => startLongPress(event, report)}
-                    onPointerMove={moveLongPress}
-                    onPointerUp={clearLongPress}
-                    onPointerCancel={clearLongPress}
-                    onPointerLeave={clearLongPress}
-                    onContextMenu={(event) => event.preventDefault()}
+                    aria-label={`${label || firstProfile.displayName}の日記を編集`}
+                    className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
+                    onClick={() => onSelectEvent(report.event.id)}
                   >
                     {shared ? (
                       <div className="relative h-12 w-16 flex-shrink-0" aria-label={`${label}の共通メモ`}>
@@ -210,44 +163,13 @@ export function DailyReportModal({
                         {report.event.note?.trim() || "（内容なし）"}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
           )}
         </div>
-        <p className="shrink-0 text-center text-[11px] leading-none text-muted-foreground">
-          メモを長押しすると削除できます。
-        </p>
       </DialogContent>
     </Dialog>
-    <Dialog open={Boolean(deleteTarget)} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>このメモを削除しますか？</DialogTitle>
-          <DialogDescription>
-            {deleteTarget?.babyIds.length === 2
-              ? "2人の共通メモとして表示されている記録をまとめて削除します。"
-              : "削除した記録は元に戻せません。"}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-            キャンセル
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              if (!deleteTarget) return;
-              onDelete(deleteTarget.event.id);
-              setDeleteTarget(null);
-            }}
-          >
-            削除する
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }
