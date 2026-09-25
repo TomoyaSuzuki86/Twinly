@@ -104,6 +104,8 @@ export const useEventOperations = ({
   const onSaveMilk = (payload: {
     milkMl?: number;
     milkMethod: MilkMethod;
+    breastLeftMinutes?: number;
+    breastRightMinutes?: number;
     note: string;
     timestamp: number;
     autoWake: boolean;

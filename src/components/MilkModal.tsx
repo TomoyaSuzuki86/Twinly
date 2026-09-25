@@ -19,6 +19,7 @@ import type { MilkMethod } from "@/types";
 import { Mic } from "lucide-react";
 import { getSpeechRecognition, type SpeechRecognitionInstance } from "@/lib/speech-recognition";
 import { mergeTranscriptSegments } from "@/lib/speech-transcript";
+import { BreastfeedingDurationFields } from "./BreastfeedingDurationFields";
 
 type MilkModalProps = {
   open: boolean;
@@ -26,7 +27,7 @@ type MilkModalProps = {
   displayName: string;
   isSleeping?: boolean;
   initialDraft: MilkDraft;
-  onSave: (payload: { milkMl?: number; milkMethod: MilkMethod; note: string; timestamp: number; autoWake: boolean }) => void;
+  onSave: (payload: { milkMl?: number; milkMethod: MilkMethod; breastLeftMinutes?: number; breastRightMinutes?: number; note: string; timestamp: number; autoWake: boolean }) => void;
   onSaveSolidFood?: (payload: { note: string; timestamp: number; autoWake: boolean }) => void;
 };
 
@@ -42,6 +43,8 @@ export function MilkModal({
 }: MilkModalProps) {
   const [recordType, setRecordType] = useState<"milk" | "breast" | "solidFood">("milk");
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
+  const [breastLeftMinutes, setBreastLeftMinutes] = useState(initialDraft.breastLeftMinutes ?? 10);
+  const [breastRightMinutes, setBreastRightMinutes] = useState(initialDraft.breastRightMinutes ?? 10);
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
@@ -56,6 +59,8 @@ export function MilkModal({
     if (!justOpened) return;
     setRecordType("milk");
     setMilkMl(initialDraft.milkMl);
+    setBreastLeftMinutes(initialDraft.breastLeftMinutes ?? 10);
+    setBreastRightMinutes(initialDraft.breastRightMinutes ?? 10);
     setNote(initialDraft.note);
     setSolidFoodNote("");
     setTimestamp(initialDraft.timestamp);
@@ -115,7 +120,7 @@ export function MilkModal({
 
     onSave(
       recordType === "breast"
-        ? { milkMethod: "breast", note, timestamp, autoWake }
+        ? { milkMethod: "breast", breastLeftMinutes, breastRightMinutes, note, timestamp, autoWake }
         : { milkMethod: "bottle", milkMl, note, timestamp, autoWake }
     );
     onOpenChange(false);
@@ -126,7 +131,7 @@ export function MilkModal({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{displayName}: 食事記録</DialogTitle>
-          <DialogDescription>ミルクまたは離乳食を選んで記録します。</DialogDescription>
+          <DialogDescription>ミルク・母乳・離乳食を選んで記録します。</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
           <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1">
@@ -159,10 +164,12 @@ export function MilkModal({
           {recordType === "milk" ? (
             <MilkAmountControl value={milkMl} onChange={setMilkMl} />
           ) : recordType === "breast" ? (
-            <div className="rounded-lg border border-pink-500/30 bg-pink-500/5 p-4">
-              <p className="font-semibold text-pink-200">母乳として記録</p>
-              <p className="mt-1 text-sm text-muted-foreground">母乳量は推定せず、授乳時刻を次の授乳目安に使います。</p>
-            </div>
+            <BreastfeedingDurationFields
+              leftMinutes={breastLeftMinutes}
+              rightMinutes={breastRightMinutes}
+              onLeftChange={setBreastLeftMinutes}
+              onRightChange={setBreastRightMinutes}
+            />
           ) : (
             <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -179,7 +186,6 @@ export function MilkModal({
                 className="min-h-28"
               />
               <p className="text-xs text-muted-foreground">食べたものや量、様子などを自由に記録できます。</p>
-              <p className="text-xs text-muted-foreground">離乳食が進んでミルク量が変わってきたら、設定のお世話ゲージから「1回の目安」を見直してください。</p>
             </div>
           )}
 
@@ -222,6 +228,7 @@ export function MilkModal({
           </DialogClose>
           <Button
             onClick={handleSave}
+            disabled={recordType === "breast" && breastLeftMinutes === 0 && breastRightMinutes === 0}
             className={
               recordType === "solidFood"
                 ? "bg-emerald-600 hover:bg-emerald-500"

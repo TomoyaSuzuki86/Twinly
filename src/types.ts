@@ -43,6 +43,8 @@ export type LogEvent = {
   timestamp: number;
   milkMl?: number;
   milkMethod?: MilkMethod;
+  breastLeftMinutes?: number;
+  breastRightMinutes?: number;
   diaperKind?: DiaperKind;
   diaperSizeUsed?: string;
   diaperStockConsumed?: number;
