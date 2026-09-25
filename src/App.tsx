@@ -891,8 +891,10 @@ export default function App() {
         onOpenChange={setDailyReportModalOpen}
         events={app.events}
         profiles={app.profiles}
-        onSelectEvent={(eventId) => {
-          setDailyReportModalOpen(false);
+        onSelectEvent={({ eventId, repairEventId, sharedDailyId }) => {
+          if (repairEventId && sharedDailyId) {
+            onSaveEdit(repairEventId, { sharedDailyId });
+          }
           openModal("edit", { eventId });
         }}
       />}
