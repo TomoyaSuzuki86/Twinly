@@ -1,4 +1,4 @@
-import { BabyId, BabyProfile, DiaperKind, LogEvent } from "@/types";
+import { BabyId, BabyProfile, DiaperKind, LogEvent, MilkMethod } from "@/types";
 
 export type VoiceCommandTarget = BabyId | "both";
 
@@ -9,6 +9,7 @@ export type VoiceCommand =
       type: "milk";
       milkMl?: number;
       milkMlByBaby?: Partial<Record<BabyId, number>>;
+      milkMethod?: MilkMethod;
       timestamp: number;
       note: string;
     }
@@ -286,6 +287,7 @@ export const parseVoiceCommand = (
   const isHeight = includesAny(normalizedText, ["身長", "慎重"]);
   const isSolidFood = includesAny(normalizedText, ["離乳食", "ごはん", "おかゆ", "お粥"]);
   const isMilk = includesAny(normalizedText, ["ミルク", "授乳", "母乳", "哺乳", "milk"]);
+  const isBreast = includesAny(normalizedText, ["母乳", "breast"]);
   const isDiaper = includesAny(normalizedText, [
     "おむつ",
     "オムツ",
@@ -403,34 +405,24 @@ export const parseVoiceCommand = (
   }
 
   if (isMilk) {
+    if (isBreast) {
+      return {
+        ok: true,
+        command: { kind: "event", babyId: targetBabyId, type: "milk", milkMethod: "breast", timestamp, note: `voice: ${text}` },
+      };
+    }
+
     const milkMl = detectMilkAmount(normalizedText);
     const defaultMilkMlByBaby = options.defaultMilkMlByBaby ?? {};
     const fallbackMilkMl = targetBabyId === "both" ? undefined : defaultMilkMlByBaby[targetBabyId];
-    const milkMlByBaby =
-      targetBabyId === "both" && !milkMl
-        ? {
-            A: defaultMilkMlByBaby.A,
-            B: defaultMilkMlByBaby.B,
-          }
-        : undefined;
-    const hasFallback =
-      targetBabyId === "both"
-        ? typeof milkMlByBaby?.A === "number" && typeof milkMlByBaby?.B === "number"
-        : typeof fallbackMilkMl === "number";
+    const milkMlByBaby = targetBabyId === "both" && !milkMl ? { A: defaultMilkMlByBaby.A, B: defaultMilkMlByBaby.B } : undefined;
+    const hasFallback = targetBabyId === "both" ? typeof milkMlByBaby?.A === "number" && typeof milkMlByBaby?.B === "number" : typeof fallbackMilkMl === "number";
 
     if (!milkMl && !hasFallback) return { ok: false, reason: "missingMilkAmount", normalizedText };
 
     return {
       ok: true,
-      command: {
-        kind: "event",
-        babyId: targetBabyId,
-        type: "milk",
-        milkMl: milkMl ?? fallbackMilkMl,
-        milkMlByBaby,
-        timestamp,
-        note: `voice: ${text}`,
-      },
+      command: { kind: "event", babyId: targetBabyId, type: "milk", milkMl: milkMl ?? fallbackMilkMl, milkMlByBaby, milkMethod: "bottle", timestamp, note: `voice: ${text}` },
     };
   }
 
@@ -509,7 +501,8 @@ export const toVoiceLogPayload = (command: VoiceCommand & { babyId: BabyId }): O
       babyId: command.babyId,
       type: "milk",
       timestamp: command.timestamp,
-      milkMl,
+      ...(typeof milkMl === "number" ? { milkMl } : {}),
+      milkMethod: command.milkMethod ?? "bottle",
       note: command.note,
     };
   }

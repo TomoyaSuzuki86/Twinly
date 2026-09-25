@@ -60,7 +60,7 @@ const formatHistoryTitle = (historyType: HistoryType) =>
 
 const formatHistoryDescription = (historyType: HistoryType) =>
   historyType === "milk"
-    ? "表示期間のミルク量と離乳食回数を、日付・週単位で確認できます。"
+    ? "表示期間のミルク量・母乳回数・離乳食回数を、日付・週単位で確認できます。"
     : "表示期間のうんち・おしっこ回数と、期間別の詳細を確認できます。";
 
 const formatMilkComparison = (difference: number) => {
@@ -93,10 +93,10 @@ function MilkSummaryCard({ title, stats }: { title: string; stats: MilkStats }) 
   );
 }
 
-function SolidFoodSummaryCard({ count, daySpan }: { count: number; daySpan: number }) {
+function CountSummaryCard({ title, count, daySpan }: { title: string; count: number; daySpan: number }) {
   return (
     <div className="rounded-xl border bg-card p-4">
-      <div className="text-sm text-muted-foreground">離乳食</div>
+      <div className="text-sm text-muted-foreground">{title}</div>
       <div className="mt-3 space-y-2 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">累計回数</span>
@@ -141,6 +141,10 @@ function MilkPeriodTooltipCard({ title, datum }: { title: string; datum: MilkCha
             <span>{datum.total.amount}ml</span>
             <span>{formatAverageMilkAmount(datum.total.average)}</span>
           </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">母乳</span>
+          <span>{datum.breastCount}回</span>
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="text-muted-foreground">離乳食</span>
@@ -319,12 +323,10 @@ export function EventHistoryModal({
           <div className="space-y-4">
             {historyType === "milk" ? (
               <div className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <MilkSummaryCard title="ミルク" stats={visibleMilkSummary.total} />
-                  <SolidFoodSummaryCard
-                    count={visibleMilkSummary.solidFoodCount}
-                    daySpan={rangeDays[timeRange]}
-                  />
+                  <CountSummaryCard title="母乳" count={visibleMilkSummary.breastCount} daySpan={rangeDays[timeRange]} />
+                  <CountSummaryCard title="離乳食" count={visibleMilkSummary.solidFoodCount} daySpan={rangeDays[timeRange]} />
                 </div>
                 <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
                   <div className="flex items-center justify-between gap-3">
@@ -356,7 +358,7 @@ export function EventHistoryModal({
                   <div className="text-sm font-medium">表示期間の推移</div>
                   <div className="text-xs text-muted-foreground">
                     {historyType === "milk"
-                      ? "青はミルク、紫は離乳食の回数です。バーを選ぶと期間別の詳細を確認できます。"
+                      ? "青はミルク、ピンクは母乳、紫は離乳食の回数です。バーを選ぶと期間別の詳細を確認できます。"
                       : "表示範囲の回数を上部に表示します。バーを選ぶと期間別の詳細を確認できます。"}
                   </div>
                 </div>
@@ -412,7 +414,10 @@ export function EventHistoryModal({
                       })}
                     </Bar>
                     {historyType === "milk" ? (
-                      <Bar dataKey="solidFoodCount" stackId="meal" fill="#a78bfa" radius={[8, 8, 0, 0]} />
+                      <>
+                        <Bar dataKey="breastCount" stackId="meal" fill="#f472b6" />
+                        <Bar dataKey="solidFoodCount" stackId="meal" fill="#a78bfa" radius={[8, 8, 0, 0]} />
+                      </>
                     ) : null}
                   </BarChart>
                 </ResponsiveContainer>

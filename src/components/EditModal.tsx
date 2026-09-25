@@ -64,7 +64,9 @@ export function EditModal({
     if (!event) return;
     const payload: Partial<LogEvent> =
       event.type === "milk"
-        ? { milkMl, note, timestamp }
+        ? event.milkMethod === "breast"
+          ? { milkMethod: "breast", note, timestamp }
+          : { milkMl, milkMethod: "bottle", note, timestamp }
         : event.type === "diaper"
         ? { diaperKind, note, timestamp }
         : { note, timestamp };
@@ -123,8 +125,12 @@ export function EditModal({
         <div className="space-y-6 py-4">
           {event.type === "milk" && (
             <div className="space-y-4 rounded-lg border p-4">
-              <h3 className="font-semibold">ミルク</h3>
-              <MilkAmountControl id="edit-milk-amount" value={milkMl} onChange={setMilkMl} />
+              <h3 className="font-semibold">{event.milkMethod === "breast" ? "母乳" : "ミルク"}</h3>
+              {event.milkMethod === "breast" ? (
+                <p className="text-sm text-muted-foreground">母乳は量を持たず、授乳時刻を次の授乳目安に使います。</p>
+              ) : (
+                <MilkAmountControl id="edit-milk-amount" value={milkMl} onChange={setMilkMl} />
+              )}
             </div>
           )}
           {event.type === "diaper" && (

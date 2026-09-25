@@ -21,7 +21,7 @@ export const createDefaultMilkDraft = (
   now: Date = new Date()
 ): MilkDraft => {
   const lastMilkEvent = events.reduce<LogEvent | undefined>((latest, event) => {
-    if (event.babyId !== babyId || event.type !== "milk") return latest;
+    if (event.babyId !== babyId || event.type !== "milk" || event.milkMethod === "breast" || typeof event.milkMl !== "number") return latest;
     if (!latest || event.timestamp > latest.timestamp) return event;
     return latest;
   }, undefined);
