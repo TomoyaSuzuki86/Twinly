@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventHistoryModal } from "./EventHistoryModal";
 import { createInitialAppState } from "@/lib/app-state";
@@ -29,6 +29,15 @@ describe("EventHistoryModal", () => {
         timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
         milkMl: 80,
         milkMethod: "breast",
+        breastLeftMinutes: 15,
+        breastRightMinutes: 10,
+      },
+      {
+        id: "food-today",
+        babyId: "A",
+        type: "solidFood",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+        note: "10倍がゆ 小さじ2",
       },
       {
         id: "d1",
@@ -60,9 +69,22 @@ describe("EventHistoryModal", () => {
       />
     );
 
-    expect(screen.getAllByText("200ml").length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "ミルク" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "母乳" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "離乳食" })).toBeTruthy();
+    expect(screen.getAllByText("120ml").length).toBeGreaterThan(0);
     expect(screen.getByText("27ml")).toBeTruthy();
-    expect(screen.getByText(/173ml/)).toBeTruthy();
-    expect(screen.queryByText("履歴一覧")).toBeNull();
+    expect(screen.getByText(/93ml/)).toBeTruthy();
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "母乳" }), { button: 0, ctrlKey: false });
+    expect(screen.getByText("授乳時間の推移")).toBeTruthy();
+    expect(screen.getByText("母乳の記録")).toBeTruthy();
+    expect(screen.getAllByText("15分").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("10分").length).toBeGreaterThan(0);
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "離乳食" }), { button: 0, ctrlKey: false });
+    expect(screen.getByText("離乳食回数の推移")).toBeTruthy();
+    expect(screen.getByText("離乳食の記録")).toBeTruthy();
+    expect(screen.getByText("10倍がゆ 小さじ2")).toBeTruthy();
   });
 });

@@ -64,9 +64,14 @@ const getMarkerLeft = (event: LogEvent) => {
 
 const getEventPresentation = (event: LogEvent) => {
   if (event.type === "milk") {
+    const isBreast = event.milkMethod === "breast";
+    const breastDetails = [
+      event.breastLeftMinutes ? `左${event.breastLeftMinutes}分` : null,
+      event.breastRightMinutes ? `右${event.breastRightMinutes}分` : null,
+    ].filter(Boolean);
     return {
-      label: "ミルク",
-      detail: `${event.milkMl ?? 0}ml`,
+      label: isBreast ? "母乳" : "ミルク",
+      detail: isBreast ? (breastDetails.join("・") || "授乳") : `${event.milkMl ?? 0}ml`,
       selectedClass: "rounded-full border-sky-100 bg-blue-500",
     };
   }

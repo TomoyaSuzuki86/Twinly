@@ -2,8 +2,12 @@ import type { BabyProfile, LogEvent } from "@/types";
 import type { DiaperStockEstimate } from "./diaper-stock";
 import type { MilkProgressComparison } from "./milk-progress";
 import {
+  buildDiaperProgressComparison,
   formatDiaperEstimateSummary,
+  formatDiaperProgressDifference,
+  formatMilkProgressDifference,
   formatMilkProgressSummary,
+  formatSleepProgressDifference,
   roundMilkAmountUp,
   summarizeBabyPanelLogEvents,
 } from "./baby-panel-presenters";
@@ -18,6 +22,7 @@ import {
   getDefaultSleepTargetHours,
 } from "./sleep";
 import { buildCareGauges } from "./care-gauges";
+import { getSleepProgressComparison } from "./sleep-history";
 import { fmtTime, minutesSince } from "./utils";
 
 type Params = {
@@ -45,12 +50,21 @@ export const buildBabyPanelViewModel = ({
 }: Params) => {
   const babyId = profile.babyId;
   const logSummary = summarizeBabyPanelLogEvents(logEvents);
+  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
   const remainingDiapers = profile.diaperStockBySize[profile.diaperSize] ?? 0;
   const diaperEstimateSummary =
     diaperStockManagementEnabled && stockForecastEnabled
       ? formatDiaperEstimateSummary(diaperEstimate)
       : null;
+  const diaperProgress = buildDiaperProgressComparison({
+    events: latestEvents,
+    babyId,
+    targetDate: selectedLogDate,
+    now,
+  });
+  const diaperProgressDifferenceLabel = formatDiaperProgressDifference(diaperProgress);
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
+  const milkProgressDifferenceLabel = formatMilkProgressDifference(milkProgress);
 
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
@@ -83,7 +97,10 @@ export const buildBabyPanelViewModel = ({
     ? formatSleepDuration((now.getTime() - sleepAnalysis.currentSleepStart.timestamp) / 60000)
     : null;
 
-  const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
+  const sleepComparisonNow = new Date(selectedLogDate);
+  sleepComparisonNow.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  const sleepProgress = getSleepProgressComparison(sleepAnalysis, sleepComparisonNow);
+  const sleepProgressDifferenceLabel = formatSleepProgressDifference(sleepProgress);
   const sleepLogSummary = buildSleepLogSummary(sleepAnalysis, selectedLogDate, now);
   const sleepLogTotal = formatSleepDuration(sleepLogSummary.totalMinutes);
   const averageActivityDuration =
@@ -118,8 +135,10 @@ export const buildBabyPanelViewModel = ({
     diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
   });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
-  const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
-  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
+  const milkGaugeMode = careGauges.milk?.mode ?? "amount";
+  const milkGaugeRemainingMinutes = careGauges.milk?.mode === "interval" ? careGauges.milk.remainingMinutes : null;
+  const milkNeededMl = careGauges.milk?.mode === "amount" ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
+  const milkTargetMl = careGauges.milk?.mode === "amount" ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
   const diaperGaugePercent = Math.round(
     (1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100
   );
@@ -128,7 +147,9 @@ export const buildBabyPanelViewModel = ({
     ...logSummary,
     remainingDiapers,
     diaperEstimateSummary,
+    diaperProgressDifferenceLabel,
     milkProgressSummary,
+    milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
     activityGauge,
@@ -139,6 +160,7 @@ export const buildBabyPanelViewModel = ({
     currentSleepDuration,
     sleepLogSummary,
     sleepLogTotal,
+    sleepProgressDifferenceLabel,
     averageActivityDuration,
     sleepDurationByWakeId,
     lastMilkEvent,
@@ -148,6 +170,8 @@ export const buildBabyPanelViewModel = ({
     lastDiaperTime,
     lastDiaperElapsed,
     milkGaugePercent,
+    milkGaugeMode,
+    milkGaugeRemainingMinutes,
     milkNeededMl,
     milkTargetMl,
     diaperGaugePercent,

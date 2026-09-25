@@ -4,8 +4,12 @@ import type { MilkProgressComparison } from "./milk-progress";
 import type { LogEvent } from "@/types";
 import {
   adjustNumber,
+  buildDiaperProgressComparison,
   formatDiaperEstimateSummary,
+  formatDiaperProgressDifference,
+  formatMilkProgressDifference,
   formatMilkProgressSummary,
+  formatSleepProgressDifference,
   roundMilkAmountUp,
   summarizeBabyPanelLogEvents,
 } from "./baby-panel-presenters";
@@ -38,6 +42,7 @@ describe("BabyPanel presenters", () => {
     const events: LogEvent[] = [
       event({ id: "milk-1", babyId: "A", type: "milk", timestamp: 1, milkMl: 120 }),
       event({ id: "milk-2", babyId: "A", type: "milk", timestamp: 2, milkMl: 80 }),
+      event({ id: "breast", babyId: "A", type: "milk", timestamp: 2.5, milkMethod: "breast" }),
       event({ id: "food", babyId: "A", type: "solidFood", timestamp: 3 }),
       event({ id: "pee", babyId: "A", type: "diaper", timestamp: 4, diaperKind: "pee" }),
       event({ id: "mix", babyId: "A", type: "diaper", timestamp: 5, diaperKind: "mix" }),
@@ -47,6 +52,7 @@ describe("BabyPanel presenters", () => {
     expect(summarizeBabyPanelLogEvents(events)).toEqual({
       milkTotal: 200,
       milkCount: 2,
+      breastCount: 1,
       solidFoodCount: 1,
       peeCount: 2,
       poopCount: 1,
@@ -57,6 +63,34 @@ describe("BabyPanel presenters", () => {
   it("keeps numeric stepping behavior including the invalid-input fallback", () => {
     expect(adjustNumber("36.0", 0.5, 1)).toBe("36.5");
     expect(adjustNumber("", 0.5, 2)).toBe("0.00");
+  });
+
+  it("compares diaper counts with the previous seven days at the same cutoff time", () => {
+    const now = new Date("2026-04-18T10:20:00+09:00");
+    const history = Array.from({ length: 7 }, (_, index) =>
+      event({
+        id: `diaper-history-${index}`,
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date(`2026-04-${String(17 - index).padStart(2, "0")}T09:00:00+09:00`).getTime(),
+        diaperKind: "pee",
+      })
+    );
+    const today = [
+      event({ id: "diaper-today-1", babyId: "A", type: "diaper", timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(), diaperKind: "pee" }),
+      event({ id: "diaper-today-2", babyId: "A", type: "diaper", timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(), diaperKind: "poop" }),
+    ];
+
+    const comparison = buildDiaperProgressComparison({
+      events: [...today, ...history],
+      babyId: "A",
+      targetDate: new Date("2026-04-18T00:00:00+09:00"),
+      now,
+    });
+
+    expect(comparison.currentCount).toBe(2);
+    expect(comparison.trailingAverage).toBe(1);
+    expect(formatDiaperProgressDifference(comparison)).toBe("+1回");
   });
 
   it("formats diaper forecast states without changing their wording", () => {
@@ -92,6 +126,26 @@ describe("BabyPanel presenters", () => {
       title: "550ml / 平均550ml",
       detail: "過去7日平均とほぼ同じ",
     });
+  });
+
+  it("formats compact signed differences for summary cards", () => {
+    expect(formatMilkProgressDifference(milkProgress({ difference: 49.6, status: "higher" }))).toBe("+50ml");
+    expect(formatMilkProgressDifference(milkProgress({ difference: -50.4, status: "lower" }))).toBe("-50ml");
+    expect(formatMilkProgressDifference(milkProgress({ difference: 0.4, status: "same" }))).toBe("0ml");
+    expect(formatMilkProgressDifference(milkProgress({ status: "no-history" }))).toBeNull();
+
+    expect(formatSleepProgressDifference({
+      currentMinutes: 510,
+      trailingAverageMinutes: 480,
+      differenceMinutes: 30,
+      status: "higher",
+    })).toBe("+30分");
+    expect(formatSleepProgressDifference({
+      currentMinutes: 450,
+      trailingAverageMinutes: 480,
+      differenceMinutes: -30,
+      status: "lower",
+    })).toBe("-30分");
   });
 
   it("rounds required milk upward to 5ml and never below zero", () => {

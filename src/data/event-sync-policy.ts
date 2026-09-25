@@ -7,6 +7,8 @@ export const USER_EVENT_FIELDS: readonly (keyof LogEvent)[] = [
   "timestamp",
   "milkMl",
   "milkMethod",
+  "breastLeftMinutes",
+  "breastRightMinutes",
   "diaperKind",
   "diaperSizeUsed",
   "temperature",

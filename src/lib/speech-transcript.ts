@@ -13,6 +13,18 @@ const rawOffsetForCompactIndex = (value: string, compactIndex: number) => {
 
 const LONG_EXACT_REPEAT_MIN_COMPACT_LENGTH = 10;
 
+export const collapseExactRepeatedTranscript = (rawValue: string) => {
+  const value = rawValue.trim().replace(/\s+/g, " ");
+  const compact = compactText(value);
+  if (compact.length < 2 || compact.length % 2 !== 0) return value;
+
+  const halfLength = compact.length / 2;
+  if (compact.slice(0, halfLength) !== compact.slice(halfLength)) return value;
+
+  const secondCopyOffset = rawOffsetForCompactIndex(value, halfLength);
+  return value.slice(0, secondCopyOffset).trim();
+};
+
 export const collapseRepeatedTranscriptPrefix = (rawValue: string) => {
   const value = rawValue.trim().replace(/\s+/g, " ");
   const compact = compactText(value);

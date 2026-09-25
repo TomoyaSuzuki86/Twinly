@@ -29,6 +29,7 @@ describe("MilkModal", () => {
     expect(screen.queryByRole("checkbox", { name: /自動的に起床する/ })).toBeNull();
     expect(onSave).toHaveBeenCalledWith({
       milkMl: 50,
+      milkMethod: "bottle",
       note: "",
       timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
       autoWake: true,
@@ -82,7 +83,8 @@ describe("MilkModal", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ milkMl: 175 }));
   });
 
-  it("does not show bottle or breast choices", () => {
+  it("records breastfeeding without inventing a milk amount", () => {
+    const onSave = vi.fn();
     render(
       <MilkModal
         open
@@ -90,16 +92,42 @@ describe("MilkModal", () => {
         displayName="赤ちゃんA"
         initialDraft={{
           milkMl: 50,
+          breastLeftMinutes: 15,
+          breastRightMinutes: 0,
           note: "",
           timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
         }}
-        onSave={vi.fn()}
+        onSave={onSave}
       />
     );
 
-    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("50");
-    expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "母乳" }));
+    expect(screen.queryByLabelText("ミルク量")).toBeNull();
+    expect(screen.queryByText("母乳として記録")).toBeNull();
+    expect(screen.queryByText(/母乳量は推定せず/)).toBeNull();
+
+    const left = screen.getByLabelText("左の授乳時間") as HTMLSelectElement;
+    const right = screen.getByLabelText("右の授乳時間") as HTMLSelectElement;
+    expect(screen.queryByRole("option", { name: "なし" })).toBeNull();
+    expect(screen.getByRole("button", { name: "左" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "右" }).getAttribute("aria-pressed")).toBe("false");
+    expect(left.value).toBe("15");
+    expect(right.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.change(left, { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "右" }));
+    expect(right.hasAttribute("disabled")).toBe(false);
+    fireEvent.change(right, { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      milkMethod: "breast",
+      breastLeftMinutes: 25,
+      breastRightMinutes: 5,
+      note: "",
+      timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+      autoWake: true,
+    });
   });
 
   it("saves solid food using only the shared memo and timestamp", () => {

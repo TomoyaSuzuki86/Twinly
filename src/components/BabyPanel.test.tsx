@@ -12,6 +12,7 @@ const renderPanel = ({
   latestEvents,
   logEvents,
   diaperEstimate = null,
+  milkProgress = null,
   lowStock = null,
   onOpenHistory = vi.fn(),
   onOpenModal = vi.fn(),
@@ -23,6 +24,7 @@ const renderPanel = ({
   latestEvents?: LogEvent[];
   logEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
+  milkProgress?: ComponentProps<typeof BabyPanel>["milkProgress"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
   onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
@@ -44,7 +46,7 @@ const renderPanel = ({
       sleepManagementEnabled={sleepManagementEnabled}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
-      milkProgress={null}
+      milkProgress={milkProgress ?? null}
       onOpenHistory={onOpenHistory}
       onOpenModal={onOpenModal}
       onAddEvent={onAddEvent}
@@ -89,7 +91,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText("前回 09:45 / 35分前")).toBeTruthy();
+    expect(screen.getByText("前回授乳 09:45 / 35分前")).toBeTruthy();
     expect(screen.getByText("前回 10:05 / 15分前")).toBeTruthy();
   });
 
@@ -117,7 +119,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events: [], latestEvents });
 
-    expect(screen.getByText("前回 23:00 / 680分前")).toBeTruthy();
+    expect(screen.getByText("前回授乳 23:00 / 680分前")).toBeTruthy();
     expect(screen.getByText("前回 23:30 / 650分前")).toBeTruthy();
     expect(screen.getAllByText("0")).toBeTruthy();
   });
@@ -362,8 +364,88 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("100");
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     const sleepSummaryButton = screen.getByRole("button", { name: /睡眠履歴を開く/ });
-    expect(sleepSummaryButton.parentElement?.className).toContain("minmax(160px,1fr)");
-    expect(sleepSummaryButton.parentElement?.parentElement?.className).toContain("overflow-x-auto");
+    expect(sleepSummaryButton.className).toContain("col-span-2");
+    expect(sleepSummaryButton.parentElement?.className).toContain("grid-cols-2");
+    expect(sleepSummaryButton.parentElement?.parentElement?.className).not.toContain("overflow-x-auto");
+  });
+
+  it("shows compact milk, diaper, and sleep differences beside the summary titles", () => {
+    const historicalSleep: LogEvent[] = Array.from({ length: 7 }, (_, index) => {
+      const day = String(17 - index).padStart(2, "0");
+      return [
+        {
+          id: `sleep-history-${index}`,
+          babyId: "A" as const,
+          type: "sleepStart" as const,
+          timestamp: new Date(`2026-04-${day}T01:00:00+09:00`).getTime(),
+        },
+        {
+          id: `wake-history-${index}`,
+          babyId: "A" as const,
+          type: "wake" as const,
+          timestamp: new Date(`2026-04-${day}T02:00:00+09:00`).getTime(),
+        },
+      ];
+    }).flat();
+
+    const historicalDiapers: LogEvent[] = Array.from({ length: 7 }, (_, index) => ({
+      id: `diaper-history-${index}`,
+      babyId: "A" as const,
+      type: "diaper" as const,
+      timestamp: new Date(`2026-04-${String(17 - index).padStart(2, "0")}T09:00:00+09:00`).getTime(),
+      diaperKind: "pee" as const,
+    }));
+    const todayDiapers: LogEvent[] = [
+      {
+        id: "diaper-today-1",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T09:00:00+09:00").getTime(),
+        diaperKind: "pee",
+      },
+      {
+        id: "diaper-today-2",
+        babyId: "A",
+        type: "diaper",
+        timestamp: new Date("2026-04-18T09:30:00+09:00").getTime(),
+        diaperKind: "poop",
+      },
+    ];
+
+    const todaySleep: LogEvent[] = [
+      {
+        id: "sleep-today",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T01:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake-today",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T02:30:00+09:00").getTime(),
+      },
+    ];
+
+    renderPanel({
+      events: [...todaySleep, ...todayDiapers],
+      latestEvents: [...todaySleep, ...todayDiapers, ...historicalSleep, ...historicalDiapers],
+      logEvents: [...todaySleep, ...todayDiapers],
+      milkProgress: {
+        currentAmount: 600,
+        trailingAverage: 550,
+        trailingDailyAmounts: [550, 550, 550, 550, 550, 550, 550],
+        difference: 50,
+        status: "higher",
+      },
+    });
+
+    expect(screen.getByText("+50ml")).toBeTruthy();
+    const diaperDifference = screen.getByText("+1回");
+    const sleepDifference = screen.getByText("+30分");
+    expect(diaperDifference.parentElement?.className).toContain("justify-between");
+    expect(sleepDifference.parentElement?.className).toContain("justify-between");
+    expect(screen.queryByText(/平均より/)).toBeNull();
   });
 
   it("shows actual wake time while the gauge accumulates after sleep recovery", () => {
@@ -448,7 +530,7 @@ describe("BabyPanel", () => {
     expect(onOpenHistory).toHaveBeenNthCalledWith(3, "sleep", "A");
   });
 
-  it("shows milk totals without method breakdowns and diaper totals", () => {
+  it("shows bottle milk totals and breastfeeding counts separately", () => {
     const events: LogEvent[] = [
       {
         id: "milk-bottle",
@@ -491,11 +573,12 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText("200")).toBeTruthy();
+    expect(screen.getByText("120")).toBeTruthy();
     expect(screen.queryByText("哺乳瓶")).toBeNull();
-    expect(screen.queryByText("母乳")).toBeNull();
+    expect(screen.getAllByText("母乳").length).toBeGreaterThan(0);
     expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getAllByText("2回")).toHaveLength(3);
+    expect(screen.getAllByText("1回")).toHaveLength(2);
+    expect(screen.getAllByText("2回")).toHaveLength(2);
   });
 
   it("shows diaper stock forecast details when an estimate is available", () => {

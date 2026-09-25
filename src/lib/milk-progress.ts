@@ -22,7 +22,7 @@ const endOfCutoff = (date: Date, now: Date) => {
 
 const sumMilkAmount = (events: LogEvent[], babyId: BabyId, startMs: number, endMs: number) =>
   events.reduce((sum, event) => {
-    if (event.babyId !== babyId || event.type !== "milk") return sum;
+    if (event.babyId !== babyId || event.type !== "milk" || event.milkMethod === "breast") return sum;
     if (event.timestamp < startMs || event.timestamp > endMs) return sum;
     return sum + (event.milkMl ?? 0);
   }, 0);

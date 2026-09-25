@@ -36,6 +36,7 @@ import { VoiceCommandButton } from "./VoiceCommandButton";
 import { formatSleepDuration } from "@/lib/sleep";
 import { buildBabyPanelViewModel } from "@/lib/baby-panel-view-model";
 import { useBabyHealthInputs } from "@/lib/use-baby-health-inputs";
+import { collapseExactRepeatedTranscript } from "@/lib/speech-transcript";
 
 const SLEEP_LONG_PRESS_MS = 550;
 const CUSTOM_MEMO_LONG_PRESS_MS = 550;
@@ -149,13 +150,15 @@ export function BabyPanel({
   const {
     milkTotal,
     milkCount,
+    breastCount,
     solidFoodCount,
     peeCount,
     poopCount,
     diaperCount,
     remainingDiapers,
     diaperEstimateSummary,
-    milkProgressSummary,
+    diaperProgressDifferenceLabel,
+    milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
     activityGauge,
@@ -166,6 +169,7 @@ export function BabyPanel({
     currentSleepDuration,
     sleepLogSummary,
     sleepLogTotal,
+    sleepProgressDifferenceLabel,
     averageActivityDuration,
     sleepDurationByWakeId,
     lastMilkEvent,
@@ -175,6 +179,8 @@ export function BabyPanel({
     lastDiaperTime,
     lastDiaperElapsed,
     milkGaugePercent,
+    milkGaugeMode,
+    milkGaugeRemainingMinutes,
     milkNeededMl,
     milkTargetMl,
     diaperGaugePercent,
@@ -284,7 +290,7 @@ export function BabyPanel({
       tabIndex={morph ? -1 : undefined}
       onClick={() => onOpenModal("milk", { babyId })}
       onContextMenu={(event) => event.preventDefault()}
-      aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
+      aria-label={!gaugesEnabled ? "食事を記録" : milkGaugeMode === "interval" ? `食事を記録・次の授乳目安${milkGaugePercent}%` : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
     >
       <span
         aria-hidden="true"
@@ -300,7 +306,11 @@ export function BabyPanel({
           <Utensils className="mr-3 h-7 w-7" />
           食事
         </div>
-        {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
+        {!gaugesEnabled ? null : milkGaugeMode === "interval" ? (
+          <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]" data-morph-secondary={morph ? "true" : undefined}>
+            {milkGaugeRemainingMinutes !== null && milkGaugeRemainingMinutes > 0 ? `次の授乳まで ${formatSleepDuration(milkGaugeRemainingMinutes)}` : "次の授乳目安です"}
+          </span>
+        ) : milkNeededMl !== null && milkTargetMl !== null ? (
           <span
             className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
             data-morph-secondary={morph ? "true" : undefined}
@@ -320,7 +330,7 @@ export function BabyPanel({
           className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
           data-morph-secondary={morph ? "true" : undefined}
         >
-          前回 {lastMilkTime} / {lastMilkElapsed}
+          前回授乳 {lastMilkTime} / {lastMilkElapsed}
         </span>
       </div>
       {morph && gaugesEnabled ? <span className="twinly-primary-action-morph-percent">{milkGaugePercent}%</span> : null}
@@ -575,7 +585,7 @@ export function BabyPanel({
                   onCommand={() => {}}
                   onMessage={onVoiceMessage}
                   onTranscript={(text) => {
-                    const note = text.trim();
+                    const note = collapseExactRepeatedTranscript(text);
                     if (!note) return;
                     onAddEvent({ babyId, type: "daily", note });
                     setDailyNote("");
@@ -791,50 +801,37 @@ export function BabyPanel({
       <CardContent className="w-full flex-grow space-y-4 px-3 sm:px-6">
         <div
           ref={tutorialAnchorRef?.(`log-summary:${babyId}`)}
-          className="-mx-1 overflow-x-auto px-1 pb-2"
-          data-horizontal-scroll="true"
-          onTouchStart={(event) => event.stopPropagation()}
-          onTouchEnd={(event) => event.stopPropagation()}
-          onTouchCancel={(event) => event.stopPropagation()}
+          className="pb-2"
         >
-          <div
-            className={`grid w-max min-w-full gap-3 ${
-              sleepManagementEnabled
-                ? "grid-cols-[repeat(3,minmax(160px,1fr))]"
-                : "grid-cols-[repeat(2,minmax(160px,1fr))]"
-            }`}
-          >
+          <div className="grid min-w-0 grid-cols-2 gap-3">
           <button
             type="button"
             className="min-w-0 text-left"
             onClick={() => onOpenHistory("milk", babyId)}
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
-            <Card className="min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
-              <CardHeader className="p-3">
+            <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">食事</CardTitle>
+                {milkProgressDifferenceLabel ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-milk-text))]">
+                    {milkProgressDifferenceLabel}
+                  </span>
+                ) : null}
               </CardHeader>
               <CardContent className="p-3 pt-0">
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
-                    <span className="font-semibold text-muted-foreground">ml</span>
-                  </div>
-                  {milkProgressSummary ? (
-                    <div className="hidden min-w-0 max-w-[52%] shrink overflow-hidden rounded-md border border-sky-400/30 bg-sky-500/10 px-2 py-1 text-right min-[900px]:block">
-                      <p className="truncate text-xs font-semibold leading-tight [color:hsl(var(--gauge-milk-text))]">
-                        {milkProgressSummary.title}
-                      </p>
-                      <p className="truncate text-[11px] leading-tight [color:hsl(var(--gauge-milk-muted))]">
-                        {milkProgressSummary.detail}
-                      </p>
-                    </div>
-                  ) : null}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold [color:hsl(var(--care-milk))]">{milkTotal}</span>
+                  <span className="font-semibold text-muted-foreground">ml</span>
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-3">
                     <span>ミルク</span>
                     <span>{milkCount}回</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>母乳</span>
+                    <span>{breastCount}回</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>離乳食</span>
@@ -852,8 +849,13 @@ export function BabyPanel({
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
-              <CardHeader className="p-3">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
+                {diaperProgressDifferenceLabel ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-diaper-text))]">
+                    {diaperProgressDifferenceLabel}
+                  </span>
+                ) : null}
               </CardHeader>
               <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -894,19 +896,24 @@ export function BabyPanel({
           {sleepManagementEnabled ? (
             <button
               type="button"
-              className="min-w-0 text-left"
+              className="col-span-2 min-w-0 text-left"
               onClick={() => onOpenHistory("sleep", babyId)}
               aria-label={`${profile.displayName}の睡眠履歴を開く`}
             >
               <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
-                <CardHeader className="p-3">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                   <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
+                  {sleepProgressDifferenceLabel ? (
+                    <span className="shrink-0 whitespace-nowrap rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-sleep-fill))]">
+                      {sleepProgressDifferenceLabel}
+                    </span>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
-                  <div className="flex min-w-0 items-baseline gap-1">
+                  <div className="flex min-w-0 items-baseline gap-3">
                     <span className="whitespace-nowrap text-2xl font-bold [color:hsl(var(--gauge-sleep-fill))]">{sleepLogTotal}</span>
                   </div>
-                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <div className="mt-2 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between gap-2">
                       <span>睡眠回数</span>
                       <span>{sleepLogSummary.sleepCount}回</span>

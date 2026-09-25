@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBreastfeedingChartData,
   buildDiaperChartData,
   buildMilkChartData,
+  buildSolidFoodChartData,
   filterEventsForTimeRange,
   getDefaultHistoryRange,
+  summarizeBreastfeedingEvents,
   summarizeDiaperEvents,
   summarizeMilkEvents,
+  summarizeSolidFoodEvents,
 } from "./event-history";
 import { LogEvent } from "@/types";
 
@@ -27,6 +31,8 @@ describe("event-history helpers", () => {
       timestamp: new Date("2026-04-20T09:00:00+09:00").getTime(),
       milkMl: 80,
       milkMethod: "breast",
+      breastLeftMinutes: 15,
+      breastRightMinutes: 10,
     },
     {
       id: "milk-3",
@@ -38,7 +44,7 @@ describe("event-history helpers", () => {
     },
   ];
 
-  it("summarizes milk totals without method breakdowns", () => {
+  it("keeps breastfeeding separate from bottle milk totals", () => {
     const summary = summarizeMilkEvents([
       ...milkEvents,
       {
@@ -49,9 +55,10 @@ describe("event-history helpers", () => {
       },
     ]);
 
-    expect(summary.total.count).toBe(3);
-    expect(summary.total.amount).toBe(300);
-    expect(summary.total.average).toBe(100);
+    expect(summary.total.count).toBe(2);
+    expect(summary.total.amount).toBe(220);
+    expect(summary.total.average).toBe(110);
+    expect(summary.breastCount).toBe(1);
     expect(summary.solidFoodCount).toBe(1);
   });
 
@@ -79,11 +86,13 @@ describe("event-history helpers", () => {
     expect(chartData).toHaveLength(2);
     expect(chartData[0]).toMatchObject({
       label: "04-20",
-      total: { count: 1, amount: 80, average: 80 },
+      total: { count: 0, amount: 0, average: 0 },
+      breastCount: 1,
     });
     expect(chartData[1]).toMatchObject({
       label: "04-21",
       total: { count: 1, amount: 120, average: 120 },
+      breastCount: 0,
       solidFoodCount: 1,
     });
   });
@@ -94,15 +103,63 @@ describe("event-history helpers", () => {
         key: "2026-04-06",
         label: "04-06",
         total: { count: 1, amount: 100, average: 100 },
+        breastCount: 0,
         solidFoodCount: 0,
       },
       {
         key: "2026-04-20",
         label: "04-20",
-        total: { count: 2, amount: 200, average: 100 },
+        total: { count: 1, amount: 120, average: 120 },
+        breastCount: 1,
         solidFoodCount: 0,
       },
     ]);
+  });
+
+  it("summarizes breastfeeding minutes by side", () => {
+    const summary = summarizeBreastfeedingEvents(milkEvents, 7);
+
+    expect(summary.count).toBe(1);
+    expect(summary.leftMinutes).toBe(15);
+    expect(summary.rightMinutes).toBe(10);
+    expect(summary.totalMinutes).toBe(25);
+    expect(summary.dailyAverageMinutes).toBeCloseTo(25 / 7);
+  });
+
+  it("builds dense breastfeeding trend data including days without records", () => {
+    const data = buildBreastfeedingChartData(milkEvents, "1W", now);
+
+    expect(data).toHaveLength(7);
+    expect(data.find((datum) => datum.key === "2026-04-20")).toMatchObject({
+      leftMinutes: 15,
+      rightMinutes: 10,
+      count: 1,
+    });
+    expect(data.find((datum) => datum.key === "2026-04-19")).toMatchObject({
+      leftMinutes: 0,
+      rightMinutes: 0,
+      count: 0,
+    });
+  });
+
+  it("summarizes and charts solid food counts independently", () => {
+    const foodEvents: LogEvent[] = [
+      {
+        id: "food-1",
+        babyId: "A",
+        type: "solidFood",
+        timestamp: new Date("2026-04-21T10:00:00+09:00").getTime(),
+        note: "10倍がゆ",
+      },
+    ];
+
+    expect(summarizeSolidFoodEvents(foodEvents, 7)).toEqual({
+      count: 1,
+      dailyAverage: 1 / 7,
+    });
+    const data = buildSolidFoodChartData(foodEvents, "1W", now);
+    expect(data).toHaveLength(7);
+    expect(data[data.length - 1]).toMatchObject({ key: "2026-04-21", count: 1 });
   });
 
   it("summarizes diaper totals by kind and daily average", () => {

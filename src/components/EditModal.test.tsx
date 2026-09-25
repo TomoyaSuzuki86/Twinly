@@ -8,7 +8,7 @@ describe("EditModal", () => {
     cleanup();
   });
 
-  it("edits milk without bottle or breast choices", () => {
+  it("edits breastfeeding without exposing a fake milk amount", () => {
     const onSave = vi.fn();
     const event: LogEvent = {
       id: "milk-legacy",
@@ -17,24 +17,25 @@ describe("EditModal", () => {
       timestamp: new Date("2026-04-18T10:00:00+09:00").getTime(),
       milkMl: 100,
       milkMethod: "breast",
+      breastLeftMinutes: 15,
+      breastRightMinutes: 0,
       note: "legacy",
     };
 
     render(<EditModal open onOpenChange={vi.fn()} event={event} onSave={onSave} onDelete={vi.fn()} />);
 
-    expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
-
-    fireEvent.change(screen.getByRole("slider", { name: "ミルク量スライダー" }), {
-      target: { value: "180" },
-    });
-    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("180");
-
-    fireEvent.change(screen.getByLabelText("ミルク量"), { target: { value: "175" } });
+    expect(screen.getByText("母乳")).toBeTruthy();
+    expect(screen.queryByLabelText("ミルク量")).toBeNull();
+    expect(screen.queryByText(/母乳は量を持たず/)).toBeNull();
+    expect((screen.getByLabelText("左の授乳時間") as HTMLSelectElement).value).toBe("15");
+    expect((screen.getByLabelText("右の授乳時間") as HTMLSelectElement).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("option", { name: "なし" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
     expect(onSave).toHaveBeenCalledWith("milk-legacy", {
-      milkMl: 175,
+      milkMethod: "breast",
+      breastLeftMinutes: 15,
+      breastRightMinutes: 0,
       note: "legacy",
       timestamp: event.timestamp,
     });

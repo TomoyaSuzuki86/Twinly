@@ -34,12 +34,23 @@ describe("createDefaultMilkDraft", () => {
         milkMl: 50,
         milkMethod: "bottle",
       },
+      {
+        id: "milk-a-latest-breast",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+        milkMethod: "breast",
+        breastLeftMinutes: 15,
+        breastRightMinutes: 0,
+      },
     ];
 
     const now = new Date("2026-04-18T08:30:00+09:00");
     const draft = createDefaultMilkDraft(events, "A", now);
 
     expect(draft.milkMl).toBe(50);
+    expect(draft.breastLeftMinutes).toBe(15);
+    expect(draft.breastRightMinutes).toBe(0);
     expect(draft.timestamp).toBe(now.getTime());
   });
 
@@ -48,6 +59,8 @@ describe("createDefaultMilkDraft", () => {
     const draft = createDefaultMilkDraft([], "A", now);
 
     expect(draft.milkMl).toBe(140);
+    expect(draft.breastLeftMinutes).toBe(10);
+    expect(draft.breastRightMinutes).toBe(10);
     expect(draft.timestamp).toBe(now.getTime());
   });
 });
