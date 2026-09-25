@@ -34,6 +34,13 @@ describe("createDefaultMilkDraft", () => {
         milkMl: 50,
         milkMethod: "bottle",
       },
+      {
+        id: "milk-a-latest-breast",
+        babyId: "A",
+        type: "milk",
+        timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
+        milkMethod: "breast",
+      },
     ];
 
     const now = new Date("2026-04-18T08:30:00+09:00");

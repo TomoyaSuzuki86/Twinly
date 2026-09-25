@@ -182,7 +182,15 @@ describe("parseVoiceCommand", () => {
     });
   });
 
+  it("records breastfeeding without requiring an amount", () => {
+    expect(parseVoiceCommand("A 母乳")).toMatchObject({
+      ok: true,
+      command: { babyId: "A", type: "milk", milkMethod: "breast" },
+    });
+  });
+
   it("asks for a milk amount when it is missing", () => {
+
     expect(parseVoiceCommand("A ミルク")).toMatchObject({
       ok: false,
       reason: "missingMilkAmount",
