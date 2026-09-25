@@ -584,6 +584,7 @@ export function BabyPanel({
                   className="h-7 w-7 flex-shrink-0"
                   onCommand={() => {}}
                   onMessage={onVoiceMessage}
+                  recognitionMode="dictation"
                   onTranscript={(text) => {
                     const note = collapseExactRepeatedTranscript(text);
                     if (!note) return;
