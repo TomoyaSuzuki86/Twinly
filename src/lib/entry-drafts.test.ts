@@ -41,7 +41,7 @@ describe("createDefaultMilkDraft", () => {
         timestamp: new Date("2026-04-18T08:00:00+09:00").getTime(),
         milkMethod: "breast",
         breastLeftMinutes: 15,
-        breastRightMinutes: 5,
+        breastRightMinutes: 0,
       },
     ];
 
@@ -50,7 +50,7 @@ describe("createDefaultMilkDraft", () => {
 
     expect(draft.milkMl).toBe(50);
     expect(draft.breastLeftMinutes).toBe(15);
-    expect(draft.breastRightMinutes).toBe(5);
+    expect(draft.breastRightMinutes).toBe(0);
     expect(draft.timestamp).toBe(now.getTime());
   });
 

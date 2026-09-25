@@ -93,7 +93,7 @@ describe("MilkModal", () => {
         initialDraft={{
           milkMl: 50,
           breastLeftMinutes: 15,
-          breastRightMinutes: 20,
+          breastRightMinutes: 0,
           note: "",
           timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
         }}
@@ -108,10 +108,15 @@ describe("MilkModal", () => {
 
     const left = screen.getByLabelText("左の授乳時間") as HTMLSelectElement;
     const right = screen.getByLabelText("右の授乳時間") as HTMLSelectElement;
+    expect(screen.queryByRole("option", { name: "なし" })).toBeNull();
+    expect(screen.getByRole("button", { name: "左" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "右" }).getAttribute("aria-pressed")).toBe("false");
     expect(left.value).toBe("15");
-    expect(right.value).toBe("20");
+    expect(right.hasAttribute("disabled")).toBe(true);
 
     fireEvent.change(left, { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "右" }));
+    expect(right.hasAttribute("disabled")).toBe(false);
     fireEvent.change(right, { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
