@@ -156,6 +156,7 @@ export function BabyPanel({
     diaperCount,
     remainingDiapers,
     diaperEstimateSummary,
+    diaperProgressDifferenceLabel,
     milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
@@ -837,8 +838,13 @@ export function BabyPanel({
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
             <Card className="min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
-              <CardHeader className="p-3">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
+                {diaperProgressDifferenceLabel ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-diaper-text))]">
+                    {diaperProgressDifferenceLabel}
+                  </span>
+                ) : null}
               </CardHeader>
               <CardContent className="p-3 pt-0">
                 <div className="flex min-w-0 items-start justify-between gap-3">
@@ -884,17 +890,17 @@ export function BabyPanel({
               aria-label={`${profile.displayName}の睡眠履歴を開く`}
             >
               <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
-                <CardHeader className="p-3">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                   <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
+                  {sleepProgressDifferenceLabel ? (
+                    <span className="shrink-0 whitespace-nowrap rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-sleep-fill))]">
+                      {sleepProgressDifferenceLabel}
+                    </span>
+                  ) : null}
                 </CardHeader>
                 <CardContent className="p-3 pt-0">
-                  <div className="flex min-w-0 items-baseline justify-between gap-3">
+                  <div className="flex min-w-0 items-baseline gap-3">
                     <span className="whitespace-nowrap text-2xl font-bold [color:hsl(var(--gauge-sleep-fill))]">{sleepLogTotal}</span>
-                    {sleepProgressDifferenceLabel ? (
-                      <span className="shrink-0 whitespace-nowrap rounded-md border border-violet-400/30 bg-violet-500/10 px-2 py-1 text-xs font-bold leading-tight [color:hsl(var(--gauge-sleep-fill))]">
-                        {sleepProgressDifferenceLabel}
-                      </span>
-                    ) : null}
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between gap-2">
