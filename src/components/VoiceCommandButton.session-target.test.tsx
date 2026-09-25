@@ -100,6 +100,50 @@ describe("VoiceCommandButton session target isolation", () => {
     );
   });
 
+  it("uses final-only single-utterance recognition for free-form dictation and submits once", () => {
+    vi.useFakeTimers();
+    const ref = createRef<VoiceCommandButtonHandle>();
+    const onTranscript = vi.fn();
+
+    render(
+      <VoiceCommandButton
+        ref={ref}
+        recognitionMode="dictation"
+        onCommand={vi.fn()}
+        onMessage={vi.fn()}
+        onTranscript={onTranscript}
+      />
+    );
+
+    act(() => {
+      ref.current?.startListening("A");
+    });
+
+    expect(MockSpeechRecognition.instances).toHaveLength(1);
+    const recognition = MockSpeechRecognition.instances[0];
+    expect(recognition.interimResults).toBe(false);
+    expect(recognition.maxAlternatives).toBe(1);
+    expect(recognition.continuous).toBe(false);
+
+    act(() => {
+      recognition.onresult?.({ resultIndex: 0, results: speechResults("沐浴してご機嫌") });
+      recognition.onend?.();
+    });
+
+    expect(onTranscript).toHaveBeenCalledTimes(1);
+    expect(onTranscript).toHaveBeenCalledWith("沐浴してご機嫌");
+
+    // Some Android implementations still dispatch callbacks after recognition ended.
+    // A completed dictation session must stay invalidated and never save twice.
+    act(() => {
+      recognition.onresult?.({ resultIndex: 0, results: speechResults("沐浴してご機嫌") });
+      recognition.onend?.();
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(onTranscript).toHaveBeenCalledTimes(1);
+  });
+
   it("ignores a late final result after submission and accepts the next explicit session", () => {
     vi.useFakeTimers();
     const ref = createRef<VoiceCommandButtonHandle>();
