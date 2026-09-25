@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AppState, DiaperKind, LogEvent } from "@/types";
+import type { AppState, DiaperKind, LogEvent, MilkMethod } from "@/types";
 import type { AppModal } from "./use-app-modal-controller";
 import { createEventRecordingController, isCareEventType } from "./event-recording-controller";
 import { editEventGroup, removeEventGroup, removeEvents } from "./event-mutations";
@@ -102,7 +102,8 @@ export const useEventOperations = ({
   });
 
   const onSaveMilk = (payload: {
-    milkMl: number;
+    milkMl?: number;
+    milkMethod: MilkMethod;
     note: string;
     timestamp: number;
     autoWake: boolean;

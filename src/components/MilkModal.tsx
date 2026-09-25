@@ -15,6 +15,10 @@ import { Textarea } from "./ui/textarea";
 import { MilkDraft } from "@/lib/entry-drafts";
 import { DateTimeAdjuster } from "./DateTimeAdjuster";
 import { MilkAmountControl } from "./MilkAmountControl";
+import type { MilkMethod } from "@/types";
+import { Mic } from "lucide-react";
+import { getSpeechRecognition, type SpeechRecognitionInstance } from "@/lib/speech-recognition";
+import { mergeTranscriptSegments } from "@/lib/speech-transcript";
 
 type MilkModalProps = {
   open: boolean;
@@ -22,7 +26,7 @@ type MilkModalProps = {
   displayName: string;
   isSleeping?: boolean;
   initialDraft: MilkDraft;
-  onSave: (payload: { milkMl: number; note: string; timestamp: number; autoWake: boolean }) => void;
+  onSave: (payload: { milkMl?: number; milkMethod: MilkMethod; note: string; timestamp: number; autoWake: boolean }) => void;
   onSaveSolidFood?: (payload: { note: string; timestamp: number; autoWake: boolean }) => void;
 };
 
@@ -36,12 +40,14 @@ export function MilkModal({
   onSave,
   onSaveSolidFood,
 }: MilkModalProps) {
-  const [recordType, setRecordType] = useState<"milk" | "solidFood">("milk");
+  const [recordType, setRecordType] = useState<"milk" | "breast" | "solidFood">("milk");
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
   const [autoWake, setAutoWake] = useState(true);
+  const [solidFoodListening, setSolidFoodListening] = useState(false);
+  const solidFoodRecognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const wasOpen = useRef(false);
 
   useEffect(() => {
@@ -54,7 +60,51 @@ export function MilkModal({
     setSolidFoodNote("");
     setTimestamp(initialDraft.timestamp);
     setAutoWake(true);
+    setSolidFoodListening(false);
   }, [open, initialDraft]);
+
+  useEffect(() => {
+    if (open) return;
+    solidFoodRecognitionRef.current?.abort();
+    solidFoodRecognitionRef.current = null;
+    setSolidFoodListening(false);
+  }, [open]);
+
+  const startSolidFoodDictation = () => {
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      window.alert("このブラウザは音声入力に未対応です");
+      return;
+    }
+
+    solidFoodRecognitionRef.current?.abort();
+    const recognition = new SpeechRecognition();
+    solidFoodRecognitionRef.current = recognition;
+    recognition.lang = "ja-JP";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+    recognition.onstart = () => setSolidFoodListening(true);
+    recognition.onerror = () => setSolidFoodListening(false);
+    recognition.onend = () => {
+      if (solidFoodRecognitionRef.current === recognition) solidFoodRecognitionRef.current = null;
+      setSolidFoodListening(false);
+    };
+    recognition.onresult = (event) => {
+      const segments: string[] = [];
+      const startIndex = event.resultIndex ?? 0;
+      for (let index = startIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const alternative = result?.[0] ?? result?.item(0);
+        const transcript = alternative?.transcript?.trim();
+        if (transcript) segments.push(transcript);
+      }
+      const transcript = mergeTranscriptSegments(segments).trim();
+      if (!transcript) return;
+      setSolidFoodNote((current) => current.trim() ? `${current.trim()}、${transcript}` : transcript);
+    };
+    recognition.start();
+  };
 
   const handleSave = () => {
     if (recordType === "solidFood") {
@@ -63,12 +113,11 @@ export function MilkModal({
       return;
     }
 
-    onSave({
-      milkMl,
-      note,
-      timestamp,
-      autoWake,
-    });
+    onSave(
+      recordType === "breast"
+        ? { milkMethod: "breast", note, timestamp, autoWake }
+        : { milkMethod: "bottle", milkMl, note, timestamp, autoWake }
+    );
     onOpenChange(false);
   };
 
@@ -80,7 +129,7 @@ export function MilkModal({
           <DialogDescription>ミルクまたは離乳食を選んで記録します。</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
-          <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1">
+          <div className="grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1">
             <Button
               type="button"
               variant={recordType === "milk" ? "secondary" : "ghost"}
@@ -88,6 +137,14 @@ export function MilkModal({
               onClick={() => setRecordType("milk")}
             >
               ミルク
+            </Button>
+            <Button
+              type="button"
+              variant={recordType === "breast" ? "secondary" : "ghost"}
+              className={recordType === "breast" ? "text-pink-300" : ""}
+              onClick={() => setRecordType("breast")}
+            >
+              母乳
             </Button>
             <Button
               type="button"
@@ -101,11 +158,19 @@ export function MilkModal({
 
           {recordType === "milk" ? (
             <MilkAmountControl value={milkMl} onChange={setMilkMl} />
+          ) : recordType === "breast" ? (
+            <div className="rounded-lg border border-pink-500/30 bg-pink-500/5 p-4">
+              <p className="font-semibold text-pink-200">母乳として記録</p>
+              <p className="mt-1 text-sm text-muted-foreground">母乳量は推定せず、授乳時刻を次の授乳目安に使います。</p>
+            </div>
           ) : (
             <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
-              <Label htmlFor="solid-food-note" className="font-semibold text-emerald-200">
-                メモ
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="solid-food-note" className="font-semibold text-emerald-200">メモ</Label>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={startSolidFoodDictation} aria-label="離乳食メモを音声入力" title="音声でメモを入力">
+                  <Mic className={`h-4 w-4 ${solidFoodListening ? "animate-pulse" : ""}`} />
+                </Button>
+              </div>
               <Textarea
                 id="solid-food-note"
                 value={solidFoodNote}
@@ -114,6 +179,7 @@ export function MilkModal({
                 className="min-h-28"
               />
               <p className="text-xs text-muted-foreground">食べたものや量、様子などを自由に記録できます。</p>
+              <p className="text-xs text-muted-foreground">離乳食が進んでミルク量が変わってきたら、設定のお世話ゲージから「1回の目安」を見直してください。</p>
             </div>
           )}
 
@@ -136,7 +202,7 @@ export function MilkModal({
               </span>
             </label>
           ) : null}
-          {recordType === "milk" ? (
+          {(recordType === "milk" || recordType === "breast") ? (
             <div className="space-y-2">
               <Label htmlFor="milk-note" className="text-xs text-muted-foreground">
                 メモ（任意）

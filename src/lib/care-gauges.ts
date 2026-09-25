@@ -17,6 +17,8 @@ export type MilkGauge = {
   targetMilkMl: number;
   digestingMl: number;
   neededMl: number;
+  mode: "amount" | "interval";
+  remainingMinutes: number | null;
 };
 
 export type DiaperGauge = {
@@ -47,63 +49,48 @@ export const buildMilkGauge = ({
 }): MilkGauge | null => {
   const nowMs = now.getTime();
   const cutoffMs = nowMs - MILK_LOOKBACK_MS;
-  const milkEvents = events
-    .filter(
-      (event) =>
-        event.babyId === babyId &&
-        event.type === "milk" &&
-        event.timestamp >= cutoffMs &&
-        event.timestamp <= nowMs &&
-        typeof event.milkMl === "number" &&
-        event.milkMl > 0
-    )
+  const feedingEvents = events
+    .filter((event) => event.babyId === babyId && event.type === "milk" && event.timestamp >= cutoffMs && event.timestamp <= nowMs)
     .sort((a, b) => a.timestamp - b.timestamp);
 
-  if (milkEvents.length === 0) return null;
+  if (feedingEvents.length === 0) return null;
 
-  // Records no more than 30 minutes apart are treated as one feeding session.
-  // The average of the three largest sessions adapts to growth while avoiding
-  // the day/night dilution caused by averaging every three-hour clock block.
-  const sessions = milkEvents.reduce<Array<{ lastTimestamp: number; totalMl: number }>>(
-    (result, event) => {
-      const latest = result[result.length - 1];
-      if (!latest || event.timestamp - latest.lastTimestamp > MILK_SESSION_GAP_MS) {
-        result.push({ lastTimestamp: event.timestamp, totalMl: event.milkMl ?? 0 });
-      } else {
-        latest.lastTimestamp = event.timestamp;
-        latest.totalMl += event.milkMl ?? 0;
-      }
-      return result;
-    },
-    []
-  );
-  const largestSessions = sessions
-    .map((session) => session.totalMl)
-    .sort((a, b) => b - a)
-    .slice(0, MILK_TARGET_SAMPLE_COUNT);
-  const calculatedTargetMilkMl = largestSessions.reduce((sum, amount) => sum + amount, 0) / largestSessions.length;
-  const targetMilkMl =
-    typeof targetMilkMlOverride === "number" && targetMilkMlOverride > 0
-      ? targetMilkMlOverride
-      : calculatedTargetMilkMl;
+  const bottleEvents = feedingEvents.filter((event) => event.milkMethod !== "breast" && typeof event.milkMl === "number" && event.milkMl > 0);
+  const bottleSessions = bottleEvents.reduce<Array<{ lastTimestamp: number; totalMl: number }>>((result, event) => {
+    const latest = result[result.length - 1];
+    if (!latest || event.timestamp - latest.lastTimestamp > MILK_SESSION_GAP_MS) result.push({ lastTimestamp: event.timestamp, totalMl: event.milkMl ?? 0 });
+    else { latest.lastTimestamp = event.timestamp; latest.totalMl += event.milkMl ?? 0; }
+    return result;
+  }, []);
+  const largestSessions = bottleSessions.map((session) => session.totalMl).sort((a, b) => b - a).slice(0, MILK_TARGET_SAMPLE_COUNT);
+  const calculatedTargetMilkMl = largestSessions.length ? largestSessions.reduce((sum, amount) => sum + amount, 0) / largestSessions.length : 0;
+  const targetMilkMl = typeof targetMilkMlOverride === "number" && targetMilkMlOverride > 0 ? targetMilkMlOverride : calculatedTargetMilkMl;
   const milkWindowMs = clampMilkWindowHours(windowHours) * HOUR_MS;
 
-  // Only the configured window contributes to fullness. Each feed is treated
-  // as fully undigested at first and linearly reaches zero at the end of the
-  // window so the UI increases hunger smoothly instead of dropping all at once.
-  const digestingMl = milkEvents.reduce((sum, event) => {
+  const feedingSessions = feedingEvents.reduce<Array<{ lastTimestamp: number; hasBreast: boolean }>>((result, event) => {
+    const latest = result[result.length - 1];
+    if (!latest || event.timestamp - latest.lastTimestamp > MILK_SESSION_GAP_MS) result.push({ lastTimestamp: event.timestamp, hasBreast: event.milkMethod === "breast" });
+    else { latest.lastTimestamp = event.timestamp; latest.hasBreast = latest.hasBreast || event.milkMethod === "breast"; }
+    return result;
+  }, []);
+  const latestFeedingSession = feedingSessions[feedingSessions.length - 1];
+
+  // Breastfeeding is a timing signal, not an estimated ml amount. Mixed feeds
+  // within 30 minutes use the same interval mode.
+  if (latestFeedingSession?.hasBreast) {
+    const elapsedMs = Math.max(0, nowMs - latestFeedingSession.lastTimestamp);
+    const remainingMs = Math.max(0, milkWindowMs - elapsedMs);
+    return { level: clampLevel(remainingMs / milkWindowMs), targetMilkMl, digestingMl: 0, neededMl: 0, mode: "interval", remainingMinutes: Math.ceil(remainingMs / (60 * 1000)) };
+  }
+
+  if (targetMilkMl <= 0) return null;
+  const digestingMl = bottleEvents.reduce((sum, event) => {
     const ageMs = nowMs - event.timestamp;
     if (ageMs < 0 || ageMs >= milkWindowMs) return sum;
-    const undigestedRatio = 1 - ageMs / milkWindowMs;
-    return sum + (event.milkMl ?? 0) * undigestedRatio;
+    return sum + (event.milkMl ?? 0) * (1 - ageMs / milkWindowMs);
   }, 0);
 
-  return {
-    level: clampLevel(digestingMl / targetMilkMl),
-    targetMilkMl,
-    digestingMl,
-    neededMl: Math.max(0, targetMilkMl - digestingMl),
-  };
+  return { level: clampLevel(digestingMl / targetMilkMl), targetMilkMl, digestingMl, neededMl: Math.max(0, targetMilkMl - digestingMl), mode: "amount", remainingMinutes: null };
 };
 
 export const buildDiaperGauge = ({

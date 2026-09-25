@@ -150,6 +150,7 @@ export function BabyPanel({
   const {
     milkTotal,
     milkCount,
+    breastCount,
     solidFoodCount,
     peeCount,
     poopCount,
@@ -178,6 +179,8 @@ export function BabyPanel({
     lastDiaperTime,
     lastDiaperElapsed,
     milkGaugePercent,
+    milkGaugeMode,
+    milkGaugeRemainingMinutes,
     milkNeededMl,
     milkTargetMl,
     diaperGaugePercent,
@@ -287,7 +290,7 @@ export function BabyPanel({
       tabIndex={morph ? -1 : undefined}
       onClick={() => onOpenModal("milk", { babyId })}
       onContextMenu={(event) => event.preventDefault()}
-      aria-label={!gaugesEnabled ? "食事を記録" : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
+      aria-label={!gaugesEnabled ? "食事を記録" : milkGaugeMode === "interval" ? `食事を記録・次の授乳目安${milkGaugePercent}%` : `食事を記録・推定空腹度${milkGaugePercent}%${milkNeededMl !== null && milkTargetMl !== null ? `・あと${milkNeededMl}ml・${milkTargetMl}ml` : ""}`}
     >
       <span
         aria-hidden="true"
@@ -303,7 +306,11 @@ export function BabyPanel({
           <Utensils className="mr-3 h-7 w-7" />
           食事
         </div>
-        {!gaugesEnabled ? null : milkNeededMl !== null && milkTargetMl !== null ? (
+        {!gaugesEnabled ? null : milkGaugeMode === "interval" ? (
+          <span className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]" data-morph-secondary={morph ? "true" : undefined}>
+            {milkGaugeRemainingMinutes !== null && milkGaugeRemainingMinutes > 0 ? `次の授乳まで ${formatSleepDuration(milkGaugeRemainingMinutes)}` : "次の授乳目安です"}
+          </span>
+        ) : milkNeededMl !== null && milkTargetMl !== null ? (
           <span
             className="mt-0.5 whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
             data-morph-secondary={morph ? "true" : undefined}
@@ -323,7 +330,7 @@ export function BabyPanel({
           className="whitespace-nowrap text-[15px] font-bold leading-tight [color:hsl(var(--gauge-milk-muted))]"
           data-morph-secondary={morph ? "true" : undefined}
         >
-          前回 {lastMilkTime} / {lastMilkElapsed}
+          前回授乳 {lastMilkTime} / {lastMilkElapsed}
         </span>
       </div>
       {morph && gaugesEnabled ? <span className="twinly-primary-action-morph-percent">{milkGaugePercent}%</span> : null}
@@ -821,6 +828,10 @@ export function BabyPanel({
                   <div className="flex items-center justify-between gap-3">
                     <span>ミルク</span>
                     <span>{milkCount}回</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>母乳</span>
+                    <span>{breastCount}回</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>離乳食</span>

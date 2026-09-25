@@ -135,8 +135,10 @@ export const buildBabyPanelViewModel = ({
     diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
   });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
-  const milkNeededMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
-  const milkTargetMl = careGauges.milk ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
+  const milkGaugeMode = careGauges.milk?.mode ?? "amount";
+  const milkGaugeRemainingMinutes = careGauges.milk?.mode === "interval" ? careGauges.milk.remainingMinutes : null;
+  const milkNeededMl = careGauges.milk?.mode === "amount" ? roundMilkAmountUp(careGauges.milk.neededMl) : null;
+  const milkTargetMl = careGauges.milk?.mode === "amount" ? roundMilkAmountUp(careGauges.milk.targetMilkMl) : null;
   const diaperGaugePercent = Math.round(
     (1 - (careGauges.diaper?.level ?? (lastDiaperEvent ? 1 : 0))) * 100
   );
@@ -168,6 +170,8 @@ export const buildBabyPanelViewModel = ({
     lastDiaperTime,
     lastDiaperElapsed,
     milkGaugePercent,
+    milkGaugeMode,
+    milkGaugeRemainingMinutes,
     milkNeededMl,
     milkTargetMl,
     diaperGaugePercent,
