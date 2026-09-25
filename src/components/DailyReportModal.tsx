@@ -15,13 +15,15 @@ import {
 import { BabyId, BabyProfile, LogEvent } from "@/types";
 import { fmtDate, fmtTime, iconGradients } from "@/lib/utils";
 import { Baby } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type DailyReportModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   events: LogEvent[];
   profiles: Record<BabyId, BabyProfile>;
+  onDelete: (eventId: string) => void;
 };
 
 type FilterValue = "all" | BabyId;
@@ -29,27 +31,6 @@ type DailyReportItem = {
   key: string;
   event: LogEvent;
   babyIds: BabyId[];
-};
-
-const calcAgeLabel = (birthDate: string, at: Date) => {
-  const birth = new Date(`${birthDate}T00:00:00`);
-  const target = new Date(at);
-  target.setHours(0, 0, 0, 0);
-  if (target.getTime() < birth.getTime()) return "生後0か月0日";
-  let months =
-    (target.getFullYear() - birth.getFullYear()) * 12 +
-    (target.getMonth() - birth.getMonth());
-  let days = target.getDate() - birth.getDate();
-  if (days < 0) {
-    months -= 1;
-    const lastDayPrevMonth = new Date(
-      target.getFullYear(),
-      target.getMonth(),
-      0
-    ).getDate();
-    days = lastDayPrevMonth + days;
-  }
-  return `生後${months}か月${days}日`;
 };
 
 const uniqueBabyIds = (events: LogEvent[]) =>
@@ -60,8 +41,50 @@ export function DailyReportModal({
   onOpenChange,
   events,
   profiles,
+  onDelete,
 }: DailyReportModalProps) {
   const [filter, setFilter] = useState<FilterValue>("all");
+  const [deleteTarget, setDeleteTarget] = useState<DailyReportItem | null>(null);
+  const longPressRef = useRef<{
+    timer: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const clearLongPress = () => {
+    if (!longPressRef.current) return;
+    window.clearTimeout(longPressRef.current.timer);
+    longPressRef.current = null;
+  };
+
+  useEffect(() => () => clearLongPress(), []);
+
+  const startLongPress = (
+    event: React.PointerEvent<HTMLDivElement>,
+    report: DailyReportItem
+  ) => {
+    clearLongPress();
+    const timer = window.setTimeout(() => {
+      longPressRef.current = null;
+      setDeleteTarget(report);
+    }, 550);
+    longPressRef.current = {
+      timer,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  };
+
+  const moveLongPress = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = longPressRef.current;
+    if (!current) return;
+    if (
+      Math.abs(event.clientX - current.startX) > 10 ||
+      Math.abs(event.clientY - current.startY) > 10
+    ) {
+      clearLongPress();
+    }
+  };
 
   const reports = useMemo(() => {
     const dailyEvents = events
@@ -97,6 +120,7 @@ export function DailyReportModal({
   }, [events, filter]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl h-[70vh] flex flex-col">
         <DialogHeader>
@@ -119,6 +143,9 @@ export function DailyReportModal({
           <DialogDescription>
             一言日記を新しい順に表示します。
           </DialogDescription>
+          <p className="text-xs text-muted-foreground">
+            メモを長押しすると削除できます。
+          </p>
         </DialogHeader>
         <div className="flex-grow overflow-y-auto pr-2">
           {reports.length === 0 ? (
@@ -138,7 +165,13 @@ export function DailyReportModal({
                 return (
                   <div
                     key={report.key}
-                    className={`flex items-start gap-3 rounded-lg border p-4 ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
+                    className={`flex select-none items-start gap-3 rounded-lg border p-4 ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
+                    onPointerDown={(event) => startLongPress(event, report)}
+                    onPointerMove={moveLongPress}
+                    onPointerUp={clearLongPress}
+                    onPointerCancel={clearLongPress}
+                    onPointerLeave={clearLongPress}
+                    onContextMenu={(event) => event.preventDefault()}
                   >
                     {shared ? (
                       <div className="relative h-12 w-16 flex-shrink-0" aria-label={`${label}の共通メモ`}>
@@ -174,7 +207,6 @@ export function DailyReportModal({
                       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                         <span className="font-semibold text-foreground">{label || firstProfile.displayName}</span>
                         <span>{fmtDate(createdAt)} {fmtTime(createdAt)}</span>
-                        <span>{calcAgeLabel(firstProfile.birthDate, createdAt)}</span>
                       </div>
                       <div className="mt-2 whitespace-pre-wrap text-sm">
                         {report.event.note?.trim() || "（内容なし）"}
@@ -188,5 +220,33 @@ export function DailyReportModal({
         </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(deleteTarget)} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>このメモを削除しますか？</DialogTitle>
+          <DialogDescription>
+            {deleteTarget?.babyIds.length === 2
+              ? "2人の共通メモとして表示されている記録をまとめて削除します。"
+              : "削除した記録は元に戻せません。"}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+            キャンセル
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (!deleteTarget) return;
+              onDelete(deleteTarget.event.id);
+              setDeleteTarget(null);
+            }}
+          >
+            削除する
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
