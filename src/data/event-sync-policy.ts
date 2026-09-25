@@ -17,6 +17,7 @@ export const USER_EVENT_FIELDS: readonly (keyof LogEvent)[] = [
   "note",
   "customMemoId",
   "customMemoEmoji",
+  "sharedDailyId",
 ];
 
 const setEventValue = (event: LogEvent, field: keyof LogEvent, value: unknown) => {

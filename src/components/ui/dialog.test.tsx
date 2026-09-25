@@ -17,6 +17,22 @@ describe("DialogContent", () => {
     expect(screen.getByTestId("dialog-opening-skeleton")).toBeTruthy();
   });
 
+  it("keeps dialogs inside the viewport and scrolls only when content overflows", () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>長いモーダル</DialogTitle>
+          <div>内容</div>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("max-h-[calc(100dvh-1rem)]");
+    expect(dialog.className).toContain("overflow-y-auto");
+    expect(dialog.className).toContain("overscroll-contain");
+  });
+
   it("renders arbitrary titles without feature-specific decoration", () => {
     render(
       <Dialog open>

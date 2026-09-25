@@ -24,6 +24,22 @@ describe("server-ordered event merge", () => {
     expect(afterOf(result)).toMatchObject({ milkMl: 150, note: "remote note" });
   });
 
+  it("persists a shared daily id added to an existing record", () => {
+    const daily: LogEvent = {
+      id: "daily-a",
+      babyId: "A",
+      type: "daily",
+      timestamp: 1_000,
+      note: "same note",
+    };
+    const local = { ...daily, sharedDailyId: "shared-1" };
+    const result = mergeEventChangeByServerOrder(
+      { id: daily.id, before: daily, after: local },
+      daily
+    );
+    expect(afterOf(result)?.sharedDailyId).toBe("shared-1");
+  });
+
   it("lets the later server-processed mutation win when both changed the same field", () => {
     const remote = { ...base, milkMl: 180 };
     const local = { ...base, milkMl: 150 };
