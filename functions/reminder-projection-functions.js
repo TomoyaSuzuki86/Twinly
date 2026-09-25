@@ -1,20 +1,26 @@
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const functions = require("firebase-functions/v1");
 const {
   projectFamilyReminders,
   projectionStateKey,
 } = require("./reminder-projection");
 
 const relevantTypes = new Set(["milk", "diaper", "sleepStart", "wake"]);
-const options = { region: "asia-northeast1", maxInstances: 1 };
 
-const revisionFor = (event) => String(event.time || new Date().toISOString());
+const revisionFor = (context) =>
+  String(context.timestamp || new Date().toISOString());
+
+const trigger = () =>
+  functions
+    .region("asia-northeast1")
+    .runWith({ maxInstances: 1 })
+    .firestore;
 
 module.exports = ({ admin, db, logger }) => {
-  const projectCareRemindersFromEvent = onDocumentWritten(
-    { ...options, document: "families/{familyId}/events/{eventId}" },
-    async (event) => {
-      const before = event.data?.before?.data();
-      const after = event.data?.after?.data();
+  const projectCareRemindersFromEvent = trigger()
+    .document("families/{familyId}/events/{eventId}")
+    .onWrite(async (change, context) => {
+      const before = change.before.exists ? change.before.data() : undefined;
+      const after = change.after.exists ? change.after.data() : undefined;
       const babyIds = new Set();
 
       for (const record of [before, after]) {
@@ -28,26 +34,25 @@ module.exports = ({ admin, db, logger }) => {
         await projectFamilyReminders({
           db,
           admin,
-          familyId: event.params.familyId,
+          familyId: context.params.familyId,
           babyIds: [...babyIds],
-          revision: revisionFor(event),
+          revision: revisionFor(context),
         });
       } catch (error) {
         logger.error("Care reminder event projection failed", {
-          familyId: event.params.familyId,
-          eventId: event.params.eventId,
+          familyId: context.params.familyId,
+          eventId: context.params.eventId,
           message: error?.message,
         });
         throw error;
       }
-    }
-  );
+    });
 
-  const projectCareRemindersFromSettings = onDocumentWritten(
-    { ...options, document: "families/{familyId}/app/state" },
-    async (event) => {
-      const before = event.data?.before?.data();
-      const after = event.data?.after?.data();
+  const projectCareRemindersFromSettings = trigger()
+    .document("families/{familyId}/app/state")
+    .onWrite(async (change, context) => {
+      const before = change.before.exists ? change.before.data() : undefined;
+      const after = change.after.exists ? change.after.data() : undefined;
       if (!after?.app) return;
 
       const beforeVersion = before?.schemaVersion ?? 1;
@@ -65,20 +70,19 @@ module.exports = ({ admin, db, logger }) => {
         await projectFamilyReminders({
           db,
           admin,
-          familyId: event.params.familyId,
+          familyId: context.params.familyId,
           babyIds: ["A", "B"],
-          revision: revisionFor(event),
+          revision: revisionFor(context),
           stateData: after,
         });
       } catch (error) {
         logger.error("Care reminder settings projection failed", {
-          familyId: event.params.familyId,
+          familyId: context.params.familyId,
           message: error?.message,
         });
         throw error;
       }
-    }
-  );
+    });
 
   return {
     projectCareRemindersFromEvent,
