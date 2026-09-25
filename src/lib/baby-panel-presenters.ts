@@ -49,6 +49,82 @@ export const summarizeBabyPanelLogEvents = (events: LogEvent[]): BabyPanelLogSum
   return summary;
 };
 
+const startOfDay = (date: Date) => {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+};
+
+const cutoffOnDay = (date: Date, now: Date) => {
+  const value = startOfDay(date);
+  value.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  return value;
+};
+
+const diaperCountInRange = (
+  events: LogEvent[],
+  babyId: LogEvent["babyId"],
+  startMs: number,
+  endMs: number
+) =>
+  summarizeBabyPanelLogEvents(
+    events.filter(
+      (event) =>
+        event.babyId === babyId &&
+        event.type === "diaper" &&
+        event.timestamp >= startMs &&
+        event.timestamp <= endMs
+    )
+  ).diaperCount;
+
+export const buildDiaperProgressComparison = ({
+  events,
+  babyId,
+  targetDate,
+  now,
+}: {
+  events: LogEvent[];
+  babyId: LogEvent["babyId"];
+  targetDate: Date;
+  now: Date;
+}) => {
+  const targetStart = startOfDay(targetDate);
+  const currentCount = diaperCountInRange(
+    events,
+    babyId,
+    targetStart.getTime(),
+    cutoffOnDay(targetDate, now).getTime()
+  );
+  const trailingDailyCounts = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(targetStart);
+    day.setDate(day.getDate() - (index + 1));
+    return diaperCountInRange(
+      events,
+      babyId,
+      startOfDay(day).getTime(),
+      cutoffOnDay(day, now).getTime()
+    );
+  });
+  const trailingAverage =
+    trailingDailyCounts.reduce((sum, count) => sum + count, 0) / trailingDailyCounts.length;
+  const difference = currentCount - trailingAverage;
+  const hasHistory = trailingDailyCounts.some((count) => count > 0);
+
+  return {
+    currentCount,
+    trailingAverage,
+    trailingDailyCounts,
+    difference,
+    status: !hasHistory
+      ? "no-history" as const
+      : Math.abs(difference) < 0.5
+        ? "same" as const
+        : difference > 0
+          ? "higher" as const
+          : "lower" as const,
+  };
+};
+
 export const formatDiaperEstimateSummary = (estimate: DiaperStockEstimate | null) => {
   if (!estimate) return null;
 
@@ -107,6 +183,13 @@ const formatSignedDifference = (difference: number, unit: string) => {
 export const formatMilkProgressDifference = (progress: MilkProgressComparison | null) => {
   if (!progress || progress.status === "no-history") return null;
   return formatSignedDifference(progress.difference, "ml");
+};
+
+export const formatDiaperProgressDifference = (
+  progress: ReturnType<typeof buildDiaperProgressComparison> | null
+) => {
+  if (!progress || progress.status === "no-history") return null;
+  return formatSignedDifference(progress.difference, "回");
 };
 
 export const formatSleepProgressDifference = (progress: SleepProgressComparison | null) => {
