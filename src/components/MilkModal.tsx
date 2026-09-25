@@ -43,8 +43,10 @@ export function MilkModal({
 }: MilkModalProps) {
   const [recordType, setRecordType] = useState<"milk" | "breast" | "solidFood">("milk");
   const [milkMl, setMilkMl] = useState(initialDraft.milkMl);
-  const [breastLeftMinutes, setBreastLeftMinutes] = useState(initialDraft.breastLeftMinutes ?? 10);
-  const [breastRightMinutes, setBreastRightMinutes] = useState(initialDraft.breastRightMinutes ?? 10);
+  const [breastLeftActive, setBreastLeftActive] = useState((initialDraft.breastLeftMinutes ?? 10) > 0);
+  const [breastRightActive, setBreastRightActive] = useState((initialDraft.breastRightMinutes ?? 10) > 0);
+  const [breastLeftMinutes, setBreastLeftMinutes] = useState(initialDraft.breastLeftMinutes && initialDraft.breastLeftMinutes > 0 ? initialDraft.breastLeftMinutes : 10);
+  const [breastRightMinutes, setBreastRightMinutes] = useState(initialDraft.breastRightMinutes && initialDraft.breastRightMinutes > 0 ? initialDraft.breastRightMinutes : 10);
   const [note, setNote] = useState(initialDraft.note);
   const [solidFoodNote, setSolidFoodNote] = useState("");
   const [timestamp, setTimestamp] = useState(initialDraft.timestamp);
@@ -59,8 +61,10 @@ export function MilkModal({
     if (!justOpened) return;
     setRecordType("milk");
     setMilkMl(initialDraft.milkMl);
-    setBreastLeftMinutes(initialDraft.breastLeftMinutes ?? 10);
-    setBreastRightMinutes(initialDraft.breastRightMinutes ?? 10);
+    setBreastLeftActive((initialDraft.breastLeftMinutes ?? 10) > 0);
+    setBreastRightActive((initialDraft.breastRightMinutes ?? 10) > 0);
+    setBreastLeftMinutes(initialDraft.breastLeftMinutes && initialDraft.breastLeftMinutes > 0 ? initialDraft.breastLeftMinutes : 10);
+    setBreastRightMinutes(initialDraft.breastRightMinutes && initialDraft.breastRightMinutes > 0 ? initialDraft.breastRightMinutes : 10);
     setNote(initialDraft.note);
     setSolidFoodNote("");
     setTimestamp(initialDraft.timestamp);
@@ -120,7 +124,7 @@ export function MilkModal({
 
     onSave(
       recordType === "breast"
-        ? { milkMethod: "breast", breastLeftMinutes, breastRightMinutes, note, timestamp, autoWake }
+        ? { milkMethod: "breast", breastLeftMinutes: breastLeftActive ? breastLeftMinutes : 0, breastRightMinutes: breastRightActive ? breastRightMinutes : 0, note, timestamp, autoWake }
         : { milkMethod: "bottle", milkMl, note, timestamp, autoWake }
     );
     onOpenChange(false);
@@ -165,8 +169,12 @@ export function MilkModal({
             <MilkAmountControl value={milkMl} onChange={setMilkMl} />
           ) : recordType === "breast" ? (
             <BreastfeedingDurationFields
+              leftActive={breastLeftActive}
+              rightActive={breastRightActive}
               leftMinutes={breastLeftMinutes}
               rightMinutes={breastRightMinutes}
+              onLeftActiveChange={setBreastLeftActive}
+              onRightActiveChange={setBreastRightActive}
               onLeftChange={setBreastLeftMinutes}
               onRightChange={setBreastRightMinutes}
             />
@@ -228,7 +236,7 @@ export function MilkModal({
           </DialogClose>
           <Button
             onClick={handleSave}
-            disabled={recordType === "breast" && breastLeftMinutes === 0 && breastRightMinutes === 0}
+            disabled={recordType === "breast" && !breastLeftActive && !breastRightActive}
             className={
               recordType === "solidFood"
                 ? "bg-emerald-600 hover:bg-emerald-500"

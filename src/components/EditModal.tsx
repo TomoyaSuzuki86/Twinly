@@ -44,6 +44,8 @@ export function EditModal({
   memberNameByUid = {},
 }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
+  const [breastLeftActive, setBreastLeftActive] = useState(true);
+  const [breastRightActive, setBreastRightActive] = useState(true);
   const [breastLeftMinutes, setBreastLeftMinutes] = useState(10);
   const [breastRightMinutes, setBreastRightMinutes] = useState(10);
   const [diaperKind, setDiaperKind] = useState<DiaperKind>("pee");
@@ -55,8 +57,10 @@ export function EditModal({
   useEffect(() => {
     if (event) {
       setMilkMl(event.milkMl ?? 0);
-      setBreastLeftMinutes(event.breastLeftMinutes ?? 10);
-      setBreastRightMinutes(event.breastRightMinutes ?? 10);
+      setBreastLeftActive((event.breastLeftMinutes ?? 10) > 0);
+      setBreastRightActive((event.breastRightMinutes ?? 10) > 0);
+      setBreastLeftMinutes(event.breastLeftMinutes && event.breastLeftMinutes > 0 ? event.breastLeftMinutes : 10);
+      setBreastRightMinutes(event.breastRightMinutes && event.breastRightMinutes > 0 ? event.breastRightMinutes : 10);
       setDiaperKind(event.diaperKind ?? "pee");
       setNote(event.note ?? "");
       setTimestamp(event.timestamp);
@@ -70,7 +74,7 @@ export function EditModal({
     const payload: Partial<LogEvent> =
       event.type === "milk"
         ? event.milkMethod === "breast"
-          ? { milkMethod: "breast", breastLeftMinutes, breastRightMinutes, note, timestamp }
+          ? { milkMethod: "breast", breastLeftMinutes: breastLeftActive ? breastLeftMinutes : 0, breastRightMinutes: breastRightActive ? breastRightMinutes : 0, note, timestamp }
           : { milkMl, milkMethod: "bottle", note, timestamp }
         : event.type === "diaper"
         ? { diaperKind, note, timestamp }
@@ -133,8 +137,12 @@ export function EditModal({
               <h3 className="font-semibold">{event.milkMethod === "breast" ? "母乳" : "ミルク"}</h3>
               {event.milkMethod === "breast" ? (
                 <BreastfeedingDurationFields
+                  leftActive={breastLeftActive}
+                  rightActive={breastRightActive}
                   leftMinutes={breastLeftMinutes}
                   rightMinutes={breastRightMinutes}
+                  onLeftActiveChange={setBreastLeftActive}
+                  onRightActiveChange={setBreastRightActive}
                   onLeftChange={setBreastLeftMinutes}
                   onRightChange={setBreastRightMinutes}
                 />
@@ -200,7 +208,7 @@ export function EditModal({
                 <DialogClose asChild>
                   <Button variant="ghost">キャンセル</Button>
                 </DialogClose>
-                <Button onClick={handleSave} disabled={requiresDiaperKindReselection || (event.type === "milk" && event.milkMethod === "breast" && breastLeftMinutes === 0 && breastRightMinutes === 0)}>
+                <Button onClick={handleSave} disabled={requiresDiaperKindReselection || (event.type === "milk" && event.milkMethod === "breast" && !breastLeftActive && !breastRightActive)}>
                   保存する
                 </Button>
               </div>
