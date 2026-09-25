@@ -91,7 +91,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText("前回 09:45 / 35分前")).toBeTruthy();
+    expect(screen.getByText("前回授乳 09:45 / 35分前")).toBeTruthy();
     expect(screen.getByText("前回 10:05 / 15分前")).toBeTruthy();
   });
 
@@ -119,7 +119,7 @@ describe("BabyPanel", () => {
 
     renderPanel({ events: [], latestEvents });
 
-    expect(screen.getByText("前回 23:00 / 680分前")).toBeTruthy();
+    expect(screen.getByText("前回授乳 23:00 / 680分前")).toBeTruthy();
     expect(screen.getByText("前回 23:30 / 650分前")).toBeTruthy();
     expect(screen.getAllByText("0")).toBeTruthy();
   });
@@ -530,7 +530,7 @@ describe("BabyPanel", () => {
     expect(onOpenHistory).toHaveBeenNthCalledWith(3, "sleep", "A");
   });
 
-  it("shows milk totals without method breakdowns and diaper totals", () => {
+  it("shows bottle milk totals and breastfeeding counts separately", () => {
     const events: LogEvent[] = [
       {
         id: "milk-bottle",
@@ -573,11 +573,12 @@ describe("BabyPanel", () => {
 
     renderPanel({ events });
 
-    expect(screen.getByText("200")).toBeTruthy();
+    expect(screen.getByText("120")).toBeTruthy();
     expect(screen.queryByText("哺乳瓶")).toBeNull();
-    expect(screen.queryByText("母乳")).toBeNull();
+    expect(screen.getByText("母乳")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getAllByText("2回")).toHaveLength(3);
+    expect(screen.getAllByText("1回")).toHaveLength(2);
+    expect(screen.getAllByText("2回")).toHaveLength(2);
   });
 
   it("shows diaper stock forecast details when an estimate is available", () => {
