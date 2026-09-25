@@ -42,6 +42,7 @@ describe("BabyPanel presenters", () => {
     const events: LogEvent[] = [
       event({ id: "milk-1", babyId: "A", type: "milk", timestamp: 1, milkMl: 120 }),
       event({ id: "milk-2", babyId: "A", type: "milk", timestamp: 2, milkMl: 80 }),
+      event({ id: "breast", babyId: "A", type: "milk", timestamp: 2.5, milkMethod: "breast" }),
       event({ id: "food", babyId: "A", type: "solidFood", timestamp: 3 }),
       event({ id: "pee", babyId: "A", type: "diaper", timestamp: 4, diaperKind: "pee" }),
       event({ id: "mix", babyId: "A", type: "diaper", timestamp: 5, diaperKind: "mix" }),
@@ -51,6 +52,7 @@ describe("BabyPanel presenters", () => {
     expect(summarizeBabyPanelLogEvents(events)).toEqual({
       milkTotal: 200,
       milkCount: 2,
+      breastCount: 1,
       solidFoodCount: 1,
       peeCount: 2,
       poopCount: 1,

@@ -8,7 +8,7 @@ describe("EditModal", () => {
     cleanup();
   });
 
-  it("edits milk without bottle or breast choices", () => {
+  it("edits breastfeeding without exposing a fake milk amount", () => {
     const onSave = vi.fn();
     const event: LogEvent = {
       id: "milk-legacy",
@@ -22,22 +22,11 @@ describe("EditModal", () => {
 
     render(<EditModal open onOpenChange={vi.fn()} event={event} onSave={onSave} onDelete={vi.fn()} />);
 
-    expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
-
-    fireEvent.change(screen.getByRole("slider", { name: "ミルク量スライダー" }), {
-      target: { value: "180" },
-    });
-    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("180");
-
-    fireEvent.change(screen.getByLabelText("ミルク量"), { target: { value: "175" } });
+    expect(screen.getByText("母乳")).toBeTruthy();
+    expect(screen.queryByLabelText("ミルク量")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "保存する" }));
 
-    expect(onSave).toHaveBeenCalledWith("milk-legacy", {
-      milkMl: 175,
-      note: "legacy",
-      timestamp: event.timestamp,
-    });
+    expect(onSave).toHaveBeenCalledWith("milk-legacy", { milkMethod: "breast", note: "legacy", timestamp: event.timestamp });
   });
 
   it("does not offer mix when editing diaper records", () => {

@@ -11,6 +11,14 @@ const milk = (id: string, timestamp: string, milkMl: number): LogEvent => ({
   milkMethod: "bottle",
 });
 
+const breast = (id: string, timestamp: string): LogEvent => ({
+  id,
+  babyId: "A",
+  type: "milk",
+  timestamp: new Date(timestamp).getTime(),
+  milkMethod: "breast",
+});
+
 const diaper = (id: string, timestamp: string): LogEvent => ({
   id,
   babyId: "A",
@@ -109,7 +117,37 @@ describe("care gauges", () => {
     expect(gauge?.neededMl).toBe(0);
   });
 
+  it("uses the configured interval when the latest feeding session contains breastfeeding", () => {
+    const gauge = buildMilkGauge({
+      events: [breast("breast", "2026-04-08T12:00:00+09:00")],
+      babyId: "A",
+      now: new Date("2026-04-08T13:30:00+09:00"),
+      windowHours: 3,
+    });
+
+    expect(gauge?.mode).toBe("interval");
+    expect(gauge?.level).toBeCloseTo(0.5, 2);
+    expect(gauge?.remainingMinutes).toBe(90);
+  });
+
+  it("keeps mixed feeding in interval mode only while it is the latest 30-minute session", () => {
+    const mixed = buildMilkGauge({
+      events: [...weeklyHistory, breast("breast", "2026-04-08T12:00:00+09:00"), milk("mixed-bottle", "2026-04-08T12:20:00+09:00", 80)],
+      babyId: "A",
+      now: new Date("2026-04-08T12:20:00+09:00"),
+    });
+    const laterBottle = buildMilkGauge({
+      events: [...weeklyHistory, breast("breast", "2026-04-08T12:00:00+09:00"), milk("mixed-bottle", "2026-04-08T12:20:00+09:00", 80), milk("next-session", "2026-04-08T13:00:00+09:00", 140)],
+      babyId: "A",
+      now: new Date("2026-04-08T13:00:00+09:00"),
+    });
+
+    expect(mixed?.mode).toBe("interval");
+    expect(laterBottle?.mode).toBe("amount");
+  });
+
   it("reaches the default diaper check timing after two hours", () => {
+
     const events = [
       diaper("d1", "2026-04-08T06:00:00+09:00"),
       { ...diaper("d2", "2026-04-08T09:00:00+09:00"), diaperKind: "poop" as const },

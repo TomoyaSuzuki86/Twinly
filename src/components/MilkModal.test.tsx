@@ -29,6 +29,7 @@ describe("MilkModal", () => {
     expect(screen.queryByRole("checkbox", { name: /自動的に起床する/ })).toBeNull();
     expect(onSave).toHaveBeenCalledWith({
       milkMl: 50,
+      milkMethod: "bottle",
       note: "",
       timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
       autoWake: true,
@@ -82,7 +83,8 @@ describe("MilkModal", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ milkMl: 175 }));
   });
 
-  it("does not show bottle or breast choices", () => {
+  it("records breastfeeding without inventing a milk amount", () => {
+    const onSave = vi.fn();
     render(
       <MilkModal
         open
@@ -93,13 +95,20 @@ describe("MilkModal", () => {
           note: "",
           timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
         }}
-        onSave={vi.fn()}
+        onSave={onSave}
       />
     );
 
-    expect((screen.getByLabelText("ミルク量") as HTMLInputElement).value).toBe("50");
-    expect(screen.queryByRole("button", { name: "母乳" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "哺乳瓶" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "母乳" }));
+    expect(screen.queryByLabelText("ミルク量")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "保存する" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      milkMethod: "breast",
+      note: "",
+      timestamp: new Date("2026-04-18T10:15:00+09:00").getTime(),
+      autoWake: true,
+    });
   });
 
   it("saves solid food using only the shared memo and timestamp", () => {

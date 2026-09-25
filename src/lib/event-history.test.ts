@@ -38,7 +38,7 @@ describe("event-history helpers", () => {
     },
   ];
 
-  it("summarizes milk totals without method breakdowns", () => {
+  it("keeps breastfeeding separate from bottle milk totals", () => {
     const summary = summarizeMilkEvents([
       ...milkEvents,
       {
@@ -49,9 +49,10 @@ describe("event-history helpers", () => {
       },
     ]);
 
-    expect(summary.total.count).toBe(3);
-    expect(summary.total.amount).toBe(300);
-    expect(summary.total.average).toBe(100);
+    expect(summary.total.count).toBe(2);
+    expect(summary.total.amount).toBe(220);
+    expect(summary.total.average).toBe(110);
+    expect(summary.breastCount).toBe(1);
     expect(summary.solidFoodCount).toBe(1);
   });
 
@@ -79,11 +80,13 @@ describe("event-history helpers", () => {
     expect(chartData).toHaveLength(2);
     expect(chartData[0]).toMatchObject({
       label: "04-20",
-      total: { count: 1, amount: 80, average: 80 },
+      total: { count: 0, amount: 0, average: 0 },
+      breastCount: 1,
     });
     expect(chartData[1]).toMatchObject({
       label: "04-21",
       total: { count: 1, amount: 120, average: 120 },
+      breastCount: 0,
       solidFoodCount: 1,
     });
   });
@@ -94,12 +97,14 @@ describe("event-history helpers", () => {
         key: "2026-04-06",
         label: "04-06",
         total: { count: 1, amount: 100, average: 100 },
+        breastCount: 0,
         solidFoodCount: 0,
       },
       {
         key: "2026-04-20",
         label: "04-20",
-        total: { count: 2, amount: 200, average: 100 },
+        total: { count: 1, amount: 120, average: 120 },
+        breastCount: 1,
         solidFoodCount: 0,
       },
     ]);
