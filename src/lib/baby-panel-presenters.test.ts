@@ -5,7 +5,9 @@ import type { LogEvent } from "@/types";
 import {
   adjustNumber,
   formatDiaperEstimateSummary,
+  formatMilkProgressDifference,
   formatMilkProgressSummary,
+  formatSleepProgressDifference,
   roundMilkAmountUp,
   summarizeBabyPanelLogEvents,
 } from "./baby-panel-presenters";
@@ -92,6 +94,26 @@ describe("BabyPanel presenters", () => {
       title: "550ml / 平均550ml",
       detail: "過去7日平均とほぼ同じ",
     });
+  });
+
+  it("formats compact signed differences for summary cards", () => {
+    expect(formatMilkProgressDifference(milkProgress({ difference: 49.6, status: "higher" }))).toBe("+50ml");
+    expect(formatMilkProgressDifference(milkProgress({ difference: -50.4, status: "lower" }))).toBe("-50ml");
+    expect(formatMilkProgressDifference(milkProgress({ difference: 0.4, status: "same" }))).toBe("0ml");
+    expect(formatMilkProgressDifference(milkProgress({ status: "no-history" }))).toBeNull();
+
+    expect(formatSleepProgressDifference({
+      currentMinutes: 510,
+      trailingAverageMinutes: 480,
+      differenceMinutes: 30,
+      status: "higher",
+    })).toBe("+30分");
+    expect(formatSleepProgressDifference({
+      currentMinutes: 450,
+      trailingAverageMinutes: 480,
+      differenceMinutes: -30,
+      status: "lower",
+    })).toBe("-30分");
   });
 
   it("rounds required milk upward to 5ml and never below zero", () => {
