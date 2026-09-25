@@ -165,6 +165,7 @@ export function DailyReportModal({
                 return (
                   <div
                     key={report.key}
+                    data-testid={`daily-report-${report.key}`}
                     className={`flex select-none items-start gap-3 rounded-lg border p-4 ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
                     onPointerDown={(event) => startLongPress(event, report)}
                     onPointerMove={moveLongPress}
