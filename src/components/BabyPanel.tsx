@@ -155,7 +155,6 @@ export function BabyPanel({
     diaperCount,
     remainingDiapers,
     diaperEstimateSummary,
-    milkProgressSummary,
     milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
