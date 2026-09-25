@@ -143,9 +143,6 @@ export function DailyReportModal({
           <DialogDescription>
             一言日記を新しい順に表示します。
           </DialogDescription>
-          <p className="text-xs text-muted-foreground">
-            メモを長押しすると削除できます。
-          </p>
         </DialogHeader>
         <div className="flex-grow overflow-y-auto pr-2">
           {reports.length === 0 ? (
@@ -219,6 +216,9 @@ export function DailyReportModal({
             </div>
           )}
         </div>
+        <p className="shrink-0 text-center text-[11px] leading-none text-muted-foreground">
+          メモを長押しすると削除できます。
+        </p>
       </DialogContent>
     </Dialog>
     <Dialog open={Boolean(deleteTarget)} onOpenChange={(nextOpen) => !nextOpen && setDeleteTarget(null)}>
