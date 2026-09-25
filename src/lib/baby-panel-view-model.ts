@@ -3,7 +3,9 @@ import type { DiaperStockEstimate } from "./diaper-stock";
 import type { MilkProgressComparison } from "./milk-progress";
 import {
   formatDiaperEstimateSummary,
+  formatMilkProgressDifference,
   formatMilkProgressSummary,
+  formatSleepProgressDifference,
   roundMilkAmountUp,
   summarizeBabyPanelLogEvents,
 } from "./baby-panel-presenters";
@@ -18,6 +20,7 @@ import {
   getDefaultSleepTargetHours,
 } from "./sleep";
 import { buildCareGauges } from "./care-gauges";
+import { getSleepProgressComparison } from "./sleep-history";
 import { fmtTime, minutesSince } from "./utils";
 
 type Params = {
@@ -51,6 +54,7 @@ export const buildBabyPanelViewModel = ({
       ? formatDiaperEstimateSummary(diaperEstimate)
       : null;
   const milkProgressSummary = formatMilkProgressSummary(milkProgress);
+  const milkProgressDifferenceLabel = formatMilkProgressDifference(milkProgress);
 
   const sleepAnalysis = analyzeSleepEvents(latestEvents, babyId);
   const sleeping = Boolean(sleepAnalysis.currentSleepStart);
@@ -84,6 +88,10 @@ export const buildBabyPanelViewModel = ({
     : null;
 
   const selectedLogDate = logDate ? new Date(`${logDate}T00:00:00`) : now;
+  const sleepComparisonNow = new Date(selectedLogDate);
+  sleepComparisonNow.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+  const sleepProgress = getSleepProgressComparison(sleepAnalysis, sleepComparisonNow);
+  const sleepProgressDifferenceLabel = formatSleepProgressDifference(sleepProgress);
   const sleepLogSummary = buildSleepLogSummary(sleepAnalysis, selectedLogDate, now);
   const sleepLogTotal = formatSleepDuration(sleepLogSummary.totalMinutes);
   const averageActivityDuration =
@@ -129,6 +137,7 @@ export const buildBabyPanelViewModel = ({
     remainingDiapers,
     diaperEstimateSummary,
     milkProgressSummary,
+    milkProgressDifferenceLabel,
     sleepAnalysis,
     sleeping,
     activityGauge,
@@ -139,6 +148,7 @@ export const buildBabyPanelViewModel = ({
     currentSleepDuration,
     sleepLogSummary,
     sleepLogTotal,
+    sleepProgressDifferenceLabel,
     averageActivityDuration,
     sleepDurationByWakeId,
     lastMilkEvent,
