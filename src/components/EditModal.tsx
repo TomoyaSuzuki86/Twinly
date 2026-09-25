@@ -22,10 +22,8 @@ type EditModalProps = {
   event: LogEvent | null;
   onSave: (eventId: string, payload: Partial<LogEvent>) => void;
   onDelete: (eventId: string) => void;
-  onCopyCustomMemoToTwin?: (
-    event: LogEvent,
-    payload: { note: string; timestamp: number }
-  ) => boolean | void;
+  onCopyToTwin?: (event: LogEvent, payload: Partial<LogEvent>) => boolean | void;
+  isTwinCopyDuplicate?: (event: LogEvent, payload: Partial<LogEvent>) => boolean;
   memberNameByUid?: Record<string, string>;
 };
 
@@ -40,7 +38,8 @@ export function EditModal({
   event,
   onSave,
   onDelete,
-  onCopyCustomMemoToTwin,
+  onCopyToTwin,
+  isTwinCopyDuplicate,
   memberNameByUid = {},
 }: EditModalProps) {
   const [milkMl, setMilkMl] = useState(0);
@@ -101,16 +100,63 @@ export function EditModal({
     onOpenChange(false);
   };
 
-  const handleCopyToTwin = () => {
-    if (!event || !onCopyCustomMemoToTwin) return;
-    const copied = onCopyCustomMemoToTwin(event, { note, timestamp });
-    if (copied !== false) setCopiedToTwin(true);
-  };
-
   if (!event) return null;
 
-  const isCustomMemo = event.type === "daily" && Boolean(event.customMemoId || event.customMemoEmoji);
   const requiresDiaperKindReselection = event.type === "diaper" && diaperKind === "mix";
+  const invalidBreastfeeding =
+    event.type === "milk" &&
+    event.milkMethod === "breast" &&
+    !breastLeftActive &&
+    !breastRightActive;
+  const supportsTwinCopy =
+    event.type === "milk" ||
+    event.type === "diaper" ||
+    event.type === "daily" ||
+    event.type === "sleepStart" ||
+    event.type === "wake";
+
+  const twinCopyPayload: Partial<LogEvent> =
+    event.type === "milk"
+      ? event.milkMethod === "breast"
+        ? {
+            milkMethod: "breast",
+            breastLeftMinutes: breastLeftActive ? breastLeftMinutes : 0,
+            breastRightMinutes: breastRightActive ? breastRightMinutes : 0,
+            note,
+            timestamp,
+          }
+        : { milkMl, milkMethod: "bottle", note, timestamp }
+      : event.type === "diaper"
+      ? {
+          diaperKind,
+          diaperSizeUsed: event.diaperSizeUsed,
+          note,
+          timestamp,
+        }
+      : event.type === "daily"
+      ? {
+          note,
+          timestamp,
+          customMemoId: event.customMemoId,
+          customMemoEmoji: event.customMemoEmoji,
+        }
+      : { note, timestamp };
+
+  const alreadyOnTwin =
+    supportsTwinCopy &&
+    Boolean(onCopyToTwin) &&
+    Boolean(isTwinCopyDuplicate?.(event, twinCopyPayload));
+  const twinCopyDisabled =
+    copiedToTwin ||
+    alreadyOnTwin ||
+    requiresDiaperKindReselection ||
+    invalidBreastfeeding;
+
+  const handleCopyToTwin = () => {
+    if (!supportsTwinCopy || !onCopyToTwin || twinCopyDisabled) return;
+    const copied = onCopyToTwin(event, twinCopyPayload);
+    if (copied !== false) setCopiedToTwin(true);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -119,7 +165,7 @@ export function EditModal({
           <DialogTitle>記録の編集</DialogTitle>
           <DialogDescription>記録内容を必要に応じて修正できます。</DialogDescription>
         </DialogHeader>
-        {isCustomMemo && onCopyCustomMemoToTwin ? (
+        {supportsTwinCopy && onCopyToTwin ? (
           <div className="flex justify-start">
             <Button
               type="button"
@@ -127,10 +173,10 @@ export function EditModal({
               variant="outline"
               className="h-8"
               onClick={handleCopyToTwin}
-              disabled={copiedToTwin}
+              disabled={twinCopyDisabled}
             >
               <Copy className="mr-1.5 h-4 w-4" />
-              {copiedToTwin ? "コピー済み" : "もう片方にもコピー"}
+              {copiedToTwin || alreadyOnTwin ? "コピー済み" : "もう片方にもコピー"}
             </Button>
           </div>
         ) : null}
@@ -219,7 +265,7 @@ export function EditModal({
                 <DialogClose asChild>
                   <Button variant="ghost">キャンセル</Button>
                 </DialogClose>
-                <Button onClick={handleSave} disabled={requiresDiaperKindReselection || (event.type === "milk" && event.milkMethod === "breast" && !breastLeftActive && !breastRightActive)}>
+                <Button onClick={handleSave} disabled={requiresDiaperKindReselection || invalidBreastfeeding}>
                   保存する
                 </Button>
               </div>
