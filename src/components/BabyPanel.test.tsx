@@ -23,6 +23,7 @@ const renderPanel = ({
   latestEvents?: LogEvent[];
   logEvents?: LogEvent[];
   diaperEstimate?: ComponentProps<typeof BabyPanel>["diaperEstimate"];
+  milkProgress?: ComponentProps<typeof BabyPanel>["milkProgress"];
   lowStock?: ComponentProps<typeof BabyPanel>["lowStock"];
   onOpenHistory?: ComponentProps<typeof BabyPanel>["onOpenHistory"];
   onOpenModal?: ComponentProps<typeof BabyPanel>["onOpenModal"];
@@ -44,7 +45,7 @@ const renderPanel = ({
       sleepManagementEnabled={sleepManagementEnabled}
       lowStock={lowStock}
       diaperEstimate={diaperEstimate}
-      milkProgress={null}
+      milkProgress={milkProgress ?? null}
       onOpenHistory={onOpenHistory}
       onOpenModal={onOpenModal}
       onAddEvent={onAddEvent}
@@ -362,8 +363,61 @@ describe("BabyPanel", () => {
     expect(screen.getByTestId("sleep-gauge-fill").getAttribute("data-percent")).toBe("100");
     expect(screen.getByTestId("sleep-gauge-fill").style.width).toBe("100%");
     const sleepSummaryButton = screen.getByRole("button", { name: /睡眠履歴を開く/ });
-    expect(sleepSummaryButton.parentElement?.className).toContain("minmax(160px,1fr)");
-    expect(sleepSummaryButton.parentElement?.parentElement?.className).toContain("overflow-x-auto");
+    expect(sleepSummaryButton.className).toContain("col-span-2");
+    expect(sleepSummaryButton.parentElement?.className).toContain("grid-cols-2");
+    expect(sleepSummaryButton.parentElement?.parentElement?.className).not.toContain("overflow-x-auto");
+  });
+
+  it("shows compact milk and sleep differences directly in the summary cards", () => {
+    const historicalSleep: LogEvent[] = Array.from({ length: 7 }, (_, index) => {
+      const day = String(17 - index).padStart(2, "0");
+      return [
+        {
+          id: `sleep-history-${index}`,
+          babyId: "A" as const,
+          type: "sleepStart" as const,
+          timestamp: new Date(`2026-04-${day}T01:00:00+09:00`).getTime(),
+        },
+        {
+          id: `wake-history-${index}`,
+          babyId: "A" as const,
+          type: "wake" as const,
+          timestamp: new Date(`2026-04-${day}T02:00:00+09:00`).getTime(),
+        },
+      ];
+    }).flat();
+
+    const todaySleep: LogEvent[] = [
+      {
+        id: "sleep-today",
+        babyId: "A",
+        type: "sleepStart",
+        timestamp: new Date("2026-04-18T01:00:00+09:00").getTime(),
+      },
+      {
+        id: "wake-today",
+        babyId: "A",
+        type: "wake",
+        timestamp: new Date("2026-04-18T02:30:00+09:00").getTime(),
+      },
+    ];
+
+    renderPanel({
+      events: todaySleep,
+      latestEvents: [...todaySleep, ...historicalSleep],
+      logEvents: todaySleep,
+      milkProgress: {
+        currentAmount: 600,
+        trailingAverage: 550,
+        trailingDailyAmounts: [550, 550, 550, 550, 550, 550, 550],
+        difference: 50,
+        status: "higher",
+      },
+    });
+
+    expect(screen.getByText("+50ml")).toBeTruthy();
+    expect(screen.getByText("+30分")).toBeTruthy();
+    expect(screen.queryByText(/平均より/)).toBeNull();
   });
 
   it("shows actual wake time while the gauge accumulates after sleep recovery", () => {
