@@ -316,8 +316,8 @@ export default function App() {
     ]);
     if (!copied) return false;
 
-    if (event.type === "daily" && sharedDailyId && event.sharedDailyId !== sharedDailyId) {
-      onSaveEdit(event.id, { sharedDailyId });
+    if (event.type === "daily" && sharedDailyId) {
+      onSaveEdit(event.id, { ...payload, sharedDailyId });
     }
     return true;
   };
