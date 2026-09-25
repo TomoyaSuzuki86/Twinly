@@ -11,6 +11,7 @@ export type MilkStats = {
 
 export type MilkBreakdown = {
   total: MilkStats;
+  breastCount: number;
   solidFoodCount: number;
 };
 
@@ -71,9 +72,10 @@ const buildDiaperStats = (count: number, daySpan: number): DiaperStats => ({
 });
 
 export const summarizeMilkEvents = (events: LogEvent[]): MilkBreakdown => {
-  const milkEvents = events.filter((event) => event.type === "milk");
+  const milkEvents = events.filter((event) => event.type === "milk" && event.milkMethod !== "breast");
   return {
     total: buildMilkStats(milkEvents),
+    breastCount: events.filter((event) => event.type === "milk" && event.milkMethod === "breast").length,
     solidFoodCount: events.filter((event) => event.type === "solidFood").length,
   };
 };

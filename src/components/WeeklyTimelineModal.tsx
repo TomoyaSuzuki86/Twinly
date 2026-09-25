@@ -64,9 +64,10 @@ const getMarkerLeft = (event: LogEvent) => {
 
 const getEventPresentation = (event: LogEvent) => {
   if (event.type === "milk") {
+    const isBreast = event.milkMethod === "breast";
     return {
-      label: "ミルク",
-      detail: `${event.milkMl ?? 0}ml`,
+      label: isBreast ? "母乳" : "ミルク",
+      detail: isBreast ? "授乳" : `${event.milkMl ?? 0}ml`,
       selectedClass: "rounded-full border-sky-100 bg-blue-500",
     };
   }

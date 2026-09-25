@@ -6,6 +6,7 @@ import type { LogEvent } from "@/types";
 export type BabyPanelLogSummary = {
   milkTotal: number;
   milkCount: number;
+  breastCount: number;
   solidFoodCount: number;
   peeCount: number;
   poopCount: number;
@@ -22,6 +23,7 @@ export const summarizeBabyPanelLogEvents = (events: LogEvent[]): BabyPanelLogSum
   const summary: BabyPanelLogSummary = {
     milkTotal: 0,
     milkCount: 0,
+    breastCount: 0,
     solidFoodCount: 0,
     peeCount: 0,
     poopCount: 0,
@@ -30,8 +32,8 @@ export const summarizeBabyPanelLogEvents = (events: LogEvent[]): BabyPanelLogSum
 
   for (const event of events) {
     if (event.type === "milk") {
-      summary.milkCount += 1;
-      summary.milkTotal += event.milkMl ?? 0;
+      if (event.milkMethod === "breast") summary.breastCount += 1;
+      else { summary.milkCount += 1; summary.milkTotal += event.milkMl ?? 0; }
       continue;
     }
 

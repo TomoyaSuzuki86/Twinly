@@ -16,6 +16,7 @@ import {
 
 const formatEventTitle = (event: LogEvent) => {
   if (event.type === "milk") {
+    if (event.milkMethod === "breast") return "母乳";
     return `${event.milkMl ?? 0}ml・ミルク`;
   }
 

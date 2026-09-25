@@ -129,7 +129,7 @@ export function SettingsCareGaugesTab({
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <h4 className="font-semibold">🍼 ミルク</h4>
-                            <p className="text-xs text-muted-foreground">ミルクを飲むとゲージが減り、時間がたつと少しずつ増えます。</p>
+                            <p className="text-xs text-muted-foreground">ミルクは量に応じて、母乳を含む授乳セッションは時間でゲージを計算します。</p>
                           </div>
                         </div>
 
@@ -210,16 +210,16 @@ export function SettingsCareGaugesTab({
 
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <Label>次のミルクまで</Label>
+                            <Label>次の授乳まで</Label>
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               disabled={milkWindowHours === 3}
                               onClick={() =>
-                                onResetRequest({ babyId, kind: "milkWindow", label: "次のミルクまでの時間" })
+                                onResetRequest({ babyId, kind: "milkWindow", label: "次の授乳までの時間" })
                               }
-                              aria-label="ミルクゲージの時間を初期値に戻す"
+                              aria-label="授乳ゲージの時間を初期値に戻す"
                             >
                               おすすめに戻す
                             </Button>
@@ -229,7 +229,7 @@ export function SettingsCareGaugesTab({
                               type="button"
                               variant="outline"
                               size="icon"
-                              aria-label={`${babyName}のミルク間隔を30分短くする`}
+                              aria-label={`${babyName}の授乳間隔を30分短くする`}
                               onClick={() =>
                                 onGaugeChange(
                                   babyId,
@@ -250,7 +250,7 @@ export function SettingsCareGaugesTab({
                               type="button"
                               variant="outline"
                               size="icon"
-                              aria-label={`${babyName}のミルク間隔を30分長くする`}
+                              aria-label={`${babyName}の授乳間隔を30分長くする`}
                               onClick={() =>
                                 onGaugeChange(
                                   babyId,
