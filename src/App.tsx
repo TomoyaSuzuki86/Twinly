@@ -70,6 +70,7 @@ import { useBackupActions } from "./lib/use-backup-actions";
 import { shouldLoadCompleteHistory } from "./lib/history-loading-policy";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
 import { useFamilySessionLifecycle } from "./lib/use-family-session-lifecycle";
+import { getOtherTwinId, hasTwinCopyDuplicate, supportsTwinCopyEvent } from "./lib/twin-copy";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
@@ -297,25 +298,28 @@ export default function App() {
     }));
   };
 
-  const handleCopyCustomMemoToTwin = (
-    event: LogEvent,
-    payload: { note: string; timestamp: number }
-  ) => {
-    if (event.type !== "daily" || (!event.customMemoId && !event.customMemoEmoji)) return false;
-    const targetBabyId: BabyId = event.babyId === "A" ? "B" : "A";
-    return recordEventDrafts([
+  const isTwinCopyDuplicate = (event: LogEvent, payload: Partial<LogEvent>) =>
+    hasTwinCopyDuplicate(app.events, event, payload);
+
+  const handleCopyToTwin = (event: LogEvent, payload: Partial<LogEvent>) => {
+    if (!supportsTwinCopyEvent(event) || isTwinCopyDuplicate(event, payload)) return false;
+
+    const sharedDailyId =
+      event.type === "daily" ? event.sharedDailyId ?? uid() : undefined;
+    const copied = recordEventDrafts([
       {
-        babyId: targetBabyId,
-        type: "daily",
-        payload: {
-          note: payload.note,
-          timestamp: payload.timestamp,
-          customMemoId: event.customMemoId,
-          customMemoEmoji: event.customMemoEmoji,
-        },
+        babyId: getOtherTwinId(event.babyId),
+        type: event.type,
+        payload: sharedDailyId ? { ...payload, sharedDailyId } : payload,
         autoWake: false,
       },
     ]);
+    if (!copied) return false;
+
+    if (event.type === "daily" && sharedDailyId && event.sharedDailyId !== sharedDailyId) {
+      onSaveEdit(event.id, { sharedDailyId });
+    }
+    return true;
   };
 
   const handleProfileSetup = async (profile: {
@@ -877,11 +881,12 @@ export default function App() {
         memberNameByUid={memberNameByUid}
         onSave={onSaveEdit}
         onDelete={removeEvent}
-        onCopyCustomMemoToTwin={handleCopyCustomMemoToTwin}
+        onCopyToTwin={handleCopyToTwin}
+        isTwinCopyDuplicate={isTwinCopyDuplicate}
       />
       <Suspense fallback={<div role="status" className="fixed bottom-4 left-4 rounded border bg-background p-3">読み込み中…</div>}>
       {chartModalOpen && <HealthChartModal open={chartModalOpen} onOpenChange={setChartModalOpen} events={app.events} profiles={app.profiles} />}
-      {dailyReportModalOpen && <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} />}
+      {dailyReportModalOpen && <DailyReportModal open={dailyReportModalOpen} onOpenChange={setDailyReportModalOpen} events={app.events} profiles={app.profiles} onDelete={removeEvent} />}
       {timelineModalOpen && <WeeklyTimelineModal
         open={timelineModalOpen}
         onOpenChange={setTimelineModalOpen}
