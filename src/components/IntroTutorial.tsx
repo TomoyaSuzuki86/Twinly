@@ -683,12 +683,12 @@ export function IntroTutorial({ uid, ready, blocked, replay, names, anchors = EM
               </div>}
 
               {step === 8 && <div className="twinly-tutorial-demo">
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
                   <div className="rounded-lg border bg-card px-2 py-3 font-bold">食事<br /><span className="text-muted-foreground">量・回数</span></div>
                   <div className="rounded-lg border bg-card px-2 py-3 font-bold">おむつ<br /><span className="text-muted-foreground">回数</span></div>
-                  <div className="rounded-lg border bg-card px-2 py-3 font-bold">睡眠<br /><span className="text-muted-foreground">時間・回数</span></div>
+                  <div className="col-span-2 rounded-lg border bg-card px-2 py-3 font-bold">睡眠<br /><span className="text-muted-foreground">時間・回数</span></div>
                 </div>
-                <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">横にスワイプして確認。カードをタップすると、その項目の詳しい履歴を開けます。</p>
+                <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">3項目を1画面で確認。カードをタップすると、その項目の詳しい履歴を開けます。</p>
               </div>}
 
               {step === 9 && <div className="twinly-tutorial-demo">
