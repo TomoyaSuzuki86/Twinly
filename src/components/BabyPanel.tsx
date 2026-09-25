@@ -803,10 +803,10 @@ export function BabyPanel({
           ref={tutorialAnchorRef?.(`log-summary:${babyId}`)}
           className="pb-2"
         >
-          <div className="grid min-w-0 grid-cols-2 gap-3">
+          <div className="grid min-w-0 grid-cols-2 items-stretch gap-3">
           <button
             type="button"
-            className="min-w-0 text-left"
+            className="h-full min-w-0 text-left"
             onClick={() => onOpenHistory("milk", babyId)}
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
@@ -844,11 +844,11 @@ export function BabyPanel({
 
           <button
             type="button"
-            className="min-w-0 text-left"
+            className="h-full min-w-0 text-left"
             onClick={() => onOpenHistory("diaper", babyId)}
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
-            <Card className="min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
+            <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
                 {diaperProgressDifferenceLabel ? (
