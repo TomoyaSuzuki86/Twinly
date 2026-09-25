@@ -22,7 +22,11 @@ type DailyReportModalProps = {
   onOpenChange: (open: boolean) => void;
   events: LogEvent[];
   profiles: Record<BabyId, BabyProfile>;
-  onSelectEvent: (eventId: string) => void;
+  onSelectEvent: (selection: {
+    eventId: string;
+    repairEventId?: string;
+    sharedDailyId?: string;
+  }) => void;
 };
 
 type FilterValue = "all" | BabyId;
@@ -30,7 +34,18 @@ type DailyReportItem = {
   key: string;
   event: LogEvent;
   babyIds: BabyId[];
+  repairEventId?: string;
+  sharedDailyId?: string;
 };
+
+const sameLegacyCopiedDaily = (left: LogEvent, right: LogEvent) =>
+  left.type === "daily" &&
+  right.type === "daily" &&
+  left.babyId !== right.babyId &&
+  left.timestamp === right.timestamp &&
+  (left.note ?? "") === (right.note ?? "") &&
+  left.customMemoId === right.customMemoId &&
+  left.customMemoEmoji === right.customMemoEmoji;
 
 const uniqueBabyIds = (events: LogEvent[]) =>
   (["A", "B"] as BabyId[]).filter((babyId) => events.some((event) => event.babyId === babyId));
@@ -56,19 +71,47 @@ export function DailyReportModal({
     });
 
     const seenSharedIds = new Set<string>();
+    const consumedEventIds = new Set<string>();
     const items: DailyReportItem[] = [];
     dailyEvents.forEach((event) => {
+      if (consumedEventIds.has(event.id)) return;
+
       if (!event.sharedDailyId) {
         items.push({ key: event.id, event, babyIds: [event.babyId] });
+        consumedEventIds.add(event.id);
         return;
       }
+
       if (seenSharedIds.has(event.sharedDailyId)) return;
       seenSharedIds.add(event.sharedDailyId);
       const group = bySharedId.get(event.sharedDailyId) ?? [event];
+      group.forEach((member) => consumedEventIds.add(member.id));
+
+      if (uniqueBabyIds(group).length === 1) {
+        const orphanedOriginal = dailyEvents.find(
+          (candidate) =>
+            !candidate.sharedDailyId &&
+            !consumedEventIds.has(candidate.id) &&
+            sameLegacyCopiedDaily(event, candidate)
+        );
+        if (orphanedOriginal) {
+          consumedEventIds.add(orphanedOriginal.id);
+          items.push({
+            key: `shared:${event.sharedDailyId}`,
+            event,
+            babyIds: uniqueBabyIds([...group, orphanedOriginal]),
+            repairEventId: orphanedOriginal.id,
+            sharedDailyId: event.sharedDailyId,
+          });
+          return;
+        }
+      }
+
       items.push({
         key: `shared:${event.sharedDailyId}`,
         event,
         babyIds: uniqueBabyIds(group),
+        sharedDailyId: event.sharedDailyId,
       });
     });
 
@@ -122,7 +165,13 @@ export function DailyReportModal({
                     data-testid={`daily-report-${report.key}`}
                     aria-label={`${label || firstProfile.displayName}の日記を編集`}
                     className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
-                    onClick={() => onSelectEvent(report.event.id)}
+                    onClick={() =>
+                      onSelectEvent({
+                        eventId: report.event.id,
+                        repairEventId: report.repairEventId,
+                        sharedDailyId: report.sharedDailyId,
+                      })
+                    }
                   >
                     {shared ? (
                       <div className="relative h-12 w-16 flex-shrink-0" aria-label={`${label}の共通メモ`}>
