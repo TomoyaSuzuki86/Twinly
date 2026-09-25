@@ -1,17 +1,13 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialAppState } from "@/lib/app-state";
 import type { LogEvent } from "@/types";
 import { DailyReportModal } from "./DailyReportModal";
 
 describe("DailyReportModal", () => {
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
+  afterEach(cleanup);
 
-  it("groups shared twin memos, hides age labels, and deletes from long press confirmation", () => {
-    vi.useFakeTimers();
+  it("groups shared twin memos, hides age labels, and opens the existing editor from a row", () => {
     const app = createInitialAppState(new Date("2026-09-26T00:00:00+09:00"));
     app.profiles.A.displayName = "奏汰";
     app.profiles.B.displayName = "日向";
@@ -35,7 +31,7 @@ describe("DailyReportModal", () => {
         sharedDailyId: "shared-1",
       },
     ];
-    const onDelete = vi.fn();
+    const onSelectEvent = vi.fn();
 
     render(
       <DailyReportModal
@@ -43,26 +39,17 @@ describe("DailyReportModal", () => {
         onOpenChange={vi.fn()}
         events={events}
         profiles={app.profiles}
-        onDelete={onDelete}
+        onSelectEvent={onSelectEvent}
       />
     );
 
     expect(screen.getAllByText("共通メモ")).toHaveLength(1);
     expect(screen.getByLabelText("奏汰 & 日向の共通メモ")).toBeTruthy();
     expect(screen.queryByText(/生後\d/)).toBeNull();
-    expect(screen.getByText("メモを長押しすると削除できます。")).toBeTruthy();
+    expect(screen.queryByText("メモを長押しすると削除できます。")).toBeNull();
 
-    fireEvent.pointerDown(screen.getByTestId("daily-report-shared:shared-1"), {
-      clientX: 20,
-      clientY: 20,
-    });
-    act(() => {
-      vi.advanceTimersByTime(550);
-    });
+    fireEvent.click(screen.getByTestId("daily-report-shared:shared-1"));
 
-    expect(screen.getByText("このメモを削除しますか？")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "削除する" }));
-
-    expect(onDelete).toHaveBeenCalledWith("daily-a");
+    expect(onSelectEvent).toHaveBeenCalledWith("daily-a");
   });
 });
