@@ -811,7 +811,7 @@ export function BabyPanel({
             onClick={() => onOpenHistory("milk", babyId)}
             aria-label={`${profile.displayName}の食事履歴を開く`}
           >
-            <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-sky-400/60 hover:bg-sky-500/5">
+            <Card className="twinly-history-summary-card--milk h-full min-w-0 overflow-hidden transition-colors">
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">食事</CardTitle>
                 {milkProgressDifferenceLabel ? (
@@ -849,7 +849,7 @@ export function BabyPanel({
             onClick={() => onOpenHistory("diaper", babyId)}
             aria-label={`${profile.displayName}のおむつ履歴を開く`}
           >
-            <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-amber-400/60 hover:bg-amber-500/5">
+            <Card className="twinly-history-summary-card--diaper h-full min-w-0 overflow-hidden transition-colors">
               <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                 <CardTitle className="text-base font-medium text-muted-foreground">おむつ</CardTitle>
                 {diaperProgressDifferenceLabel ? (
@@ -901,7 +901,7 @@ export function BabyPanel({
               onClick={() => onOpenHistory("sleep", babyId)}
               aria-label={`${profile.displayName}の睡眠履歴を開く`}
             >
-              <Card className="h-full min-w-0 overflow-hidden transition-colors hover:border-violet-400/60 hover:bg-violet-500/5">
+              <Card className="twinly-history-summary-card--sleep h-full min-w-0 overflow-hidden transition-colors">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3">
                   <CardTitle className="text-base font-medium text-muted-foreground">睡眠</CardTitle>
                   {sleepProgressDifferenceLabel ? (
