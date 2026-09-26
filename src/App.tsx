@@ -2,7 +2,7 @@ import { BillingPrompt } from "./components/BillingPrompt";
 import { IntroTutorial } from "./components/IntroTutorial";
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Baby, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
@@ -500,11 +500,12 @@ export default function App() {
                 onPointerCancel={clearVoiceLongPress}
                 onContextMenu={(event) => event.preventDefault()}
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="hidden h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 min-[430px]:grid">
-                    <Baby className="h-5 w-5 text-white" />
-                  </div>
-                  <h1 className="text-xl font-extrabold tracking-tight">Twinly</h1>
+                <div className="flex items-center">
+                  <img
+                    src="/icons/icon-192-v7.png"
+                    alt="Twinly"
+                    className="h-9 w-9 rounded-xl object-contain"
+                  />
                 </div>
 
                 <div className="flex items-center gap-1">
