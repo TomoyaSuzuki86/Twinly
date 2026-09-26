@@ -180,3 +180,34 @@ html[data-twinly-sync-managed='true'] header + [role='status'] {
   display: none !important;
   content: none !important;
 }
+
+
+/* Touch devices can keep :hover after a tap. Keep history-card feedback transient on touch,
+   while preserving hover feedback for mouse/trackpad users. */
+button:active > .twinly-history-summary-card--milk {
+  border-color: rgb(56 189 248 / .6);
+  background-color: rgb(14 165 233 / .05);
+}
+button:active > .twinly-history-summary-card--diaper {
+  border-color: rgb(251 191 36 / .6);
+  background-color: rgb(245 158 11 / .05);
+}
+button:active > .twinly-history-summary-card--sleep {
+  border-color: rgb(167 139 250 / .6);
+  background-color: rgb(139 92 246 / .05);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button:hover > .twinly-history-summary-card--milk {
+    border-color: rgb(56 189 248 / .6);
+    background-color: rgb(14 165 233 / .05);
+  }
+  button:hover > .twinly-history-summary-card--diaper {
+    border-color: rgb(251 191 36 / .6);
+    background-color: rgb(245 158 11 / .05);
+  }
+  button:hover > .twinly-history-summary-card--sleep {
+    border-color: rgb(167 139 250 / .6);
+    background-color: rgb(139 92 246 / .05);
+  }
+}
