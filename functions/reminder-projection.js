@@ -1,9 +1,9 @@
 const { buildSleepReminderCandidate } = require("./care-reminders");
 const { resolveMilkWindowHours } = require("./milk-window-policy");
+const { resolveDiaperWindowMinutes } = require("./diaper-window-policy");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
-const DEFAULT_DIAPER_WINDOW_MINUTES = 120;
 const QUEUE_COLLECTION = "careReminderQueue";
 const BACKFILL_MARKER = "careReminderQueueV1";
 
@@ -24,10 +24,7 @@ const buildSimpleCandidate = ({ events, profile, babyId, kind, nowMs }) => {
   const event = latestEvent(events, babyId, kind === "milk" ? "milk" : "diaper");
   if (!event) return null;
 
-  const diaperWindowMinutes = Math.min(
-    720,
-    Math.max(30, Number(profile?.diaperGaugeWindowMinutes) || DEFAULT_DIAPER_WINDOW_MINUTES)
-  );
+  const diaperWindowMinutes = resolveDiaperWindowMinutes(profile?.diaperGaugeWindowMinutes);
   const intervalMs = kind === "milk"
     ? resolveMilkWindowHours(profile?.milkGaugeWindowHours) * 60 * 60 * 1000
     : diaperWindowMinutes * MINUTE_MS;
