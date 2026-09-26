@@ -500,11 +500,11 @@ export default function App() {
                 onPointerCancel={clearVoiceLongPress}
                 onContextMenu={(event) => event.preventDefault()}
               >
-                <div className="flex items-center">
+                <div className="flex shrink-0 items-center">
                   <img
                     src="/assets/twinly-header-logo-v2.png"
                     alt="Twinly"
-                    className="h-8 w-auto max-w-[112px] object-contain"
+                    className="h-9 w-auto max-w-[140px] object-contain"
                   />
                 </div>
 
