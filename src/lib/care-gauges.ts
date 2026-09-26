@@ -3,6 +3,10 @@ import {
   clampMilkWindowHours,
   DEFAULT_MILK_WINDOW_HOURS,
 } from "@/lib/milk-window-policy";
+import {
+  DEFAULT_DIAPER_WINDOW_MINUTES,
+  resolveDiaperWindowMinutes,
+} from "@/lib/diaper-window-policy";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -10,7 +14,7 @@ const MILK_LOOKBACK_MS = 3 * DAY_MS;
 const DIAPER_LOOKBACK_MS = 7 * DAY_MS;
 const MILK_SESSION_GAP_MS = 30 * 60 * 1000;
 const MILK_TARGET_SAMPLE_COUNT = 3;
-export const DEFAULT_DIAPER_GAUGE_WINDOW_MINUTES = 120;
+export const DEFAULT_DIAPER_GAUGE_WINDOW_MINUTES = DEFAULT_DIAPER_WINDOW_MINUTES;
 
 export type MilkGauge = {
   level: number;
@@ -119,7 +123,7 @@ export const buildDiaperGauge = ({
   if (diaperEvents.length === 0) return null;
 
   const elapsedMs = Math.max(0, nowMs - diaperEvents[diaperEvents.length - 1].timestamp);
-  const normalizedIntervalMinutes = Math.min(720, Math.max(30, intervalMinutes));
+  const normalizedIntervalMinutes = resolveDiaperWindowMinutes(intervalMinutes);
   const intervalMs = normalizedIntervalMinutes * 60 * 1000;
 
   return {
