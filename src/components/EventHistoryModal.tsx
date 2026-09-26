@@ -472,7 +472,7 @@ export function EventHistoryModal({
           {historyType === "milk" && mealTab === "milk" ? (
             <div className="space-y-4">
               <MilkSummaryCard title="表示期間" stats={visibleMilkSummary.total} />
-              <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+              <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 text-sm text-foreground">
                 <div className="flex items-center justify-between gap-3">
                   <span>現時点</span>
                   <span className="font-semibold">{milkProgress.currentAmount}ml</span>
