@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/firebase';
 import type { BabyId, DiaperKind } from '@/types';
-export type { FamilyAccess } from './family-access';
+export type { FamilyAccess } from './family-access-contract';
 
 // Kept for compatibility with the existing manual-save pipeline. Gemini no longer creates these drafts.
 export type AiDraft = {

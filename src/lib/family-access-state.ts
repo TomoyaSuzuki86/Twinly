@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { setFamilyPreviewPlan, type FamilyAccess } from "./family-access";
+import { setFamilyPreviewPlan } from "./family-access";
+import type { FamilyAccess } from "./family-access-contract";
 
 export type FamilyAccessState = {
   key: string;

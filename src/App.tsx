@@ -7,7 +7,6 @@ import { BabyPanel } from "./components/BabyPanel";
 import {
   AppState,
   BabyId,
-  CustomMemoPreset,
   FamilyRelationship,
   LogEvent,
 } from "./types";
@@ -18,6 +17,7 @@ import { SleepRecordModal } from "./components/SleepRecordModal";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { SettingsModal } from "./components/SettingsModal";
+import { AppearanceSettingsPanel } from "./components/AppearanceSettingsPanel";
 import { HelpModal } from "./components/HelpModal";
 import { ComfortTools, type ComfortState, type ComfortToolsHandle } from "./components/ComfortTools";
 import { ManualSyncButton } from "./components/ManualSyncButton";
@@ -25,7 +25,6 @@ import { SyncStatusOverlay } from "./components/SyncStatusOverlay";
 import { ComfortMiniPlayer, HeaderOverflowMenu } from "./components/HeaderOverflowMenu";
 import { useFamilyAccess } from "./lib/use-family-access";
 import { useAppearancePreferences } from "./lib/use-appearance-preferences";
-import { WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX } from "./lib/appearance-preferences";
 import { AiTools } from "./components/AiTools";
 import { validConfirmedDrafts } from "./lib/ai";
 import { EditModal } from "./components/EditModal";
@@ -71,6 +70,11 @@ import { shouldLoadCompleteHistory } from "./lib/history-loading-policy";
 import { useVoiceInteraction } from "./lib/use-voice-interaction";
 import { useFamilySessionLifecycle } from "./lib/use-family-session-lifecycle";
 import { getOtherTwinId, hasTwinCopyDuplicate, supportsTwinCopyEvent } from "./lib/twin-copy";
+import {
+  createCustomMemoPreset,
+  prependCustomMemoPreset,
+  removeCustomMemoPreset,
+} from "./lib/custom-memo-presets";
 
 const createEmptyState = () => createInitialAppState(new Date());
 const FAMILY_INVITE_KEY = "twinly-family-invite";
@@ -275,18 +279,12 @@ export default function App() {
     updateApp((previous) => updateSharedDiaperStock(previous, babyId, size, stock));
   };
 
-  const handleAddCustomMemoPreset = (emoji: string, text: string): CustomMemoPreset | null => {
-    const normalizedEmoji = emoji.trim();
-    const normalizedText = text.trim();
-    if (!normalizedEmoji || !normalizedText) return null;
-    const preset: CustomMemoPreset = {
-      id: uid(),
-      emoji: normalizedEmoji,
-      text: normalizedText,
-    };
+  const handleAddCustomMemoPreset = (emoji: string, text: string) => {
+    const preset = createCustomMemoPreset(emoji, text, uid);
+    if (!preset) return null;
     if (!updateApp((previous) => ({
       ...previous,
-      customMemoPresets: [preset, ...previous.customMemoPresets],
+      customMemoPresets: prependCustomMemoPreset(previous.customMemoPresets, preset),
     }))) return null;
     return preset;
   };
@@ -294,7 +292,7 @@ export default function App() {
   const handleDeleteCustomMemoPreset = (id: string) => {
     updateApp((previous) => ({
       ...previous,
-      customMemoPresets: previous.customMemoPresets.filter((preset) => preset.id !== id),
+      customMemoPresets: removeCustomMemoPreset(previous.customMemoPresets, id),
     }));
   };
 
@@ -810,40 +808,13 @@ export default function App() {
         onImport={handleImport}
         onResetAll={resetAll}
         appearance={
-          <div className="space-y-6">
-            <section className="space-y-3">
-              <div>
-                <h3 className="font-semibold">画面レイアウト</h3>
-                <p className="text-sm text-muted-foreground">横長の端末で、双子の入力画面をどう表示するか選べます。</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => selectLayoutMode("single")}
-                  className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "single" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
-                >
-                  <span className="block text-sm font-bold">1人ずつ表示</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">従来どおり、双子タブで切り替えて画面いっぱいに表示</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectLayoutMode("split")}
-                  className={`rounded-xl border-2 p-3 text-left transition ${layoutMode === "split" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "border-border bg-card"}`}
-                >
-                  <span className="block text-sm font-bold">左右2人表示</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">横幅{WIDE_SPLIT_LAYOUT_MIN_WIDTH_PX}px以上で2人を同時表示。狭い画面では自動で1人表示</span>
-                </button>
-              </div>
-            </section>
-            <section className="space-y-3">
-              <div><h3 className="font-semibold">テーマ</h3><p className="text-sm text-muted-foreground">背景・文字・ゲージをまとめて切り替えます。</p></div>
-              <div className="grid grid-cols-2 gap-2">{[
-                ["dark", "ナイト", "from-slate-950 to-indigo-950"], ["milk", "ミルク", "from-stone-50 to-amber-100"],
-                ["sakura", "さくら", "from-rose-50 to-pink-200"], ["sun", "ひだまり", "from-amber-50 to-orange-200"],
-                ["forest", "森の朝", "from-emerald-50 to-green-200"]
-              ].map(([id,label,colors]) => <button key={id} type="button" disabled={id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes} onClick={() => selectTheme(id)} className={`rounded-xl border-2 bg-gradient-to-br ${colors} p-3 text-left ${theme===id ? "border-primary ring-2 ring-primary/30" : "border-border"} disabled:opacity-45`}><span className="block text-sm font-bold text-slate-800">{label}</span><span className="block text-xs text-slate-600">{id!=="dark"&&id!=="milk"&&!familyAccess?.features.themes ? "有料限定" : "選択"}</span></button>)}</div>
-            </section>
-          </div>
+          <AppearanceSettingsPanel
+            theme={theme}
+            layoutMode={layoutMode}
+            premiumThemesEnabled={Boolean(familyAccess?.features.themes)}
+            onSelectTheme={selectTheme}
+            onSelectLayoutMode={selectLayoutMode}
+          />
         }
         planAi={<AiTools key={`${authUser.uid}:${family.id}`} familyId={family.id} app={app} onSave={(drafts) => {
           if (!validConfirmedDrafts(drafts)) return false;

@@ -5,9 +5,9 @@ import { readCachedAppState } from "@/data/app-state-cache";
 import {
   InvalidFamilySessionError,
   loadFamilySession,
-  readCachedFamilySession,
   subscribeFamilyMembers,
 } from "./family";
+import { readCachedFamilySession } from "./family-session-cache";
 import { ensureNotificationSettingsDocument } from "./notification-settings";
 import type { AuthChangeContext, AuthUser } from "./use-authentication";
 

@@ -1,6 +1,7 @@
 import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { buildMilkGauge } from "./care-gauges";
 import { getDefaultActivityLimitMinutes, getDefaultSleepTargetHours } from "./sleep";
+import { DEFAULT_DIAPER_WINDOW_MINUTES } from "./diaper-window-policy";
 
 export type BabyProfiles = Record<BabyId, BabyProfile>;
 export const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
@@ -8,7 +9,7 @@ export const BABY_DISPLAY_ORDER: readonly BabyId[] = ["A", "B"];
 export const gaugeProfileSnapshot = (profile: BabyProfile) => ({
   milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
   milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? DEFAULT_DIAPER_WINDOW_MINUTES,
   activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
   activityLimitMinutesCustom: profile.activityLimitMinutesCustom ?? null,
   sleepTargetHoursOverride: profile.sleepTargetHoursOverride ?? null,
@@ -128,7 +129,7 @@ export const buildCareGaugeSettingsModel = ({
     autoMilkTarget,
     milkTarget: profile.milkTargetMlOverride ?? autoMilkTarget,
     milkWindowHours: profile.milkGaugeWindowHours ?? 3,
-    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? DEFAULT_DIAPER_WINDOW_MINUTES,
     defaultActivityLimitMinutes,
     defaultSleepTargetHours,
     activityLimitMinutes: profile.activityLimitMinutesOverride ?? defaultActivityLimitMinutes,

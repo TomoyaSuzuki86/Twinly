@@ -3,6 +3,8 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { accessFor, summarize } = require('./ai-policy');
 const { isActiveMember, isFamilyOwner } = require('./access-policy');
+const { generateGeminiJson } = require('./gemini-json-client');
+const { createAiUsage } = require('./ai-usage');
 
 const key = defineSecret('TWINLY_AI_API_KEY');
 const model = defineString('TWINLY_AI_MODEL', { default: 'gemini-3.6-flash' });
@@ -127,86 +129,16 @@ module.exports = function createAiServices(db) {
   }
 
   async function generate(system, data) {
-    const primaryModel = model.value() || 'gemini-3.6-flash';
-    const secondaryModel = fallbackModel.value() || 'gemini-3.5-flash-lite';
-    const candidates = [...new Set([primaryModel, secondaryModel])];
-    if (candidates.some(value => !/^[a-zA-Z0-9.-]+$/.test(value))) throw new HttpsError('failed-precondition','AIモデル設定を確認してください');
-    const body = JSON.stringify({
-      systemInstruction:{parts:[{text:system}]},
-      contents:[{role:'user',parts:[{text:JSON.stringify(data)}]}],
-      generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'minimal'}},
-    });
-    const transientStatus = status => status === 408 || status === 429 || status >= 500;
-
-    for (let index = 0; index < candidates.length; index += 1) {
-      const selectedModel = candidates[index];
-      let response;
-      try {
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json','x-goog-api-key':key.value()},
-          signal:AbortSignal.timeout(40000),
-          body,
-        });
-      } catch (error) {
-        console.error('Gemini API connection failed',{model:selectedModel,fallback:index>0,message:error?.message});
-        if (index + 1 < candidates.length) continue;
-        throw new HttpsError('unavailable','AIに接続できませんでした。入力は残っています');
-      }
-
-      if (!response.ok) {
-        let details='';
-        try { if(typeof response.text==='function') details=(await response.text()).slice(0,1000); } catch {}
-        console.error('Gemini API request failed',{status:response.status,model:selectedModel,fallback:index>0,details});
-
-        if (transientStatus(response.status) && index + 1 < candidates.length) continue;
-        if(response.status===400) throw new HttpsError('failed-precondition','AIモデルへの送信設定が対応していません');
-        if(response.status===401||response.status===403) throw new HttpsError('permission-denied','Gemini APIキーまたは利用権限を確認してください');
-        if(response.status===404) throw new HttpsError('failed-precondition','指定したAIモデルを利用できません');
-        if(response.status===429) throw new HttpsError('resource-exhausted','Gemini APIの利用上限に達しました');
-        throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
-      }
-
-      try {
-        const result = await response.json();
-        const candidate = result.candidates?.[0];
-        if (candidate?.finishReason !== 'STOP') throw new Error('Incomplete');
-        return JSON.parse(candidate.content.parts.filter(p => !p.thought).map(p=>p.text || '').join(''));
-      } catch {
-        throw new HttpsError('data-loss','AIの結果を読み取れませんでした');
-      }
-    }
-
-    throw new HttpsError('unavailable','AIサービスが一時的に利用できません');
-  }
-
-  async function reserve(ctx, feature, reserveOptions = {}) {
-    const now = Date.now();
-    const day = jstDate(now);
-    const month = day.slice(0,7);
-    const daily = ctx.root.collection('aiUsage').doc(day);
-    const monthly = ctx.root.collection('aiUsage').doc(month);
-    await db.runTransaction(async tx => {
-      const [a,d,m] = await Promise.all([tx.get(ctx.ref),tx.get(daily),tx.get(monthly)]);
-      if (!accessFor(a.data(),ctx.access.trialAllowed).features[feature]) throw new HttpsError('permission-denied','無料モードではAI機能を利用できません');
-      const dv=d.data()||{}, mv=m.data()||{};
-      const reviewLimitReached = feature==='aiReview' && (dv.successfulReviews||0)>=2 && !reserveOptions.allowReviewRefresh;
-      if ((dv.successfulCount||0)>=40 || (mv.successfulCount||0)>=600 || now-(dv.lastAt||0)<5000 || reviewLimitReached) throw new HttpsError('resource-exhausted','AI利用上限に達しました。通常の記録は引き続き使えます');
-      tx.set(daily,{...dv,lastAt:now});
-    });
-    return { day, month, feature };
-  }
-
-  async function commitUsage(ctx, reservation) {
-    const daily = ctx.root.collection('aiUsage').doc(reservation.day);
-    const monthly = ctx.root.collection('aiUsage').doc(reservation.month);
-    await db.runTransaction(async tx => {
-      const [d,m] = await Promise.all([tx.get(daily),tx.get(monthly)]);
-      const dv=d.data()||{}, mv=m.data()||{};
-      tx.set(daily,{...dv,successfulCount:(dv.successfulCount||0)+1,successfulReviews:(dv.successfulReviews||0)+(reservation.feature==='aiReview'?1:0)});
-      tx.set(monthly,{...mv,successfulCount:(mv.successfulCount||0)+1});
+    return generateGeminiJson({
+      system,
+      data,
+      apiKey: key.value(),
+      primaryModel: model.value() || 'gemini-3.6-flash',
+      secondaryModel: fallbackModel.value() || 'gemini-3.5-flash-lite',
     });
   }
+
+  const aiUsage = createAiUsage({ db, accessFor });
 
   async function loadEvents(root, state, from, to, limit=3001) {
     const app = state.data()?.app;
@@ -258,7 +190,7 @@ module.exports = function createAiServices(db) {
         const events=await loadEvents(c.root,state,now-15*DAY,now+60000,1001);
         timeline=compactTimeline(events,now);
       }
-      const reservation=await reserve(c,feature);
+      const reservation=await aiUsage.reserve(c,feature);
       const result=await generate(
         'Twinlyに記録された双子育児データについて、日本語で簡潔に質問へ答える。JSON {answer:string} のみ返す。まず今日のAIアドバイスと集計済みcontextを根拠にする。timelineが渡された場合だけ追加の時系列確認に使う。データにないことは推測せず「記録からは判断できません」と明示する。A/Bではなく登録名を使う。医療診断、投薬、治療指示、具体的な授乳量変更の指示はしない。心配な症状の相談では記録を持って小児科・保健師へ相談する案内に留める。',
         {
@@ -271,7 +203,7 @@ module.exports = function createAiServices(db) {
       if(typeof result.answer!=='string' || !result.answer.trim() || result.answer.length>1600) throw new HttpsError('data-loss','AI回答の形式が不正です');
       const latest=await context(request, accessDocId);
       if(!latest.access.features.aiChat) throw new HttpsError('permission-denied','無料モードへ切り替わりました');
-      await commitUsage(c,reservation);
+      await aiUsage.commit(c,reservation);
       return {answer:replaceBabyLabels(result.answer,cachedData.summary),source:deep?'review+timeline':'review',generatedAt:now};
     }
 
@@ -279,7 +211,7 @@ module.exports = function createAiServices(db) {
     const events=await loadEvents(c.root,state,now-16*DAY,now+60000,3001);
     const summary=summarize(events,now,app.profiles||{});
     if(!summary.some(b=>b.periods.some(p=>(p.recordCount||0)>0))) throw new HttpsError('failed-precondition','AIアドバイスには直近2週間の育児記録が必要です');
-    const reservation=await reserve(c,feature,{allowReviewRefresh:Boolean(cachedData&&cachedData.version!==REVIEW_VERSION)});
+    const reservation=await aiUsage.reserve(c,feature,{allowReviewRefresh:Boolean(cachedData&&cachedData.version!==REVIEW_VERSION)});
     const result=await generate(
       '双子育児の直近2週間の記録から、家族が今日確認すると役立つ短いアドバイスを日本語で作る。JSON {observations:string,checks:string} のみ返す。observationsは「最近の傾向」、checksは「今日のポイント」として各800文字以内。入力の各babyにはnameがあるので、回答では必ずその登録名を使い、A・B・赤ちゃんA・赤ちゃんBという呼び方は絶対に使わない。2人を比較する時も登録名で書く。ミルクの量と回数、おむつ交換・おしっこ・うんち、離乳食、総睡眠と夜間睡眠、睡眠回数、体重（十分な測定がある場合のみ）、日ごとの変化、双子同士の差、メモ、就寝前2時間以内のミルク記録を総合して見る。直近7日とその前7日の変化を優先し、急な増減や継続する傾向を簡潔に示す。todaySoFarは今日の途中経過なので完了した1日と同列に比較しない。メモに吐き戻し等が繰り返しあれば一般的な確認事項を提案してよいが原因を断定しない。月齢の一般的な目安は補助的に使ってよいが個人差が大きいことを前提とし、厳密な正常・異常判定や診断はしない。記録がない日はゼロとみなさない。数値の羅列ではなく、変化・比較・次に見るポイントを優先する。治療、投薬、メーカー変更、具体的な授乳量の増減を指示しない。心配な変化は記録を持って小児科や保健師へ相談するよう案内する。',
       summary
@@ -294,7 +226,7 @@ module.exports = function createAiServices(db) {
       generatedAt:now,
       summary,
     };
-    await commitUsage(c,reservation);
+    await aiUsage.commit(c,reservation);
     await cache.set(review);
     return publicReview(review);
   });

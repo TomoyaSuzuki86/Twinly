@@ -3,6 +3,7 @@ import { endOfDayMs, startOfDayMs } from "./utils";
 import { estimateDiaperStockBySize } from "./diaper-stock";
 import { buildMilkProgressComparison } from "./milk-progress";
 import { buildCareGauges } from "./care-gauges";
+import { DEFAULT_DIAPER_WINDOW_MINUTES } from "./diaper-window-policy";
 import {
   analyzeSleepEvents,
   buildActivityGauge,
@@ -87,7 +88,7 @@ export const buildDashboardSelectors = (
         now,
         milkWindowHours: profile.milkGaugeWindowHours ?? 3,
         milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-        diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+        diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? DEFAULT_DIAPER_WINDOW_MINUTES,
       });
       const hasDiaperRecord = babyEvents.some((event) => event.type === "diaper");
       const sleepAnalysis = analyzeSleepEvents(babyEvents, babyId);
