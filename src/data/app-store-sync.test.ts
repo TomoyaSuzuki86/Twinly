@@ -182,7 +182,7 @@ describe("AppStore resilient synchronization", () => {
     }
   });
 
-  it("manual sync reads the server directly instead of relying on listener delivery", async () => {
+  it("manual sync reads the server directly without recreating the realtime listener", async () => {
     const initial = createInitialAppState();
     const remote = appendEvents(initial, [remoteMilk]);
     const subscribe = vi.fn((next: (snapshot: AppSnapshot) => void) => {
@@ -200,8 +200,10 @@ describe("AppStore resilient synchronization", () => {
     const stop = context.store.start();
 
     expect(context.view().events).toEqual([]);
+    expect(subscribe).toHaveBeenCalledTimes(1);
     await context.store.syncNow();
 
+    expect(subscribe).toHaveBeenCalledTimes(1);
     expect(loadLatest).toHaveBeenCalledTimes(1);
     expect(context.view().events).toEqual([remoteMilk]);
     expect(context.status().ready).toBe(true);
