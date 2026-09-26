@@ -69,7 +69,7 @@ const expectedPngAssets = {
 const expectedBinaryAssets = {
   "public/icons/icon-192-maskable-v8.webp": "724332557536894b99c774d8ecf234bab6a6f6e98c1a5884cecfd4a0ee6e7a4a",
   "public/icons/icon-512-maskable-v8.webp": "293ca1cebf7412d83843c31e0d975ea61218f97649029eb928ac7e5dbbc656da",
-  "public/assets/twinly-header-logo-v1.webp": "6e14fdb826cd57777c06b5182b715dd3ab1e55bc2cf4cbedcaf1acda90f01ff7",
+  "public/assets/twinly-header-logo-v2.png": "0023cee3c55edee162e6ea149511e73bf9af565dd8167990c66307ed52107237",
 };
 const checksum = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 assert.equal(checksum("public/icons/source-twinly-512-v7.webp"),
@@ -87,10 +87,8 @@ const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"))
 assert.equal(manifest.id, "/");
 assert.equal(manifest.display, "standalone");
 const expectedManifestIcons = [
-  {src:"/icons/icon-192-v7.png",sizes:"192x192",type:"image/png",purpose:"any"},
-  {src:"/icons/icon-512-v7.png",sizes:"512x512",type:"image/png",purpose:"any"},
-  {src:"/icons/icon-192-maskable-v8.webp",sizes:"192x192",type:"image/webp",purpose:"maskable"},
-  {src:"/icons/icon-512-maskable-v8.webp",sizes:"512x512",type:"image/webp",purpose:"maskable"},
+  {src:"/icons/icon-192-maskable-v8.webp",sizes:"192x192",type:"image/webp",purpose:"any maskable"},
+  {src:"/icons/icon-512-maskable-v8.webp",sizes:"512x512",type:"image/webp",purpose:"any maskable"},
 ];
 assert.deepEqual(manifest.icons, expectedManifestIcons, "Android install icon references changed");
 const login = readFileSync("src/components/LoginScreen.tsx", "utf8");
@@ -99,7 +97,7 @@ const sw = readFileSync("public/sw.js", "utf8");
 assert(login.includes('src="/icons/icon-512-v7.png"'), "Login must use high-quality 512px icon");
 assert(html.includes('href="/icons/apple-touch-icon-v7.png"'), "Missing refreshed 180px iOS home-screen icon");
 assert(html.includes('href="/icons/favicon-32-v7.png"'), "Missing refreshed favicon");
-assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v19";'), "Old service-worker cache version");
+assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v20";'), "Old service-worker cache version");
 assert(sw.includes('const BUILD_CACHE_KEY = "dev";'), "Missing build cache-key injection marker");
 assert(sw.includes("const BUILD_ASSET_PRECACHE = [];"), "Missing build asset precache injection marker");
 assert(sw.includes("/assets/twinly-launch-v2.mp4"), "Missing launch video precache");
