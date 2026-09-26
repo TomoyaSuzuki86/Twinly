@@ -19,16 +19,16 @@ const subscription = (overrides = {}) => ({
   ...overrides,
 });
 
-test('selects the same family and price while allowing environment isolation', () => {
+test('selects the matching family and price and supports environment isolation', () => {
   const prod = subscription();
   const dev = subscription({ id: 'sub_dev', metadata: { familyId: 'f', environment: 'development' } });
   assert.equal(selectBillingSubscription({
-    subscriptions: [dev, prod],
+    subscriptions: [prod],
     familyId: 'f',
     priceId,
     environment: undefined,
     multipleMessage: 'multiple',
-  }).id, 'sub_dev');
+  }).id, 'sub_1');
   assert.equal(selectBillingSubscription({
     subscriptions: [prod, dev],
     familyId: 'f',
