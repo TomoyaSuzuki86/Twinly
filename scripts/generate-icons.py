@@ -15,8 +15,6 @@ EXPECTED_SOURCE_SHA256 = "ef228ee999c501d9e5091a5460f0484e92e256cd119eb9967f9dfa
 OUTPUTS = {
     "icon-192-v7.png": 192,
     "icon-512-v7.png": 512,
-    "icon-192-maskable-v7.png": 192,
-    "icon-512-maskable-v7.png": 512,
     "apple-touch-icon-v7.png": 180,
     "favicon-32-v7.png": 32,
 }
@@ -29,9 +27,8 @@ def main():
     with Image.open(SOURCE) as loaded:
         assert loaded.format == "WEBP" and loaded.size == (512, 512), "Source image must be 512x512 WebP"
         source = loaded.convert("RGB")
-        # Maskable and normal versions intentionally use the SAME full-bleed
-        # artwork. We inspected the round Android crop and kept all motifs in
-        # its safe circle; no extra inset square or artificial border.
+        # Maskable v8 assets use separate full-bleed artwork and are intentionally
+        # not regenerated from this normal-icon source.
         for filename, size in OUTPUTS.items():
             output = source if size == 512 else source.resize((size, size), Image.Resampling.LANCZOS)
             path = ROOT / filename

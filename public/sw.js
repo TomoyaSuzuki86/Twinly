@@ -1,4 +1,4 @@
-const SHELL_CACHE_VERSION = "twinly-shell-v18";
+const SHELL_CACHE_VERSION = "twinly-shell-v19";
 const BUILD_CACHE_KEY = "dev";
 const SHELL_CACHE = `${SHELL_CACHE_VERSION}-${BUILD_CACHE_KEY}`;
 
@@ -7,8 +7,9 @@ const STATIC_PRECACHE = [
   "/assets/twinly-launch-v2.mp4",
   "/icons/icon-192-v7.png",
   "/icons/icon-512-v7.png",
-  "/icons/icon-192-maskable-v7.png",
-  "/icons/icon-512-maskable-v7.png",
+  "/icons/icon-192-maskable-v8.webp",
+  "/icons/icon-512-maskable-v8.webp",
+  "/assets/twinly-header-logo-v1.webp",
   "/icons/apple-touch-icon-v7.png",
   "/icons/favicon-32-v7.png",
 ];

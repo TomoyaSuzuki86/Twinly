@@ -502,9 +502,9 @@ export default function App() {
               >
                 <div className="flex items-center">
                   <img
-                    src="/icons/icon-192-v7.png"
+                    src="/assets/twinly-header-logo-v1.webp"
                     alt="Twinly"
-                    className="h-9 w-9 rounded-xl object-contain"
+                    className="h-8 w-auto max-w-[112px] object-contain"
                   />
                 </div>
 

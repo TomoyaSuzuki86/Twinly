@@ -60,22 +60,28 @@ function validatePng(path, expectedSize) {
 }
 
 
-const expectedAssets = {
+const expectedPngAssets = {
   "icon-192-v7.png": [192, "e0b381dba4d732320bcc4bd37366a3216db159af6d486ed6716dcd099e8112a0"],
   "icon-512-v7.png": [512, "8e00b56913c8fb339dbfc0cf306ed4f7b5341bbdcb2a3fb62d0d6ed4dfddd4f7"],
-  "icon-192-maskable-v7.png": [192, "e0b381dba4d732320bcc4bd37366a3216db159af6d486ed6716dcd099e8112a0"],
-  "icon-512-maskable-v7.png": [512, "8e00b56913c8fb339dbfc0cf306ed4f7b5341bbdcb2a3fb62d0d6ed4dfddd4f7"],
   "apple-touch-icon-v7.png": [180, "517000bbcb5c6666f57c2132dc0bf342e086e6aa1813c2125476202060d5939b"],
   "favicon-32-v7.png": [32, "d1e1a53c63b7e6455416ed2cd0e5f974ae69b1929955659415b7a1f3dfb3a835"],
+};
+const expectedBinaryAssets = {
+  "public/icons/icon-192-maskable-v8.webp": "724332557536894b99c774d8ecf234bab6a6f6e98c1a5884cecfd4a0ee6e7a4a",
+  "public/icons/icon-512-maskable-v8.webp": "293ca1cebf7412d83843c31e0d975ea61218f97649029eb928ac7e5dbbc656da",
+  "public/assets/twinly-header-logo-v1.webp": "6e14fdb826cd57777c06b5182b715dd3ab1e55bc2cf4cbedcaf1acda90f01ff7",
 };
 const checksum = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 assert.equal(checksum("public/icons/source-twinly-512-v7.webp"),
   "ef228ee999c501d9e5091a5460f0484e92e256cd119eb9967f9dfadb981964bb",
   "Unexpected or missing user-supplied high-quality source image");
-for (const [name, [size, hash]] of Object.entries(expectedAssets)) {
+for (const [name, [size, hash]] of Object.entries(expectedPngAssets)) {
   const path = `public/icons/${name}`;
   validatePng(path, size);
   assert.equal(checksum(path), hash, `Icon asset ${name} is not from the verified high-quality source`);
+}
+for (const [path, hash] of Object.entries(expectedBinaryAssets)) {
+  assert.equal(checksum(path), hash, `Unexpected binary asset: ${path}`);
 }
 const manifest = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
 assert.equal(manifest.id, "/");
@@ -83,8 +89,8 @@ assert.equal(manifest.display, "standalone");
 const expectedManifestIcons = [
   {src:"/icons/icon-192-v7.png",sizes:"192x192",type:"image/png",purpose:"any"},
   {src:"/icons/icon-512-v7.png",sizes:"512x512",type:"image/png",purpose:"any"},
-  {src:"/icons/icon-192-maskable-v7.png",sizes:"192x192",type:"image/png",purpose:"maskable"},
-  {src:"/icons/icon-512-maskable-v7.png",sizes:"512x512",type:"image/png",purpose:"maskable"},
+  {src:"/icons/icon-192-maskable-v8.webp",sizes:"192x192",type:"image/webp",purpose:"maskable"},
+  {src:"/icons/icon-512-maskable-v8.webp",sizes:"512x512",type:"image/webp",purpose:"maskable"},
 ];
 assert.deepEqual(manifest.icons, expectedManifestIcons, "Android install icon references changed");
 const login = readFileSync("src/components/LoginScreen.tsx", "utf8");
@@ -93,14 +99,18 @@ const sw = readFileSync("public/sw.js", "utf8");
 assert(login.includes('src="/icons/icon-512-v7.png"'), "Login must use high-quality 512px icon");
 assert(html.includes('href="/icons/apple-touch-icon-v7.png"'), "Missing refreshed 180px iOS home-screen icon");
 assert(html.includes('href="/icons/favicon-32-v7.png"'), "Missing refreshed favicon");
-assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v18";'), "Old service-worker cache version");
+assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v19";'), "Old service-worker cache version");
 assert(sw.includes('const BUILD_CACHE_KEY = "dev";'), "Missing build cache-key injection marker");
 assert(sw.includes("const BUILD_ASSET_PRECACHE = [];"), "Missing build asset precache injection marker");
 assert(sw.includes("/assets/twinly-launch-v2.mp4"), "Missing launch video precache");
-for (const name of Object.keys(expectedAssets)) {
+for (const name of Object.keys(expectedPngAssets)) {
   if (name === "apple-touch-icon-v7.png" || name === "favicon-32-v7.png" ||
       name.startsWith("icon-")) {
     assert(sw.includes(`/icons/${name}`), `Service worker references missing ${name}`);
   }
+}
+for (const path of Object.keys(expectedBinaryAssets)) {
+  const publicPath = path.replace(/^public/, "");
+  assert(sw.includes(publicPath), `Service worker references missing ${publicPath}`);
 }
 console.log("Verified source integrity, PNG checksums, Android manifest, iOS icon, login and SW.");
