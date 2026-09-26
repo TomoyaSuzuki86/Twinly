@@ -4,7 +4,7 @@ import { createInitialAppState, toSharedAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
 import { createMutation, isCommitResult } from "./app-repository";
 
-const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }>, queryFromCache: false, batchCommits: 0 }));
+const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }>, queryFromCache: false, seedQueryFromCache: false, batchCommits: 0 }));
 vi.mock("firebase/firestore", () => {
   const ref = (...parts: any[]) => ({ path: parts.map((part) => typeof part === "string" ? part : part.path || "").filter(Boolean).join("/") });
   const snapshot = (path: string) => ({ id: path.split("/").pop(), exists: () => memory.docs.has(path),
@@ -24,7 +24,10 @@ vi.mock("firebase/firestore", () => {
         path: reference.path,
         includeMetadataChanges: Boolean(hasOptions && options?.includeMetadataChanges),
       });
-      callback(reference.constraints ? { docs: [], metadata: { fromCache: memory.queryFromCache } } : snapshot(reference.path));
+      const seedQuery = reference.constraints?.some((constraint: any) =>
+        constraint.kind === "where" && constraint.args[0] === "timestamp" && constraint.args[1] === "<");
+      const fromCache = seedQuery ? memory.seedQueryFromCache : memory.queryFromCache;
+      callback(reference.constraints ? { docs: [], metadata: { fromCache } } : snapshot(reference.path));
       return () => {};
     },
     writeBatch: () => {
@@ -62,7 +65,7 @@ const statePath = "families/family/app/state";
 const eventPath = "families/family/events/event";
 const record = { id: "event", babyId: "A" as const, type: "milk" as const, timestamp: Date.now(), milkMl: 120 };
 const repository = () => createFirestoreAppRepository({} as Firestore, "family", "user");
-beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; memory.queryFromCache = false; memory.batchCommits = 0; });
+beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; memory.queryFromCache = false; memory.seedQueryFromCache = false; memory.batchCommits = 0; });
 
 describe("Firestore adapter contract", () => {
   it("writes just one event and receipt in v2 without rewriting shared state", async () => {
@@ -160,7 +163,7 @@ describe("Firestore adapter contract", () => {
     expect(memory.subscriptions.every((item) => item.includeMetadataChanges)).toBe(true);
   });
 
-  it("keeps the combined snapshot cache-only while any event source is cache-only", () => {
+  it("keeps the combined snapshot cache-only while the visible recent window is cache-only", () => {
     memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
     memory.queryFromCache = true;
     const snapshots: Array<{ fromCache: boolean }> = [];
@@ -169,6 +172,17 @@ describe("Firestore adapter contract", () => {
 
     expect(snapshots.length).toBeGreaterThan(0);
     expect(snapshots[snapshots.length - 1].fromCache).toBe(true);
+  });
+
+  it("does not let stale pre-window seed queries block a fresh recent cross-device snapshot", () => {
+    memory.docs.set(statePath, { schemaVersion: 2, app: toSharedAppState(createInitialAppState()) });
+    memory.seedQueryFromCache = true;
+    const snapshots: Array<{ fromCache: boolean }> = [];
+
+    repository().subscribe((snapshot) => snapshots.push(snapshot), () => {});
+
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots[snapshots.length - 1].fromCache).toBe(false);
   });
 
   it("reconciles simultaneous consumption of the last diaper", async () => {
