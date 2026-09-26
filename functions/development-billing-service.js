@@ -1,8 +1,9 @@
-const crypto = require('node:crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { accessFor } = require('./ai-policy');
 const { billingState, startTrial, PRICE_YEN } = require('./billing-policy');
+const { buildBillingAccessPatch, selectBillingSubscription } = require('./billing-reconciliation');
+const { ensureCheckoutAttempt, isUnresolvedCheckoutAttemptStale, rotateCheckoutAttempt } = require('./billing-checkout-attempt');
 const { expireDevelopmentTrial } = require('./development-billing-policy');
 const { stripeRequest } = require('./stripe-client');
 
@@ -56,27 +57,18 @@ module.exports = function createDevelopmentBillingServices(db) {
       const price = priceId();
       const subscriptions = await api(`subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=100&expand[]=data.latest_invoice`);
       if (subscriptions.has_more) throw new Error('Too many development subscriptions');
-      const relevant = subscriptions.data.filter(sub => sub.metadata?.familyId === ctx.familyId && sub.metadata?.environment === 'development' && sub.items?.data?.some(item => item.price?.id === price));
-      const current = relevant.filter(sub => !['canceled', 'incomplete_expired'].includes(sub.status));
-      if (current.length > 1) throw new Error('Multiple development subscriptions');
-      const sub = current[0] || relevant.sort((a, b) => b.created - a.created)[0];
-      const existing = accessSnap.data() || {};
-      let paidUntil = existing.paidUntil || 0;
-      if (!sub || existing.subscriptionId !== sub.id) paidUntil = 0;
-      const invoice = sub?.latest_invoice;
-      if (invoice && typeof invoice === 'object' && invoice.paid && invoice.status === 'paid') {
-        const periods = invoice.lines?.data?.filter(line => line.price?.id === price).map(line => line.period?.end * 1000).filter(Number.isFinite) || [];
-        paidUntil = Math.max(paidUntil, 0, ...periods);
-      }
-      if (!sub || ['canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused'].includes(sub.status)) paidUntil = 0;
-      tx.set(ctx.ref, {
-        billingVersion: 1,
-        subscriptionId: sub?.id || null,
-        subscriptionStatus: sub?.status || null,
-        paidUntil,
-        cancelAtPeriodEnd: sub?.cancel_at_period_end === true,
-        billingUpdatedAt: Date.now(),
-      }, { merge: true });
+      const sub = selectBillingSubscription({
+        subscriptions: subscriptions.data,
+        familyId: ctx.familyId,
+        priceId: price,
+        environment: 'development',
+        multipleMessage: 'Multiple development subscriptions',
+      });
+      tx.set(ctx.ref, buildBillingAccessPatch({
+        existing: accessSnap.data() || {},
+        subscription: sub,
+        priceId: price,
+      }), { merge: true });
     });
   }
 
@@ -133,11 +125,9 @@ module.exports = function createDevelopmentBillingServices(db) {
     if (state.status === 'trialing') throw new HttpsError('failed-precondition', '無料体験の終了後にテスト決済してください');
     let attempt = await db.runTransaction(async tx => {
       const snap = await tx.get(ctx.privateRef);
-      const data = snap.data() || {};
-      if (data.checkoutAttempt) return data.checkoutAttempt;
-      const next = { id: crypto.randomUUID(), createdAt: Date.now(), price };
-      tx.set(ctx.privateRef, { checkoutAttempt: next }, { merge: true });
-      return next;
+      const decision = ensureCheckoutAttempt(snap.data(), price);
+      if (decision.shouldWrite) tx.set(ctx.privateRef, { checkoutAttempt: decision.attempt }, { merge: true });
+      return decision.attempt;
     });
     if (attempt.sessionId) {
       const session = await api(`checkout/sessions/${attempt.sessionId}`);
@@ -147,14 +137,12 @@ module.exports = function createDevelopmentBillingServices(db) {
       }
       attempt = await db.runTransaction(async tx => {
         const snap = await tx.get(ctx.privateRef);
-        const current = snap.data()?.checkoutAttempt;
-        if (!current || current.id !== attempt.id) return current;
-        const next = { id: crypto.randomUUID(), createdAt: Date.now(), price };
-        tx.set(ctx.privateRef, { checkoutAttempt: next }, { merge: true });
-        return next;
+        const decision = rotateCheckoutAttempt(snap.data(), attempt.id, price);
+        if (decision.shouldWrite) tx.set(ctx.privateRef, { checkoutAttempt: decision.attempt }, { merge: true });
+        return decision.attempt;
       });
     }
-    if (!attempt || Date.now() - attempt.createdAt > 23 * 3600000 && !attempt.sessionId) throw new HttpsError('failed-precondition', '前回のテスト決済状況を確認してください');
+    if (!attempt || isUnresolvedCheckoutAttemptStale(attempt)) throw new HttpsError('failed-precondition', '前回のテスト決済状況を確認してください');
     const session = await api('checkout/sessions', {
       mode: 'subscription',
       customer: privateData.customerId,
