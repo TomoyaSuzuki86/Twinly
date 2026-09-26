@@ -168,7 +168,7 @@ export function DailyReportModal({
                     type="button"
                     data-testid={`daily-report-${report.key}`}
                     aria-label={`${label || firstProfile.displayName}の日記を編集`}
-                    className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${shared ? "bg-card/80" : firstGradient.dimmedBgColor}`}
+                    className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${shared ? "bg-card/80" : firstGradient.softBgColor}`}
                     onClick={() =>
                       onSelectEvent({
                         eventId: report.event.id,
