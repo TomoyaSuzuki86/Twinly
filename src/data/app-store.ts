@@ -27,7 +27,7 @@ export type StoreStatus = {
   conflicts?: SyncConflict[];
 };
 
-type SyncCheckReason = "start" | "manual" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
+type SyncCheckReason = "start" | "online" | "visibility" | "pageshow" | "listener-error" | "server-check-timeout";
 type ConflictRecord = {
   id: string;
   mutation: AppMutation;
@@ -371,8 +371,15 @@ export class AppStore {
 
   async syncNow() {
     if (this.stopped) return;
-    this.connect("manual");
     const generation = this.connectionGeneration;
+    this.receiveError = null;
+    this.status.checking = true;
+    this.status.connection = "connecting";
+    this.syncError();
+    this.emit();
+    this.logDiagnostic("manual-server-check");
+    // Keep the healthy realtime listener alive. Manual sync is a direct server verification,
+    // not a reason to tear down and recreate every Firestore subscription.
     await this.recoverFromServer(generation);
   }
 

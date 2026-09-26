@@ -102,9 +102,11 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       let seeds: LogEvent[] = [];
       let ready = false;
       let stateFromCache = true;
-      const eventSourcesFromCache = new Map<string, boolean>();
-      const compositeFromCache = () =>
-        stateFromCache || [...eventSourcesFromCache.values()].some(Boolean);
+      // Only the event query that owns the currently visible history window participates in
+      // sync readiness. The 14 pre-window seed queries are supplemental context; one stale
+      // IndexedDB seed must not make a fresh cross-device event snapshot look cache-only.
+      let visibleEventsFromCache = true;
+      const compositeFromCache = () => stateFromCache || visibleEventsFromCache;
       const emit = () => {
         if (stopped || !ready) return;
         const byId = new Map([...seeds, ...recent].map((event) => [event.id, event]));
@@ -130,7 +132,7 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
         if (allHistory) {
           stopEvents = onSnapshot(query(eventsRef, orderBy("timestamp", "desc")), { includeMetadataChanges: true }, (rows) => {
             if (stopped) return;
-            eventSourcesFromCache.set("all-history", rows.metadata.fromCache);
+            visibleEventsFromCache = rows.metadata.fromCache;
             recent = rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent);
             ready = true;
             emit();
@@ -151,14 +153,13 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
           const sourceKey = `${babyId}:${type}`;
           stops.push(onSnapshot(query(eventsRef, where("babyId", "==", babyId), where("type", "==", type),
             where("timestamp", "<", since), orderBy("timestamp", "desc"), limit(1)), { includeMetadataChanges: true }, (rows) => {
-              eventSourcesFromCache.set(sourceKey, rows.metadata.fromCache);
               seedRows.set(sourceKey, rows.docs.map((row) => ({ ...row.data(), id: row.id }) as LogEvent));
               finish();
             }, onError));
         }
         stops.push(onSnapshot(query(eventsRef, where("timestamp", ">=", since), orderBy("timestamp", "desc")),
           { includeMetadataChanges: true }, (rows) => {
-            eventSourcesFromCache.set("recent-window", rows.metadata.fromCache);
+            visibleEventsFromCache = rows.metadata.fromCache;
             recent = rows.docs.map((item) => ({ ...item.data(), id: item.id }) as LogEvent);
             windowReady = true;
             finish();
