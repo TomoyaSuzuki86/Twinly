@@ -42,10 +42,10 @@ const assetUrls = walkFiles(ASSET_ROOT)
 assert(assetUrls.some((url) => url.endsWith(".js")), "No built JavaScript assets found");
 assert(assetUrls.some((url) => url.endsWith(".css")), "No built CSS assets found");
 
-const precacheUrls = ["/index.html", ...assetUrls];
+const precacheUrls = ["/", "/index.html", ...assetUrls];
 
 const buildHash = createHash("sha256");
-for (const url of precacheUrls) {
+for (const url of ["/index.html", ...assetUrls]) {
   const diskPath = path.join(DIST_ROOT, url.slice(1));
   buildHash.update(url);
   buildHash.update(readFileSync(diskPath));
@@ -67,6 +67,4 @@ for (const url of precacheUrls) {
 }
 
 writeFileSync(SW_PATH, builtSw);
-console.log(
-  `Injected offline app shell: ${precacheUrls.length} files, cache key ${buildCacheKey}`
-);
+console.log(`Injected offline app shell: ${precacheUrls.length} files, cache key ${buildCacheKey}`);

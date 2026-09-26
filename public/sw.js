@@ -1,4 +1,4 @@
-const SHELL_CACHE_VERSION = "twinly-shell-v17";
+const SHELL_CACHE_VERSION = "twinly-shell-v18";
 const BUILD_CACHE_KEY = "dev";
 const SHELL_CACHE = `${SHELL_CACHE_VERSION}-${BUILD_CACHE_KEY}`;
 
@@ -13,18 +13,15 @@ const STATIC_PRECACHE = [
   "/icons/favicon-32-v7.png",
 ];
 
-// Replaced in dist/sw.js by scripts/inject-sw-precache.mjs after Vite has
-// generated the current hashed JS/CSS chunks. Keeping this empty in source
-// also makes public/sw.js valid when served directly by the Vite dev server.
 const BUILD_ASSET_PRECACHE = [];
-
-const PRECACHE_URLS = [...new Set([...STATIC_PRECACHE, ...BUILD_ASSET_PRECACHE])];
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
+    // Never let one flaky asset abort the entire worker installation. Once the
+    // worker controls the app, normal online requests will backfill any misses.
     const results = await Promise.allSettled(
-      PRECACHE_URLS.map((url) => cache.add(url))
+      [...BUILD_ASSET_PRECACHE, ...STATIC_PRECACHE].map((url) => cache.add(url))
     );
     const failed = results.filter((result) => result.status === "rejected").length;
     if (failed) console.warn(`Twinly precache missed ${failed} asset(s); runtime cache will backfill them.`);
@@ -35,6 +32,8 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_CACHE);
+    // Warm the navigation shell again during activation. This gives an online
+    // launch a second chance even if install-time precaching partially failed.
     await Promise.allSettled(
       ["/", "/index.html"].map(async (url) => {
         if (await cache.match(url)) return;
@@ -42,6 +41,7 @@ self.addEventListener("activate", (event) => {
         if (response.ok) await cache.put(url, response);
       })
     );
+
     const keys = await caches.keys();
     await Promise.all(
       keys.map((key) =>
@@ -64,23 +64,27 @@ self.addEventListener("fetch", (event) => {
 
   if (req.mode === "navigate") {
     event.respondWith((async () => {
+      const cached = (await caches.match(req, { ignoreSearch: true })) || (await caches.match("/index.html"));
+      if (cached) {
+        return cached;
+      }
       try {
-        // Prefer the latest HTML while online. Every production/development build
-        // also precaches /index.html, so a cold offline launch can always boot.
         const response = await fetch(req, { cache: "no-store" });
         if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
           const copy = response.clone();
-          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put("/index.html", copy)));
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => Promise.all([
+            cache.put("/", copy.clone()),
+            cache.put("/index.html", copy),
+          ])));
         }
         return response;
       } catch {
-        return (await caches.match("/index.html")) || new Response("通信状態を確認してください", { status: 503 });
+        return cached || new Response("通信状態を確認してください", { status: 503 });
       }
     })());
     return;
   }
 
-  // Install metadata changes on deploy; do not pin a previous manifest cache-first.
   if (url.pathname === "/manifest.webmanifest") {
     event.respondWith(
       fetch(req, { cache: "no-store" }).then((response) => {
@@ -94,10 +98,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Build assets and icons are cache-first. The current build's app-shell assets
-  // are already present before this service worker activates.
   if (!url.pathname.startsWith("/assets/") && !url.pathname.startsWith("/icons/")) return;
-  event.respondWith(caches.match(req).then(async (cached) => {
+  event.respondWith((async () => {
+    const cached = await caches.match(req);
     if (cached) return cached;
     try {
       const response = await fetch(req);
@@ -107,14 +110,13 @@ self.addEventListener("fetch", (event) => {
       }
       return response;
     } catch {
-      return cached || new Response("", { status: 503 });
+      return new Response("", { status: 503 });
     }
-  }));
+  })());
 });
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
-
   const payload = event.data.json();
   const title = payload.title || "Twinly";
   const options = {
@@ -128,31 +130,22 @@ self.addEventListener("push", (event) => {
       careReminders: Array.isArray(payload.careReminders) ? payload.careReminders : [],
     },
   };
-
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || "/";
-
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
           client.focus();
-          if ("navigate" in client) {
-            return client.navigate(targetUrl);
-          }
+          if ("navigate" in client) return client.navigate(targetUrl);
           return client;
         }
       }
-
-      if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
-      }
-
-      return undefined;
+      return self.clients.openWindow ? self.clients.openWindow(targetUrl) : undefined;
     })
   );
 });

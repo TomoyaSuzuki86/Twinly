@@ -93,10 +93,10 @@ const sw = readFileSync("public/sw.js", "utf8");
 assert(login.includes('src="/icons/icon-512-v7.png"'), "Login must use high-quality 512px icon");
 assert(html.includes('href="/icons/apple-touch-icon-v7.png"'), "Missing refreshed 180px iOS home-screen icon");
 assert(html.includes('href="/icons/favicon-32-v7.png"'), "Missing refreshed favicon");
-assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v17";'), "Old service-worker cache version");
+assert(sw.includes('const SHELL_CACHE_VERSION = "twinly-shell-v18";'), "Old service-worker cache version");
 assert(sw.includes('const BUILD_CACHE_KEY = "dev";'), "Missing build cache-key injection marker");
 assert(sw.includes("const BUILD_ASSET_PRECACHE = [];"), "Missing build asset precache injection marker");
-assert(sw.includes("...BUILD_ASSET_PRECACHE"), "Service worker must include generated build assets in precache");
+assert(sw.includes("/assets/twinly-launch-v2.mp4"), "Missing launch video precache");
 for (const name of Object.keys(expectedAssets)) {
   if (name === "apple-touch-icon-v7.png" || name === "favicon-32-v7.png" ||
       name.startsWith("icon-")) {

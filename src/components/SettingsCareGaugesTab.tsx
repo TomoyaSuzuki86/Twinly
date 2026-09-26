@@ -1,3 +1,4 @@
+import { MAX_DIAPER_WINDOW_MINUTES, MIN_DIAPER_WINDOW_MINUTES } from "@/lib/diaper-window-policy";
 import type { BabyId, BabyProfile, LogEvent } from "@/types";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -313,7 +314,7 @@ export function SettingsCareGaugesTab({
                                 onGaugeChange(
                                   babyId,
                                   "diaperGaugeWindowMinutes",
-                                  Math.max(30, diaperWindowMinutes - 30)
+                                  Math.max(MIN_DIAPER_WINDOW_MINUTES, diaperWindowMinutes - 30)
                                 )
                               }
                             >
@@ -333,7 +334,7 @@ export function SettingsCareGaugesTab({
                                 onGaugeChange(
                                   babyId,
                                   "diaperGaugeWindowMinutes",
-                                  Math.min(720, diaperWindowMinutes + 30)
+                                  Math.min(MAX_DIAPER_WINDOW_MINUTES, diaperWindowMinutes + 30)
                                 )
                               }
                             >

@@ -22,6 +22,7 @@ import {
   getDefaultSleepTargetHours,
 } from "./sleep";
 import { buildCareGauges } from "./care-gauges";
+import { DEFAULT_DIAPER_WINDOW_MINUTES } from "./diaper-window-policy";
 import { getSleepProgressComparison } from "./sleep-history";
 import { fmtTime, minutesSince } from "./utils";
 
@@ -132,7 +133,7 @@ export const buildBabyPanelViewModel = ({
     now,
     milkWindowHours: profile.milkGaugeWindowHours ?? 3,
     milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+    diaperWindowMinutes: profile.diaperGaugeWindowMinutes ?? DEFAULT_DIAPER_WINDOW_MINUTES,
   });
   const milkGaugePercent = Math.round((1 - (careGauges.milk?.level ?? 0)) * 100);
   const milkGaugeMode = careGauges.milk?.mode ?? "amount";

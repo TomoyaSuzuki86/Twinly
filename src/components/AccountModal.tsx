@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { familyRelationshipOptions, normalizeNickname, relationshipLabels } from "@/lib/family";
+import { familyRelationshipOptions, normalizeNickname, relationshipLabels } from "@/lib/family-profile";
 import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
 
 type AccountModalProps = {

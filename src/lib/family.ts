@@ -3,90 +3,34 @@ import { collection, doc, getDoc, getDocFromServer, onSnapshot, serverTimestamp,
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/firebase";
 import { beginBackgroundSync } from "@/lib/background-sync";
-import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
+import {
+  isFamilyRelationship,
+  normalizeNickname,
+} from "@/lib/family-profile";
+import {
+  clearCachedFamilySession,
+  readCachedFamilySession,
+  writeCachedFamilySession,
+} from "@/lib/family-session-cache";
+import type { FamilySession } from "@/lib/family-session-contract";
+import { FamilyMember, FamilyRelationship } from "@/types";
 
-export const relationshipLabels: Record<FamilyRelationship, string> = {
-  father: "父",
-  mother: "母",
-  grandfather: "祖父",
-  grandmother: "祖母",
-  other: "その他",
-};
+export {
+  familyRelationshipOptions,
+  isFamilyRelationship,
+  normalizeNickname,
+  relationshipLabels,
+} from "@/lib/family-profile";
 
-export const familyRelationshipOptions = Object.entries(relationshipLabels) as [FamilyRelationship, string][];
-
-export const normalizeNickname = (value: string) => value.trim().slice(0, 20);
-
-export const isFamilyRelationship = (value: unknown): value is FamilyRelationship =>
-  typeof value === "string" && Object.prototype.hasOwnProperty.call(relationshipLabels, value);
-
-export type FamilySession = {
-  family: FamilyInfo;
-  member: FamilyMember;
-};
+export type { FamilySession } from "@/lib/family-session-contract";
+export { readCachedFamilySession } from "@/lib/family-session-cache";
 
 type FamilySetupResult = { familyId: string | null };
 type FamilyOnboardingInput =
   | { nickname: string; relationship: FamilyRelationship }
   | { migrateLegacyOnly: true };
 
-const FAMILY_SESSION_CACHE_PREFIX = "twinly-family-session:";
-
 export class InvalidFamilySessionError extends Error {}
-
-const familySessionCacheKey = (uid: string) => `${FAMILY_SESSION_CACHE_PREFIX}${uid}`;
-
-const isFamilySession = (value: unknown, uid: string): value is FamilySession => {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<FamilySession>;
-  return Boolean(
-    candidate.family &&
-    typeof candidate.family.id === "string" &&
-    candidate.family.id &&
-    typeof candidate.family.name === "string" &&
-    typeof candidate.family.ownerUid === "string" &&
-    candidate.member &&
-    candidate.member.uid === uid &&
-    typeof candidate.member.nickname === "string" &&
-    isFamilyRelationship(candidate.member.relationship) &&
-    (candidate.member.role === "owner" || candidate.member.role === "member") &&
-    candidate.member.status === "active"
-  );
-};
-
-export const readCachedFamilySession = (uid: string): FamilySession | null => {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(familySessionCacheKey(uid));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isFamilySession(parsed, uid)) {
-      window.localStorage.removeItem(familySessionCacheKey(uid));
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-};
-
-const writeCachedFamilySession = (uid: string, session: FamilySession) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(familySessionCacheKey(uid), JSON.stringify(session));
-  } catch {
-    // Local cache is an optimization only. Firestore remains the source of truth.
-  }
-};
-
-const clearCachedFamilySession = (uid: string) => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(familySessionCacheKey(uid));
-  } catch {
-    // Ignore storage failures.
-  }
-};
 
 const callCompleteFamilyOnboarding = async (input: FamilyOnboardingInput) => {
   if (!functions) throw new Error("Firebase Functions is not configured");
