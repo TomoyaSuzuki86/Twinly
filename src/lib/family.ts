@@ -3,22 +3,18 @@ import { collection, doc, getDoc, getDocFromServer, onSnapshot, serverTimestamp,
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "@/firebase";
 import { beginBackgroundSync } from "@/lib/background-sync";
+import {
+  isFamilyRelationship,
+  normalizeNickname,
+} from "@/lib/family-profile";
 import { FamilyInfo, FamilyMember, FamilyRelationship } from "@/types";
 
-export const relationshipLabels: Record<FamilyRelationship, string> = {
-  father: "父",
-  mother: "母",
-  grandfather: "祖父",
-  grandmother: "祖母",
-  other: "その他",
-};
-
-export const familyRelationshipOptions = Object.entries(relationshipLabels) as [FamilyRelationship, string][];
-
-export const normalizeNickname = (value: string) => value.trim().slice(0, 20);
-
-export const isFamilyRelationship = (value: unknown): value is FamilyRelationship =>
-  typeof value === "string" && Object.prototype.hasOwnProperty.call(relationshipLabels, value);
+export {
+  familyRelationshipOptions,
+  isFamilyRelationship,
+  normalizeNickname,
+  relationshipLabels,
+} from "@/lib/family-profile";
 
 export type FamilySession = {
   family: FamilyInfo;
