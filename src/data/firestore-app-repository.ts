@@ -1,6 +1,6 @@
 import {
   collection, doc, getDocFromServer, getDocsFromServer, limit, onSnapshot, orderBy,
-  query, runTransaction, serverTimestamp, startAfter, where,
+  query, runTransaction, serverTimestamp, startAfter, where, writeBatch,
   type Firestore, type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import type { AppState, EventType, LogEvent } from "@/types";
@@ -43,6 +43,15 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
       throw new Error("一括変更は450件までです。全件の復元・削除は管理者による作業が必要です。");
     }
   };
+  const canPersistSleepOffline = (mutation: AppMutation) =>
+    storageVersion === 2 &&
+    mutation.settings.length === 0 &&
+    mutation.events.length > 0 &&
+    mutation.events.every((change) =>
+      !change.before &&
+      Boolean(change.after) &&
+      (change.after?.type === "sleepStart" || change.after?.type === "wake")
+    );
 
   const loadAllFromServer = async () => {
     const snapshot = await getDocFromServer(stateRef);
@@ -160,6 +169,18 @@ export function createFirestoreAppRepository(db: Firestore, familyId: string, us
     },
     async commit(mutation: AppMutation) {
       const receiptRef = doc(familyRef, "mutations", mutation.id);
+      if (canPersistSleepOffline(mutation)) {
+        const confirmed: AppMutation = { ...mutation, settings: [] };
+        const result: CommitResult = { confirmed, conflicts: [] };
+        const batch = writeBatch(db);
+        for (const change of confirmed.events) {
+          if (!change.after) continue;
+          batch.set(doc(eventsRef, change.id), removeUndefined(change.after));
+        }
+        batch.set(receiptRef, removeUndefined({ uid: userId, result, createdAt: serverTimestamp() }));
+        await batch.commit();
+        return confirmed;
+      }
       return runTransaction(db, async (transaction) => {
         const [receipt, snapshot] = await Promise.all([transaction.get(receiptRef), transaction.get(stateRef)]);
         if (receipt.exists()) {

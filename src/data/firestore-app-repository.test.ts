@@ -4,7 +4,7 @@ import { createInitialAppState, toSharedAppState } from "@/lib/app-state";
 import { appendEvents } from "@/lib/event-mutations";
 import { createMutation, isCommitResult } from "./app-repository";
 
-const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }>, queryFromCache: false }));
+const memory = vi.hoisted(() => ({ docs: new Map<string, any>(), reads: [] as string[], writes: [] as string[], queries: [] as any[], subscriptions: [] as Array<{ path: string; includeMetadataChanges: boolean }>, queryFromCache: false, batchCommits: 0 }));
 vi.mock("firebase/firestore", () => {
   const ref = (...parts: any[]) => ({ path: parts.map((part) => typeof part === "string" ? part : part.path || "").filter(Boolean).join("/") });
   const snapshot = (path: string) => ({ id: path.split("/").pop(), exists: () => memory.docs.has(path),
@@ -27,6 +27,20 @@ vi.mock("firebase/firestore", () => {
       callback(reference.constraints ? { docs: [], metadata: { fromCache: memory.queryFromCache } } : snapshot(reference.path));
       return () => {};
     },
+    writeBatch: () => {
+      const staged: (() => void)[] = [];
+      return {
+        set: (reference: any, value: any, options?: any) => staged.push(() => {
+          memory.writes.push(reference.path);
+          memory.docs.set(reference.path, options?.merge ? { ...memory.docs.get(reference.path), ...value } : value);
+        }),
+        delete: (reference: any) => staged.push(() => { memory.writes.push(reference.path); memory.docs.delete(reference.path); }),
+        commit: async () => {
+          memory.batchCommits += 1;
+          staged.forEach((write) => write());
+        },
+      };
+    },
     runTransaction: async (_db: any, action: any) => {
       const staged: (() => void)[] = [];
       const result = await action({
@@ -48,7 +62,7 @@ const statePath = "families/family/app/state";
 const eventPath = "families/family/events/event";
 const record = { id: "event", babyId: "A" as const, type: "milk" as const, timestamp: Date.now(), milkMl: 120 };
 const repository = () => createFirestoreAppRepository({} as Firestore, "family", "user");
-beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; memory.queryFromCache = false; });
+beforeEach(() => { memory.docs.clear(); memory.reads = []; memory.writes = []; memory.queries = []; memory.subscriptions = []; memory.queryFromCache = false; memory.batchCommits = 0; });
 
 describe("Firestore adapter contract", () => {
   it("writes just one event and receipt in v2 without rewriting shared state", async () => {
@@ -57,6 +71,20 @@ describe("Firestore adapter contract", () => {
     await repository().commit(createMutation(initial, appendEvents(initial, [record]), "op"));
     expect(memory.writes).toEqual([eventPath, "families/family/mutations/op"]);
     expect(memory.reads).toHaveLength(3);
+  });
+
+  it("persists sleep-only additions with an offline-capable batch", async () => {
+    const initial = createInitialAppState();
+    memory.docs.set(statePath, { schemaVersion: 2, app: { ...toSharedAppState(initial), events: undefined } });
+    const sleepRecord = { ...record, type: "sleepStart" as const };
+    const repo = repository();
+    repo.subscribe(() => {}, () => {});
+
+    await repo.commit(createMutation(initial, appendEvents(initial, [sleepRecord]), "sleep-op"));
+
+    expect(memory.batchCommits).toBe(1);
+    expect(memory.reads).toEqual([]);
+    expect(memory.writes).toEqual([eventPath, "families/family/mutations/sleep-op"]);
   });
 
   it("uses a receipt to make repeated stock consumption idempotent", async () => {
