@@ -1,5 +1,6 @@
 import { AppState, BabyProfile, CustomMemoPreset, LogEvent } from "@/types";
 import { fmtDate } from "./utils";
+import { DEFAULT_DIAPER_WINDOW_MINUTES } from "./diaper-window-policy";
 
 export type SharedAppState = Pick<AppState, "profiles" | "events"> & {
   customMemoPresets?: CustomMemoPreset[];
@@ -49,7 +50,7 @@ const createBaseProfiles = (now: Date): AppState["profiles"] => ({
     voiceAliases: [],
     milkGaugeWindowHours: 3,
     milkTargetMlOverride: null,
-    diaperGaugeWindowMinutes: 120,
+    diaperGaugeWindowMinutes: DEFAULT_DIAPER_WINDOW_MINUTES,
     activityLimitMinutesOverride: null,
     activityLimitMinutesCustom: null,
     sleepTargetHoursOverride: null,
@@ -67,7 +68,7 @@ const createBaseProfiles = (now: Date): AppState["profiles"] => ({
     voiceAliases: [],
     milkGaugeWindowHours: 3,
     milkTargetMlOverride: null,
-    diaperGaugeWindowMinutes: 120,
+    diaperGaugeWindowMinutes: DEFAULT_DIAPER_WINDOW_MINUTES,
     activityLimitMinutesOverride: null,
     activityLimitMinutesCustom: null,
     sleepTargetHoursOverride: null,
@@ -98,7 +99,7 @@ const normalizeStoredProfile = (profile: StoredProfile): BabyProfile => ({
   ...profile,
   milkGaugeWindowHours: profile.milkGaugeWindowHours ?? 3,
   milkTargetMlOverride: profile.milkTargetMlOverride ?? null,
-  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? 120,
+  diaperGaugeWindowMinutes: profile.diaperGaugeWindowMinutes ?? DEFAULT_DIAPER_WINDOW_MINUTES,
   activityLimitMinutesOverride: profile.activityLimitMinutesOverride ?? null,
   activityLimitMinutesCustom:
     profile.activityLimitMinutesCustom ?? profile.activityLimitMinutesOverride ?? null,
