@@ -30,6 +30,8 @@ type FamilyOnboardingInput =
   | { nickname: string; relationship: FamilyRelationship }
   | { migrateLegacyOnly: true };
 
+export class InvalidFamilySessionError extends Error {}
+
 const callCompleteFamilyOnboarding = async (input: FamilyOnboardingInput) => {
   if (!functions) throw new Error("Firebase Functions is not configured");
   const call = httpsCallable<FamilyOnboardingInput, FamilySetupResult>(functions, "completeFamilyOnboarding");
