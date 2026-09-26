@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import React, { useEffect, useState } from "react";
 import { AppState, BabyId, BabyProfile } from "@/types";
 import { adjustSharedDiaperStock } from "@/lib/diaper-stock";
+import { DEFAULT_DIAPER_WINDOW_MINUTES } from "@/lib/diaper-window-policy";
 import {
   applyGaugeProfiles,
   copyGaugeSettings,
@@ -232,7 +233,7 @@ export function SettingsModal({
     } else if (resetRequest.kind === "milkTarget") {
       handleGaugeChange(resetRequest.babyId, "milkTargetMlOverride", null);
     } else if (resetRequest.kind === "diaperWindow") {
-      handleGaugeChange(resetRequest.babyId, "diaperGaugeWindowMinutes", 120);
+      handleGaugeChange(resetRequest.babyId, "diaperGaugeWindowMinutes", DEFAULT_DIAPER_WINDOW_MINUTES);
     } else if (resetRequest.kind === "activityLimit") {
       setGaugeDraftProfiles((prev) => ({
         ...prev,
