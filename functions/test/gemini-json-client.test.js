@@ -56,7 +56,16 @@ test('rejects malformed provider JSON result', async () => {
       apiKey: 'key',
       primaryModel: 'primary',
       secondaryModel: 'secondary',
-      fetchImpl: async () => ok({ invalid: undefined }),
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [{
+            finishReason: 'STOP',
+            content: { parts: [{ text: 'not-json' }] },
+          }],
+        }),
+      }),
     }),
     error => error.code === 'data-loss'
   );
